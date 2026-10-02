@@ -114,6 +114,14 @@ impl SymbolTable {
     pub fn count(&self) -> usize {
         self.syms.len()
     }
+
+    /// Look up an interned symbol without interning it. Useful for tests and
+    /// for exterior code that wants to name a predicate it did not create.
+    pub fn predicate_id(&self, name: &str, arity: u16) -> Option<SymId> {
+        let name_id = *self.name_ids.get(name)?;
+        let sym = Sym { name: name_id, arity, kind: SK_PRED };
+        self.sym_ids.get(&sym).copied()
+    }
 }
 
 impl fmt::Debug for SymbolTable {

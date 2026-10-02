@@ -203,8 +203,18 @@ mod regressions {
         let mut s = Solver::new(prog);
         let mut budget = Budget::steps(100_000);
         let sat = s.saturate(&mut budget).expect("within budget");
-        // path(a,b), path(b,c), path(a,c) plus the two edge facts.
+        // 2 edge facts + 3 path facts.
         assert_eq!(sat.idb_facts, 5);
-        assert_eq!(s.stats.rounds, 2, "path(a,c) needs exactly one extra round");
+
+        // Assert the least model itself, not a proxy. Round counts are an
+        // implementation detail; the set of derived tuples is the semantics.
+        let path = s.prog.symbols.predicate_id("path", 2).expect("path/2 exists");
+        let mut got: Vec<String> = s
+            .facts_of(path)
+            .iter()
+            .map(|f| s.prog.store.show(*f, &s.prog.symbols))
+            .collect();
+        got.sort();
+        assert_eq!(got, vec!["path(a,b)", "path(a,c)", "path(b,c)"]);
     }
 }
