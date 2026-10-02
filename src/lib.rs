@@ -157,4 +157,3 @@ pub(crate) mod tests_fixtures {
         (prog, goal)
     }
 }
-}
