@@ -17,6 +17,7 @@
 //!
 //! | Module | Role |
 //! |---|---|
+//! | [`bench`] | measurement harness: timing, allocation counting, seeded RNG |
 //! | [`hash`] | fast hasher used by every internal table |
 //! | [`symbol`] | name interning; `u32` everywhere after load |
 //! | [`term`] | hash-consed term/atom arena, 16 B per node |
@@ -77,6 +78,7 @@
 //! assert!(solver.proof_size(&proof) >= 1);
 //! ```
 
+pub mod bench;
 pub mod budget;
 pub mod check;
 pub mod db;
