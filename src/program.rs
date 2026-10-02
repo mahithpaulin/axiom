@@ -194,10 +194,22 @@ impl Builder {
         self.size_to(p);
     }
 
+    /// Grow the per-predicate vectors to cover symbol id `p`.
+    ///
+    /// Must only ever *grow*. `Vec::resize` truncates when given a smaller
+    /// length, and symbol ids are not allocated in index order across the
+    /// constant/function/predicate namespaces, so a later `p` can easily be
+    /// smaller than an earlier one. Using `resize` here silently shrank the
+    /// vectors and every subsequent `rule` call indexed out of bounds --
+    /// caught by `tests/soundness.rs::predicate_vectors_never_shrink`.
     fn size_to(&mut self, p: u32) {
         let n = p as usize + 1;
-        self.pred_idb.resize(n, false);
-        self.pred_edb.resize(n, false);
+        if self.pred_idb.len() < n {
+            self.pred_idb.resize(n, false);
+        }
+        if self.pred_edb.len() < n {
+            self.pred_edb.resize(n, false);
+        }
     }
 
     pub fn constant(&mut self, name: &str) -> TermId {
