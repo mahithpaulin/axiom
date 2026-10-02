@@ -41,10 +41,54 @@ use crate::term::TermId;
 
 const DEFAULT_MAX_DEPTH: u32 = 64;
 
+/// Why SLD stopped, as distinct from whether the goal was provable.
+///
+/// The distinction is load-bearing. "No rule derives this goal" and "I did not
+/// look" both used to surface as `Refuted`, which is a definite claim that the
+/// goal is not derivable. Backward resolution declines for several reasons that
+/// are *not* such a claim: the depth bound, a negated body literal, a non-ground
+/// subgoal. Those must reach the caller as a decline, so `prove` can answer
+/// `Unknown` instead of asserting something it never established.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum SldOutcome {
+    /// Proved, and `steps` holds the derivation.
+    Proved,
+    /// Exhaustively declined: every candidate rule was tried and failed.
+    NotProvable,
+    /// Declined without establishing anything.
+    Declined(DeclineReason),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum DeclineReason {
+    Depth,
+    NegatedBody,
+    NonGroundSubgoal,
+    Budget,
+}
+
+impl DeclineReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DeclineReason::Depth => "resolution depth bound reached",
+            DeclineReason::NegatedBody => "negation is not implemented in backward resolution",
+            DeclineReason::NonGroundSubgoal => "backward resolution is restricted to ground goals",
+            DeclineReason::Budget => "budget exhausted during resolution",
+        }
+    }
+    pub fn exhausted(self) -> Option<Exhausted> {
+        match self {
+            DeclineReason::Budget => Some(Exhausted::Steps),
+            _ => None,
+        }
+    }
+}
+
 impl Solver {
     /// Depth-bounded SLD for a ground goal.
     ///
     /// Returns true with the proof trace in `trace` when the goal is provable.
+    #[allow(clippy::type_complexity)]
     fn sld_ground(
         &mut self,
         goal: TermId,
@@ -53,23 +97,28 @@ impl Solver {
         budget: &mut Budget,
         trace: &mut Vec<ResolutionStep>,
         failed: &mut FxHashMap<(TermId, u32), ()>,
-    ) -> Result<bool, Exhausted> {
+        declined: &mut FxHashMap<(TermId, u32), DeclineReason>,
+    ) -> Result<SldOutcome, Exhausted> {
         if depth > max_depth {
-            return Ok(false);
+            return Ok(SldOutcome::Declined(DeclineReason::Depth));
+        }
+        if let Some(r) = declined.get(&(goal, depth)) {
+            return Ok(SldOutcome::Declined(*r));
         }
         budget.charge(1)?;
         self.stats.sld_steps += 1;
         self.stats.max_depth = self.stats.max_depth.max(depth as u64);
 
         if failed.contains_key(&(goal, depth)) {
-            return Ok(false);
+            return Ok(SldOutcome::NotProvable);
         }
         // Already known bottom-up: the forward derivations carry the proof.
         if self.db.contains(goal) {
-            return Ok(true);
+            return Ok(SldOutcome::Proved);
         }
 
         let pred = self.prog.store.sym(goal);
+        let mut saw_unsupported = false;
         let candidates: Vec<RuleId> = match self.rules_by_pred.get(pred as usize) {
             Some(v) => v.clone(),
             None => Vec::new(),
@@ -95,23 +144,44 @@ impl Solver {
             for i in 0..blen {
                 let lit = self.ren_lit(rule, i);
                 if !lit.pos {
+                    // No backward semantics for negation: record that this rule
+                    // was not usable rather than treating it as a failure.
                     ok = false;
+                    saw_unsupported = true;
                     break;
                 }
                 let sub = self.subst.resolve(&mut self.prog.store, lit.atom);
                 if !self.prog.store.is_ground(sub) {
                     // Non-ground subgoal: outside the implemented fragment.
                     ok = false;
+                    saw_unsupported = true;
                     break;
                 }
-                let r = self.sld_ground(sub, depth + 1, max_depth, budget, &mut sub_trace, failed);
+                let r = self.sld_ground(
+                    sub,
+                    depth + 1,
+                    max_depth,
+                    budget,
+                    &mut sub_trace,
+                    failed,
+                    declined,
+                );
                 if r.is_err() {
                     self.subst.undo_to(mark);
                     return r;
                 }
-                if !r.unwrap() {
-                    ok = false;
-                    break;
+                match r.unwrap() {
+                    SldOutcome::Proved => {}
+                    SldOutcome::NotProvable => {
+                        ok = false;
+                        break;
+                    }
+                    SldOutcome::Declined(reason) => {
+                        ok = false;
+                        saw_unsupported = true;
+                        let _ = reason;
+                        break;
+                    }
                 }
             }
 
@@ -129,12 +199,17 @@ impl Solver {
                     premises,
                 });
                 self.subst.undo_to(mark);
-                return Ok(true);
+                return Ok(SldOutcome::Proved);
             }
             self.subst.undo_to(mark);
-            failed.insert((goal, depth), ());
         }
-        Ok(false)
+        if saw_unsupported {
+            declined.insert((goal, depth), DeclineReason::NegatedBody);
+            Ok(SldOutcome::Declined(DeclineReason::NegatedBody))
+        } else {
+            failed.insert((goal, depth), ());
+            Ok(SldOutcome::NotProvable)
+        }
     }
 
     /// Current binding of a rule's local variables, as ground terms.
@@ -192,45 +267,61 @@ impl Solver {
         }
 
         // Not in the closure. Try goal-directed resolution before concluding.
+        //
+        // The outcome is tri-state on purpose. Only `NotProvable` licenses the
+        // definite claim `Refuted`; a decline means the backward engine never
+        // established anything, and saturation's success does not license the
+        // claim either because saturation skips `backward_only` rules.
         let mut trace = Vec::new();
         let mut failed = FxHashMap::default();
-        match self.sld_ground(goal, 0, max_depth, budget, &mut trace, &mut failed) {
-            Ok(true) => {
-                let proof = Proof {
-                    goal,
-                    root: None,
-                    steps: trace,
-                    saturation: None,
-                };
-                Outcome::definite(Status::Proved, Some(proof), self.stats.delta(&before))
+        let mut declined = FxHashMap::default();
+        match self.sld_ground(goal, 0, max_depth, budget, &mut trace, &mut failed, &mut declined)? {
+            SldOutcome::Proved => {
+                let proof = Proof { goal, root: None, steps: trace, saturation: None };
+                return Outcome::definite(Status::Proved, Some(proof), self.stats.delta(&before))
+                    .note("proved by backward resolution; the proof is a rule-resolution trace");
             }
-            Ok(false) => match sat {
+            SldOutcome::NotProvable => match sat {
                 Some(s) => {
-                    // A negative answer is backed by the closure certificate,
-                    // which is cheap and is always present, so it stays
-                    // `Refuted` regardless of proof mode.
-                    // Bottom-up completed and the goal is absent: this is the
-                    // least model, so absence is a proof of non-derivability.
-                    let proof = Proof {
-                        goal,
-                        root: None,
-                        steps: Vec::new(),
-                        saturation: Some(s),
-                    };
-                    let mut o =
-                        Outcome::definite(Status::Refuted, Some(proof), self.stats.delta(&before));
+                    // Bottom-up completed and the backward engine exhausted its
+                    // options: the atom is absent from the least model.
+                    let proof =
+                        Proof { goal, root: None, steps: Vec::new(), saturation: Some(s) };
+                    let mut o = Outcome::definite(
+                        Status::Refuted,
+                        Some(proof),
+                        self.stats.delta(&before),
+                    );
                     o.notes.push(
                         "bottom-up saturation completed; goal absent from the least model"
                             .to_string(),
                     );
-                    o
+                    return o;
                 }
                 None => {
                     let e = note_forward_exhausted.unwrap_or(Exhausted::Steps);
-                    Outcome::inconclusive(Status::Exhausted, e, self.stats.delta(&before))
+                    return Outcome::inconclusive(
+                        Status::Exhausted,
+                        e,
+                        self.stats.delta(&before),
+                    );
                 }
             },
-            Err(e) => Outcome::inconclusive(Status::Exhausted, e, self.stats.delta(&before)),
+            SldOutcome::Declined(reason) => {
+                // An inconclusive result must not carry a proof, and must say
+                // why. `Unknown` is the honest status: the engine did not
+                // establish either answer.
+                let mut o = Outcome::inconclusive(
+                    Status::Unknown,
+                    reason.exhausted().unwrap_or(Exhausted::Depth),
+                    self.stats.delta(&before),
+                );
+                o.notes.push(format!(
+                    "backward resolution declined: {}; a negative answer is not established",
+                    reason.as_str()
+                ));
+                return o;
+            }
         }
     }
 

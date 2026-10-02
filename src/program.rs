@@ -387,49 +387,47 @@ impl Builder {
         self.pred_idb.resize(num_preds, false);
         self.pred_edb.resize(num_preds, false);
 
-        // Relaxation to a stratification. Positive deps: >=. Negative: >.
+        // Relaxation to a stratification, enforcing both edge kinds in the
+        // *same* loop:
+        //
+        //     positive literal:   stratum(h) >= stratum(p)
+        //     negative literal:   stratum(h) >  stratum(p)
+        //
+        // Folding the negative bound in only after the loop -- as an earlier
+        // version did -- accepts programs whose negation cycle is reached
+        // through a positive edge, leaving a positive edge pointing at a
+        // *higher* stratum. Such a program has no stratification, and
+        // evaluating it produced wrong answers while reporting success.
         let np = num_preds;
         let mut stratum = vec![0u32; np];
-        let mut neg_bound = vec![0u32; np];
-        let mut changed = true;
-        let mut rounds = 0;
-        while changed {
-            changed = false;
-            rounds += 1;
-            debug_assert!(
-                rounds <= np + 2,
-                "stratification relaxation failed to converge"
-            );
+        let mut rounds = 0usize;
+        loop {
+            let mut changed = false;
             for r in &self.rules {
                 let h = self.store.sym(r.head) as usize;
                 for l in &r.body {
                     let p = self.store.sym(l.atom) as usize;
-                    if l.pos {
-                        if stratum[h] < stratum[p] {
-                            stratum[h] = stratum[p];
-                            changed = true;
-                        }
-                    } else if neg_bound[h] <= stratum[p] {
-                        neg_bound[h] = stratum[p] + 1;
+                    let want = if l.pos {
+                        stratum[p]
+                    } else {
+                        stratum[p] + 1
+                    };
+                    if stratum[h] < want {
+                        stratum[h] = want;
                         changed = true;
                     }
                 }
             }
-        }
-        for r in &self.rules {
-            let h = self.store.sym(r.head) as usize;
-            stratum[h] = stratum[h].max(neg_bound[h]);
-        }
-        // Verify every negative edge really points downward.
-        for r in &self.rules {
-            let h = self.store.sym(r.head) as usize;
-            for l in &r.body {
-                if !l.pos {
-                    let p = self.store.sym(l.atom) as usize;
-                    if stratum[h] <= stratum[p] {
-                        return Err(ProgramError::NotStratified { pred: h as u32 });
-                    }
-                }
+            if !changed {
+                break;
+            }
+            rounds += 1;
+            // Strata are bounded by the predicate count; exceeding it means a
+            // cycle no assignment can satisfy, i.e. no stratification exists.
+            // Checked in release too, so a pathological program is rejected
+            // rather than looping.
+            if rounds > np + 2 {
+                return Err(ProgramError::NotStratified { pred: u32::MAX });
             }
         }
 

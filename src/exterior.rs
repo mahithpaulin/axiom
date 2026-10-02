@@ -38,6 +38,24 @@ pub struct Limits {
     pub max_rules: usize,
 }
 
+impl Limits {
+    /// Arity cannot exceed what `TermNode.len` (a `u16`) can record, and depth
+    /// cannot exceed what `TermStore::rename` silently truncates. Both limits
+    /// are clamped here rather than asserted, because these are caller-supplied
+    /// values and a wrong one must not become silent data corruption.
+    fn clamped(mut self) -> Limits {
+        const MAX_ARITY: usize = u16::MAX as usize;
+        const MAX_DEPTH: usize = 4096;
+        if self.max_arity > MAX_ARITY {
+            self.max_arity = MAX_ARITY;
+        }
+        if self.max_depth > MAX_DEPTH {
+            self.max_depth = MAX_DEPTH;
+        }
+        self
+    }
+}
+
 impl Default for Limits {
     fn default() -> Self {
         // Generous for hand-written programs, far too small for an attack.
@@ -410,6 +428,7 @@ pub fn parse(src: &str) -> Result<Parsed, ParseError> {
 }
 
 pub fn parse_with(src: &str, limits: Limits) -> Result<Parsed, ParseError> {
+    let limits = limits.clamped();
     let toks = tokenize(src, &limits)?;
     let mut p = Parser {
         toks: &toks,

@@ -52,23 +52,6 @@ use crate::status::Exhausted;
 use crate::symbol::SymId;
 use crate::term::{TermId, T_VAR};
 
-/// The `k`-th body position that is not `skip`. Avoids materialising a `rem`
-/// vector, which would alias the solver's own borrow.
-#[inline]
-fn nth_other(n_body: usize, skip: Option<usize>, k: usize) -> Option<usize> {
-    let mut c = 0usize;
-    for i in 0..n_body {
-        if Some(i) == skip {
-            continue;
-        }
-        if c == k {
-            return Some(i);
-        }
-        c += 1;
-    }
-    None
-}
-
 impl Solver {
     #[inline]
     fn is_idb_in_stratum(&self, pred: SymId, stratum: u32) -> bool {
@@ -84,6 +67,24 @@ impl Solver {
                 .copied()
                 .unwrap_or(0)
                 == stratum
+    }
+
+    /// Body positions that can seed this rule with a delta tuple: positive
+    /// positions over an IDB predicate in this stratum.
+    fn seed_positions(&mut self, rule: RuleId, stratum: u32) -> Vec<usize> {
+        let n = self.ren_len(rule);
+        let mut out = Vec::new();
+        for i in 0..n {
+            let lit = self.ren_lit(rule, i);
+            if !lit.pos {
+                continue;
+            }
+            let p = self.prog.store.sym(lit.atom);
+            if self.is_idb_in_stratum(p, stratum) {
+                out.push(i);
+            }
+        }
+        out
     }
 
     pub(crate) fn ensure_pred_slots(&mut self, pred: SymId) {
@@ -115,19 +116,72 @@ impl Solver {
         true
     }
 
-    /// Resolve the first argument of `atom` if it is already determined. Returns
-    /// the resolved term, which indexes the database directly.
+    /// Is argument 0 of `atom` determined *and ground*?
+    ///
+    /// Two conditions, both necessary and both learned the hard way:
+    ///
+    /// * Only argument 0. The database is indexed on the first argument only,
+    ///   so binding a later argument buys nothing and reporting it as
+    ///   "determined" invites the join to use an index position it does not
+    ///   have.
+    /// * Ground, not merely non-variable. `f(gX)` with `gX` free is a function
+    ///   node, so a `kind != T_VAR` test accepts it, and it is then used as an
+    ///   index key that is in no bucket -- silently losing every derivation
+    ///   that should have matched. `contains_var` is allocation-free here.
     #[inline]
     fn first_bound(&mut self, atom: TermId) -> Option<TermId> {
-        let n = self.prog.store.arity(atom);
+        if self.prog.store.arity(atom) == 0 {
+            return None;
+        }
+        let a = self.prog.store.child(atom, 0);
+        let r = self.subst.find(a);
+        if self.prog.store.kind(r) == T_VAR {
+            return None;
+        }
+        let resolved = self.subst.resolve(&mut self.prog.store, r);
+        if !self.prog.store.is_ground(resolved) {
+            return None;
+        }
+        Some(resolved)
+    }
+
+    /// The `k`-th positive body position that is not `skip`.
+    ///
+    /// Only *positive* positions participate in the join. A negated literal is
+    /// not a tuple to be matched; it is a test performed by `negatives_hold`
+    /// once every positive position has matched. Joining over negated positions
+    /// required a `match_into` success against an empty relation, so any rule
+    /// whose negation was not already grounded derived nothing at all.
+    fn nth_positive(&self, rule: RuleId, skip: Option<usize>, k: usize) -> Option<usize> {
+        let n = self.ren_len(rule);
+        let mut c = 0usize;
         for i in 0..n {
-            let a = self.prog.store.child(atom, i);
-            let r = self.subst.find(a);
-            if self.prog.store.kind(r) != T_VAR {
-                return Some(self.subst.resolve(&mut self.prog.store, r));
+            if Some(i) == skip {
+                continue;
             }
+            if !self.ren_lit(rule, i).pos {
+                continue;
+            }
+            if c == k {
+                return Some(i);
+            }
+            c += 1;
         }
         None
+    }
+
+    fn positive_count(&self, rule: RuleId, skip: Option<usize>) -> usize {
+        let n = self.ren_len(rule);
+        let mut c = 0usize;
+        for i in 0..n {
+            if Some(i) == skip {
+                continue;
+            }
+            if self.ren_lit(rule, i).pos {
+                c += 1;
+            }
+        }
+        c
     }
 
     /// Produce the *next* complete solution for every body position except
@@ -150,8 +204,7 @@ impl Solver {
         skip: Option<usize>,
         budget: &mut Budget,
     ) -> Result<bool, Exhausted> {
-        let n_body = self.ren_len(rule);
-        let levels = n_body - usize::from(skip.is_some());
+        let levels = self.positive_count(rule, skip);
         if levels == 0 {
             // The seed already covers every body position, so there is exactly
             // one solution for this seed and no cursor to advance. Yielding
@@ -177,15 +230,13 @@ impl Solver {
                 }
                 // This solution violates a negation; keep searching.
             } else {
-                let i = match nth_other(n_body, skip, depth) {
+                let i = match self.nth_positive(rule, skip, depth) {
                     Some(i) => i,
                     None => return Ok(false),
                 };
                 let lit = self.ren_lit(rule, i);
                 let pred = self.prog.store.sym(lit.atom);
-                // A negated position is never seeded by the delta; it is checked
-                // by `negatives_hold` once the positive positions have matched.
-                let bound = if lit.pos { self.first_bound(lit.atom) } else { None };
+                let bound = self.first_bound(lit.atom);
                 if depth == self.jc.len() {
                     self.jc.push(0);
                     self.jm.push(self.subst.mark());
@@ -363,6 +414,30 @@ impl Solver {
         let mut rounds = 0u32;
         for stratum in 0..self.prog.num_strata {
             loop {
+                // Every rule in this stratum must run at least once before the
+                // delta-driven loop is allowed to conclude the stratum is done.
+                //
+                // A stratum whose IDB predicates start empty -- which is every
+                // stratum above the first, and therefore *all* stratified
+                // negation -- has an empty delta on entry. Breaking out first
+                // meant those rules never ran at all, and the engine reported
+                // an empty least model as fact.
+                for rule_id in self.prog.by_stratum[stratum as usize].clone() {
+                    if self.prog.rules[rule_id as usize].backward_only {
+                        continue;
+                    }
+                    self.ensure_renamed(rule_id);
+                    if self.seed_positions(rule_id, stratum).is_empty()
+                        && !self.static_done[rule_id as usize]
+                    {
+                        self.eval_rule(rule_id, None, budget)?;
+                        // Only now. Marking it done before the call meant a
+                        // budget abort left the rule permanently skipped while
+                        // `saturate` still reported success.
+                        self.static_done[rule_id as usize] = true;
+                    }
+                }
+
                 let mut any = false;
                 for p in 0..np.min(self.delta.len()) {
                     if self.prog.pred_stratum[p] == stratum && !self.delta[p].is_empty() {
@@ -392,34 +467,16 @@ impl Solver {
                         continue;
                     }
                     self.ensure_renamed(rule_id);
-                    let blen = self.ren_len(rule_id);
-                    let mut seeds = Vec::new();
-                    for i in 0..blen {
+                    let seeds = self.seed_positions(rule_id, stratum);
+                    for i in seeds {
                         let lit = self.ren_lit(rule_id, i);
-                        if !lit.pos {
-                            continue;
+                        let p = self.prog.store.sym(lit.atom) as usize;
+                        let facts = std::mem::take(&mut self.work[p]);
+                        for k in 0..facts.len() {
+                            let t = facts[k];
+                            self.eval_rule(rule_id, Some((i, t)), budget)?;
                         }
-                        let p = self.prog.store.sym(lit.atom);
-                        if self.is_idb_in_stratum(p, stratum) {
-                            seeds.push(i);
-                        }
-                    }
-                    if seeds.is_empty() {
-                        if !self.static_done[rule_id as usize] {
-                            self.static_done[rule_id as usize] = true;
-                            self.eval_rule(rule_id, None, budget)?;
-                        }
-                    } else {
-                        for i in seeds {
-                            let lit = self.ren_lit(rule_id, i);
-                            let p = self.prog.store.sym(lit.atom) as usize;
-                            let facts = std::mem::take(&mut self.work[p]);
-                            for k in 0..facts.len() {
-                                let t = facts[k];
-                                self.eval_rule(rule_id, Some((i, t)), budget)?;
-                            }
-                            self.work[p] = facts;
-                        }
+                        self.work[p] = facts;
                     }
                 }
             }

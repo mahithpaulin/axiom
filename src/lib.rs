@@ -95,6 +95,7 @@ pub mod symbol;
 pub mod term;
 
 pub use budget::Budget;
+pub use exterior::{Limits, ParseError};
 pub use db::Db;
 pub use subst::Subst;
 pub use symbol::SymbolTable;

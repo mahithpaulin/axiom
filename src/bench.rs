@@ -149,22 +149,6 @@ pub struct Row {
     pub note: String,
 }
 
-impl Row {
-    fn default_stub() -> Row {
-        Row {
-            name: String::new(),
-            iters: 0,
-            ops: 0,
-            wall_ms: 0.0,
-            cpu_ms: 0,
-            allocs: 0,
-            alloc_bytes: 0,
-            rss_kb: 0,
-            note: String::new(),
-        }
-    }
-}
-
 pub struct Bench {
     title: String,
     notes: Vec<String>,
@@ -194,8 +178,8 @@ impl Bench {
     /// loses every result when a late benchmark turns out to be pathological,
     /// which is exactly when the numbers are most wanted.
     fn push(&mut self, row: Row) {
+        self.rows.push(row);
         let r = self.rows.last().expect("just pushed");
-        let r = r;
         let secs = r.wall_ms / 1000.0;
         let mops = if secs > 0.0 { r.ops as f64 / secs / 1e6 } else { 0.0 };
         let ai = if r.iters > 0 { r.allocs / r.iters } else { 0 };
@@ -206,7 +190,6 @@ impl Bench {
             "  {:<30} {:>7} it {:>10.2} ms {:>9} Mops/s {:>9} allocs/it {:>10} B/op {:>8} rss kB",
             r.name, r.iters, r.wall_ms, mops, ai, bo, r.rss_kb
         );
-        let _ = row;
     }
 
     pub fn run(&mut self, name: &str, hint_ops: u64, mut f: impl FnMut(u32) -> u64) {
@@ -236,7 +219,6 @@ impl Bench {
             rss_kb: rss_kb(),
             note: format!("hint {hint_ops} ops"),
         });
-        self.push(Row::default_stub());
     }
 
     /// Same, but with no warm-up, for workloads whose single iteration is
@@ -259,7 +241,6 @@ impl Bench {
             rss_kb: rss_kb(),
             note: "single shot".into(),
         });
-        self.push(Row::default_stub());
     }
 
     /// Run one closure per mode and emit a row per mode, for A/B comparisons.
@@ -287,7 +268,6 @@ impl Bench {
                 rss_kb: rss_kb(),
                 note: String::new(),
             });
-            self.push(Row::default_stub());
         }
     }
 
