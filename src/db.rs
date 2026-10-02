@@ -153,7 +153,7 @@ impl Db {
             .by_first
             .iter()
             .flat_map(|v| v.iter())
-            .map(|m| {
+            .map(|(_, m)| {
                 // load-factor overhead of the key/value table plus the per-bucket
                 // vector; an estimate, not an exact allocator figure.
                 m.capacity() * (std::mem::size_of::<TermId>() * 2 + 16)
