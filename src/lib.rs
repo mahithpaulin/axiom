@@ -140,20 +140,21 @@ pub(crate) mod tests_fixtures {
     /// plus a three-node chain, and the goal `path(a,c)`.
     pub fn transitive_closure_program() -> (Program, TermId) {
         let mut b = Builder::new();
-        let a = b.constant("a");
-        let bb = b.constant("b");
-        let c = b.constant("c");
-        b.fact(b.atom("edge", 2, &[a, bb]));
-        b.fact(b.atom("edge", 2, &[bb, c]));
+        b.fact_n("edge", &["a", "b"]);
+        b.fact_n("edge", &["b", "c"]);
         let x = b.var("X");
         let y = b.var("Y");
         let z = b.var("Z");
         let h1 = b.atom("path", 2, &[x, y]);
-        b.rule(h1, vec![Literal::pos(b.atom("edge", 2, &[x, y]))]);
+        let l1 = b.pos("edge", 2, &[x, y]);
+        b.rule(h1, vec![l1]);
         let h2 = b.atom("path", 2, &[x, z]);
-        b.rule(h2, vec![Literal::pos(b.atom("path", 2, &[x, y])), Literal::pos(b.atom("edge", 2, &[y, z]))]);
-        let goal = b.atom("path", 2, &[a, c]);
+        let p1 = b.pos("path", 2, &[x, y]);
+        let e1 = b.pos("edge", 2, &[y, z]);
+        b.rule(h2, vec![p1, e1]);
+        let goal = b.goal_n("path", &["a", "c"]);
         let prog = b.build().unwrap();
         (prog, goal)
     }
+}
 }

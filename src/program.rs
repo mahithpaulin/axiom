@@ -234,8 +234,39 @@ impl Builder {
         self.store.atom(p, args)
     }
 
-    /// A ground fact: a rule with an empty body. Backward-only facts are
-    /// rejected, since a fact's head is by definition ground.
+    /// Positive body literal. Exists so rule bodies can be written as
+    /// `vec![b.pos(...), b.pos(...)]` without a temporary per literal.
+    pub fn pos(&mut self, name: &str, arity: u16, args: &[TermId]) -> Literal {
+        let a = self.atom(name, arity, args);
+        Literal::pos(a)
+    }
+
+    /// Negated body literal.
+    pub fn neg(&mut self, name: &str, arity: u16, args: &[TermId]) -> Literal {
+        let a = self.atom(name, arity, args);
+        Literal::neg(a)
+    }
+
+    /// Ground fact from plain names: `fact_n("edge", &["a", "b"])`.
+    pub fn fact_n(&mut self, name: &str, args: &[&str]) -> RuleId {
+        let mut ts = Vec::with_capacity(args.len());
+        for a in args {
+            ts.push(self.constant(a));
+        }
+        let head = self.atom(name, args.len() as u16, &ts);
+        self.fact(head)
+    }
+
+    /// Ground atom from plain names, for use as a goal.
+    pub fn goal_n(&mut self, name: &str, args: &[&str]) -> TermId {
+        let mut ts = Vec::with_capacity(args.len());
+        for a in args {
+            ts.push(self.constant(a));
+        }
+        self.atom(name, args.len() as u16, &ts)
+    }
+
+    /// A ground fact: a rule with an empty body.
     pub fn fact(&mut self, head: TermId) -> RuleId {
         debug_assert_eq!(self.store.kind(head), T_ATOM);
         self.pred_idb[self.store.sym(head) as usize] = true;
@@ -427,38 +458,25 @@ mod tests {
     #[test]
     fn rule_local_variables_are_namespaced_per_rule() {
         let mut b = Builder::new();
-        let p = b.atom("p", 1, &[]);
-        let _ = p;
-        // rule 1
         let x1 = b.var("X");
-        let a = b.constant("a");
         let h1 = b.atom("p", 1, &[x1]);
-        let body1 = vec![Literal::pos(b.atom("q", 1, &[x1]))];
+        let body1 = vec![b.pos("q", 1, &[x1])];
         b.rule(h1, body1);
-        // rule 2 must not share X
         let x2 = b.var("X");
         assert_ne!(x1, x2, "X in two rules must be distinct variables");
-        let _ = a;
     }
 
     #[test]
     fn transitive_closure_is_stratified() {
         let mut b = Builder::new();
-        let e = b.atom("edge", 2, &[]);
-        let t = b.atom("path", 2, &[]);
-        let _ = (e, t);
-        let a = b.constant("a");
-        let z = b.constant("b");
-        b.fact(b.atom("edge", 2, &[a, z]));
+        b.fact_n("edge", &["a", "b"]);
         let x = b.var("X");
         let y = b.var("Y");
-        let z2 = b.var("Z");
-        let head = b.atom("path", 2, &[x, z2]);
-        let body = vec![
-            Literal::pos(b.atom("edge", 2, &[x, y])),
-            Literal::pos(b.atom("path", 2, &[y, z2])),
-        ];
-        b.rule(head, body);
+        let z = b.var("Z");
+        let head = b.atom("path", 2, &[x, z]);
+        let e = b.pos("edge", 2, &[x, y]);
+        let p = b.pos("path", 2, &[y, z]);
+        b.rule(head, vec![e, p]);
         let prog = b.build().unwrap();
         assert_eq!(prog.num_strata, 1);
         // Positive self-cycle must be allowed.
@@ -471,19 +489,23 @@ mod tests {
         let mut b = Builder::new();
         let p = b.atom("p", 0, &[]);
         let q = b.atom("q", 0, &[]);
-        b.rule(p, vec![Literal::neg(q)]);
-        b.rule(q, vec![Literal::neg(p)]);
+        let np = Literal::neg(q);
+        let nq = Literal::neg(p);
+        b.rule(p, vec![np]);
+        b.rule(q, vec![nq]);
         assert!(matches!(b.build(), Err(ProgramError::NotStratified { .. })));
     }
 
     #[test]
     fn stratified_negation_gets_a_strictly_higher_stratum() {
         let mut b = Builder::new();
+        b.fact_n("e", &["x"]);
         let e = b.atom("e", 1, &[]);
         let p = b.atom("p", 0, &[]);
-        b.fact(b.atom("e", 1, &[b.constant("x")]));
         let x = b.var("X");
-        b.rule(p, vec![Literal::pos(b.atom("e", 1, &[x])), Literal::neg(e)]);
+        let pe = b.pos("e", 1, &[x]);
+        let ne = Literal::neg(e);
+        b.rule(p, vec![pe, ne]);
         let prog = b.build().unwrap();
         let pp = prog.symbols.predicate("p", 0);
         let ee = prog.symbols.predicate("e", 1);
@@ -514,7 +536,8 @@ mod tests {
         // through the builder; this pins that property.
         let mut b = Builder::new();
         let x = b.var("X");
-        b.fact(b.atom("p", 1, &[x]));
+        let h = b.atom("p", 1, &[x]);
+        b.fact(h);
         let prog = b.build().unwrap();
         assert!(prog.arity_check().is_ok());
     }
