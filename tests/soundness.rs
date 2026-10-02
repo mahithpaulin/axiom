@@ -94,7 +94,7 @@ fn a_tampered_proof_is_rejected() {
     let other = s.facts_of(edge)[0];
     let fake = axiom::Proof {
         goal: other,
-        root,
+        root: Some(root),
         ..Default::default()
     };
     assert!(
