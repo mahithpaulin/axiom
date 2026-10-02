@@ -52,7 +52,7 @@ fn representation(b: &mut Bench, quick: bool) {
     b.note("-- representation --");
 
     // H: interning a term is O(arity) and duplicate interning allocates nothing.
-    b.run_once("hash_cons_1000_terms", || {
+    b.run_once("hash_cons_1000_terms", |_| {
         let mut s = Builder::new();
         let f2 = s.symbols.func("f", 2);
         let g1 = s.symbols.func("g", 1);
@@ -101,17 +101,17 @@ fn representation(b: &mut Bench, quick: bool) {
     });
 
     // Structural sharing across rules: the same subterm is one node.
-    b.run_once("hash_cons_sharing", || {
+    b.run_once("hash_cons_sharing", |_| {
         let mut s = Builder::new();
         let f2 = s.symbols.func("f", 2);
         let mut ts = axiom::TermStore::new();
         let a = ts.constant(s.symbols.constant("a"));
-        let b = ts.constant(s.symbols.constant("b"));
-        let shared = ts.func(f2, &[a, b]);
+        let bb = ts.constant(s.symbols.constant("b"));
+        let shared = ts.func(f2, &[a, bb]);
+        let g = s.symbols.func("g", 1);
         let mut n = 0u64;
         for _ in 0..1000 {
             // 1000 distinct wrappers over one shared subterm.
-            let g = ts.symbols.func("g", 1);
             let w = ts.func(g, &[shared]);
             n += 1;
             std::hint::black_box(w);
@@ -124,7 +124,7 @@ fn representation(b: &mut Bench, quick: bool) {
     }
 
     // Deep terms: walking and resolving must not touch the native stack.
-    b.run_once("deep_term_walk_100k", || {
+    b.run_once("deep_term_walk_100k", |_| {
         let mut s = Builder::new();
         let cons = s.symbols.func("cons", 2);
         let nil = s.symbols.constant("nil");
@@ -202,7 +202,7 @@ fn unification(b: &mut Bench, quick: bool) {
     }
 
     // Wide terms: a single literal with many arguments.
-    b.run_once("unify_wide_terms", || {
+    b.run_once("unify_wide_terms", |_| {
         let mut s = Builder::new();
         let wide = s.symbols.func("w", 64);
         let mut ts = axiom::TermStore::new();
@@ -322,7 +322,7 @@ fn algorithms(b: &mut Bench, quick: bool) {
         });
     }
 
-    b.run_once("tc_random_n3000", || {
+    b.run_once("tc_random_n3000", |_| {
         let prog = random_graph(3000, 10, 11);
         let mut s = Solver::new(prog);
         let mut budget = Budget::steps(4_000_000_000);
@@ -333,7 +333,7 @@ fn algorithms(b: &mut Bench, quick: bool) {
     });
 
     // Stratified negation: the extra stratum must not cost much.
-    b.run_once("stratified_negation_5000", || {
+    b.run_once("stratified_negation_5000", |_| {
         let mut bld = Builder::new();
         for i in 0..5_000 {
             let x = bld.constant(&format!("n{i}"));
