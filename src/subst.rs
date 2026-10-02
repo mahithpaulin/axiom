@@ -372,3 +372,116 @@ impl Subst {
         (0..nodes).filter(|&i| self.parent[i] != i as u32).count()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::symbol::SymbolTable;
+
+    fn store_and_syms() -> (SymbolTable, TermStore) {
+        let mut s = SymbolTable::new();
+        let _ = s.predicate("p", 2);
+        let _ = s.func("f", 1);
+        (s, TermStore::new())
+    }
+
+    #[test]
+    fn match_then_resolve_yields_a_ground_term() {
+        let (s, mut st) = store_and_syms();
+        let p = s.predicate("p", 2);
+        let a = st.constant(s.constant("a"));
+        let b = st.constant(s.constant("b"));
+        let (x, _) = st.fresh_var();
+        let (y, _) = st.fresh_var();
+        let pat = st.atom(p, &[x, y]);
+        let fact = st.atom(p, &[a, b]);
+        let mut sub = Subst::new();
+        sub.match_into(&st, pat, fact).expect("should match");
+        let r = sub.resolve(&mut st, pat);
+        assert_eq!(st.show(r, &s), "p(a,b)");
+        assert!(st.is_ground(r), "resolved term must be ground");
+    }
+
+    #[test]
+    fn resolve_is_idempotent_on_ground_terms() {
+        let (s, mut st) = store_and_syms();
+        let f = s.func("f", 1);
+        let a = st.constant(s.constant("a"));
+        let t = st.func(f, &[a]);
+        let mut sub = Subst::new();
+        let r = sub.resolve(&mut st, t);
+        assert_eq!(r, t, "a ground term must resolve to itself");
+    }
+
+    #[test]
+    fn undo_restores_the_table_exactly() {
+        let (s, mut st) = store_and_syms();
+        let p = s.predicate("p", 2);
+        let a = st.constant(s.constant("a"));
+        let (x, _) = st.fresh_var();
+        let (y, _) = st.fresh_var();
+        let pat = st.atom(p, &[x, y]);
+        let mut sub = Subst::new();
+        let before = sub.binding_count(st.node_count());
+        let mark = sub.mark();
+        sub.match_into(&st, pat, st.atom(p, &[a, a])).unwrap();
+        assert!(sub.binding_count(st.node_count()) > before);
+        sub.undo_to(mark);
+        assert_eq!(sub.binding_count(st.node_count()), before, "leaked bindings");
+        assert!(!sub.bound(x) && !sub.bound(y));
+    }
+
+    #[test]
+    fn occurs_check_blocks_cyclic_terms() {
+        let (s, mut st) = store_and_syms();
+        let f = s.func("f", 1);
+        let (x, _) = st.fresh_var();
+        let fx = st.func(f, &[x]);
+        let mut sub = Subst::new();
+        assert_eq!(sub.unify(&st, x, fx), Err(UnifyErr::Occurs));
+        // And the symmetric direction.
+        let (y, _) = st.fresh_var();
+        let gy = st.func(f, &[y]);
+        assert_eq!(sub.unify(&st, gy, y), Err(UnifyErr::Occurs));
+    }
+
+    #[test]
+    fn clash_on_distinct_symbols() {
+        let (s, mut st) = store_and_syms();
+        let a = st.constant(s.constant("a"));
+        let b = st.constant(s.constant("b"));
+        let mut sub = Subst::new();
+        assert_eq!(sub.unify(&st, a, b), Err(UnifyErr::Clash));
+    }
+
+    #[test]
+    fn variable_never_becomes_the_root_over_a_term() {
+        // Union by rank must not elect a variable as representative when it
+        // meets a function term, or the binding becomes invisible.
+        let (s, mut st) = store_and_syms();
+        let f = s.func("f", 1);
+        let a = st.constant(s.constant("a"));
+        let fa = st.func(f, &[a]);
+        let (x, _) = st.fresh_var();
+        let (y, _) = st.fresh_var();
+        // Force y to a higher rank by linking two variables through it.
+        let mut sub = Subst::new();
+        sub.unify(&st, x, y).unwrap();
+        sub.unify(&st, x, fa).unwrap();
+        assert_eq!(st.show(sub.resolve(&mut st, y), &s), "f(a)");
+    }
+
+    #[test]
+    fn deep_terms_resolve_without_native_recursion() {
+        let (s, mut st) = store_and_syms();
+        let cons = s.func("cons", 2);
+        let nil = st.constant(s.constant("nil"));
+        let mut t = nil;
+        for _ in 0..50_000 {
+            t = st.func(cons, &[t, nil]);
+        }
+        let mut sub = Subst::new();
+        let r = sub.resolve(&mut st, t);
+        assert!(st.is_ground(r));
+    }
+}
