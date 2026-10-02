@@ -65,7 +65,9 @@
 //! let mut solver = Solver::new(parsed.program);
 //! let mut budget = Budget::steps(1_000_000);
 //! let sat = solver.least_model(&mut budget).expect("within budget");
-//! assert_eq!(sat.idb_facts, 3, "path/2 gains path(a,b), path(b,c), path(a,c)");
+//! // `edge` is itself an IDB predicate (it has rules with it as a head), so the
+//! // closure is 2 edge facts + 3 path facts.
+//! assert_eq!(sat.idb_facts, 5, "path/2 gains path(a,b), path(b,c), path(a,c)");
 //!
 //! // 4. Answer with a proof, then re-check it without consulting the search.
 //! let out = solver.prove(goal, &mut budget);
