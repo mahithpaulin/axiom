@@ -491,11 +491,14 @@ path(X, Z) :- path(X, Y), edge(Y, Z).
 
     #[test]
     fn uppercase_is_a_variable() {
-        let mut b = Builder::new();
-        let _ = b.var("X");
-        let p = parse("q(X).").unwrap();
-        // q(X) with an unbound variable is not a fact, so it must be rejected.
-        assert!(p.program.rules.len() == 1);
+        // `X` must survive tokenisation as a variable and not decay into the
+        // constant `x`. If it did, `q(X).` would parse as a ground fact.
+        let e = parse("q(X).");
+        assert!(e.is_err(), "X must not be tokenised as a constant");
+        assert_eq!(e.unwrap_err().message, "a fact must be ground");
+        // In rule position the same identifier is accepted as a variable.
+        let p = parse("q(X) :- r(X).").unwrap();
+        assert_eq!(p.program.rules.len(), 1);
     }
 
     #[test]
