@@ -35,6 +35,26 @@ use crate::status::{Exhausted, Status};
 use crate::subst::Subst;
 use crate::term::TermId;
 
+/// Whether to record derivations.
+///
+/// This is not a cosmetic switch. Measured cost of `Full` on transitive closure
+/// is roughly an order of magnitude more memory than the facts themselves
+/// (see docs/PERFORMANCE.md, `memory_breakdown`): every derived fact stores a
+/// `Derivation` with two `Vec`s, and each `Vec` is a separate heap block. On a
+/// 7 GB machine that is the difference between solving and not solving.
+///
+/// The status contract is preserved either way. With `Off` the engine cannot
+/// support a `Proved` claim, so it reports `Found` -- "a witness exists, no
+/// proof attached" -- rather than a definite status with nothing behind it.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum ProofMode {
+    /// Least model only. No derivations recorded.
+    Off,
+    /// Every derivation recorded; proofs available and independently checkable.
+    #[default]
+    Full,
+}
+
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
 pub struct Stats {
     /// Semi-naive rounds executed.
@@ -84,6 +104,8 @@ pub struct Solver {
     pub derivs: Vec<Derivation>,
     pub deriv_of: FxHashMap<TermId, DerivId>,
     pub stats: Stats,
+    /// Whether derivations are being recorded. See [`ProofMode`].
+    pub proof_mode: ProofMode,
     renamed: Vec<Option<Renamed>>,
     /// Rules whose body is entirely extensional: evaluated once per stratum.
     pub(crate) static_done: Vec<bool>,
@@ -117,6 +139,7 @@ impl Solver {
             derivs: Vec::new(),
             deriv_of: FxHashMap::default(),
             stats: Stats::default(),
+            proof_mode: ProofMode::Full,
             renamed: (0..n).map(|_| None).collect(),
             static_done: vec![false; n],
             delta: vec![Vec::new(); np],
@@ -125,6 +148,12 @@ impl Solver {
             jm: Vec::new(),
             rules_by_pred,
         }
+    }
+
+    /// Stop recording derivations. Existing derivations are kept, so this must
+    /// be called before solving to have any memory effect.
+    pub fn set_proof_mode(&mut self, m: ProofMode) {
+        self.proof_mode = m;
     }
 
     // ---- rule renaming ----------------------------------------------------

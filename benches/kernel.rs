@@ -23,7 +23,7 @@
 //! first; a constant-factor change shows up only in the time columns.
 
 use axiom::bench::{allocated_bytes, peak_rss_kb, rss_kb, Bench, Rng};
-use axiom::{exterior, Budget, Builder, Db, Literal, Program, Solver, Status, TermId};
+use axiom::{exterior, Budget, Builder, Db, Literal, ProofMode, Program, Solver, Status, TermId};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -39,6 +39,7 @@ fn main() {
     indexing(&mut b, quick);
     algorithms(&mut b, quick);
     checking(&mut b, quick);
+    memory(&mut b, quick);
     exterior_and_end_to_end(&mut b, quick);
 
     b.report();
@@ -399,6 +400,63 @@ fn checking(b: &mut Bench, quick: bool) {
         } else {
             0
         }
+    });
+}
+
+// ---- memory --------------------------------------------------------------
+
+/// Where does the memory actually go?
+///
+/// Transitive closure measured ~248 B per derived fact, against ~19 B of IR
+/// payload. The gap is the interesting result, so this benchmark attributes it
+/// rather than reporting one number. Each row re-solves the same program in a
+/// fresh process-local solver with one component disabled, and the deltas are
+/// what the components cost.
+fn memory(b: &mut Bench, quick: bool) {
+    b.note("");
+    b.note("-- memory --");
+    let n = if quick { 2_000 } else { 4_000 };
+
+    for mode in [ProofMode::Full, ProofMode::Off] {
+        let label = if mode == ProofMode::Full { "proofs on" } else { "proofs off" };
+        let prog = path_graph(n);
+        let mut s = Solver::new(prog);
+        s.set_proof_mode(mode);
+        let store_before = s.prog.payload_bytes();
+        let mut budget = Budget::steps(8_000_000_000);
+        let t0 = std::time::Instant::now();
+        let sat = s.least_model(&mut budget);
+        let ms = t0.elapsed().as_secs_f64() * 1000.0;
+        let facts = sat.map(|x| x.idb_facts).unwrap_or(0);
+        let store = s.prog.payload_bytes().saturating_sub(store_before);
+        let db_idx = s.db.index_bytes();
+        let derivs = s.derivs.capacity() * std::mem::size_of::<axiom::Derivation>();
+        println!(
+            "    {label:<11} facts={facts:<8} rss={:>8} kB  store={:>9} B  db_indexes={:>9} B  deriv_records={:>9} B  derivs={}",
+            rss_kb(),
+            store,
+            db_idx,
+            derivs,
+            s.derivs.len()
+        );
+        if facts > 0 {
+            println!(
+                "                measured {:.0} B/fact   IR payload {:.0} B/fact   deriv+db {:.0} B/fact",
+                (rss_kb() * 1024) as f64 / facts as f64,
+                store as f64 / facts as f64,
+                (db_idx + derivs) as f64 / facts as f64
+            );
+        }
+        std::hint::black_box(ms);
+        std::hint::black_box(mode);
+    }
+
+    b.run_once("memory_per_fact_probe", |_| {
+        let prog = path_graph(n);
+        let mut s = Solver::new(prog);
+        s.set_proof_mode(ProofMode::Off);
+        let mut budget = Budget::steps(8_000_000_000);
+        s.least_model(&mut budget).map(|x| x.idb_facts).unwrap_or(0)
     });
 }
 

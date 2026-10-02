@@ -289,7 +289,9 @@ impl Solver {
                             self.delta[pred as usize].push(concl);
                             self.stats.new_facts += 1;
                             self.stats.derivations += 1;
-                            self.record_derivation(rule, concl);
+                            if self.proof_mode == ProofMode::Full {
+                                self.record_derivation(rule, concl);
+                            }
                         }
                     }
                     self.subst.undo_to(mark);

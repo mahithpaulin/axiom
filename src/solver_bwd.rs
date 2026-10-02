@@ -176,6 +176,12 @@ impl Solver {
         };
 
         if self.db.contains(goal) {
+            // Without recorded derivations there is nothing to check, so the
+            // honest status is `Found`, not `Proved`. See `ProofMode`.
+            if self.proof_mode == ProofMode::Off {
+                return Outcome::definite(Status::Found, None, self.stats.delta(&before))
+                    .note("derivations not recorded; no proof attached");
+            }
             let proof = Proof {
                 goal,
                 root: self.deriv_of.get(&goal).copied(),
@@ -200,6 +206,9 @@ impl Solver {
             }
             Ok(false) => match sat {
                 Some(s) => {
+                    // A negative answer is backed by the closure certificate,
+                    // which is cheap and is always present, so it stays
+                    // `Refuted` regardless of proof mode.
                     // Bottom-up completed and the goal is absent: this is the
                     // least model, so absence is a proof of non-derivability.
                     let proof = Proof {
