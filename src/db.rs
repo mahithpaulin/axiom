@@ -152,10 +152,9 @@ impl Db {
         let map_bytes: usize = self
             .by_first
             .iter()
-            .flat_map(|v| v.iter())
-            .map(|(_, m)| {
-                // load-factor overhead of the key/value table plus the per-bucket
-                // vector; an estimate, not an exact allocator figure.
+            .map(|m| {
+                // key/value table overhead at load factor, plus the per-bucket
+                // vectors. An estimate, not an exact allocator figure.
                 m.capacity() * (std::mem::size_of::<TermId>() * 2 + 16)
                     + m.values().map(|v: &Vec<TermId>| v.capacity() * 4).sum::<usize>()
             })
