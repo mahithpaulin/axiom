@@ -109,41 +109,29 @@ fn apply(s: &str, env: &HashMap<String, Term>) -> Term {
 /// All ground instances of a rule body, left to right with backtracking.
 /// Results are `Option<()>`-free because the body is always satisfiable or not;
 /// a `None` bound map simply means "no solution".
-fn solve_body(
-    body: &[(bool, Atom)],
-    pred_facts: &HashMap<String, Vec<Atom>>,
-) -> Vec<HashMap<String, Term>> {
-    let mut out: Vec<HashMap<String, Term>> = Vec::new();
+fn solve_body(body: &[(bool, Atom)], pred_facts: &HashMap<String, Vec<Atom>>) -> Vec<HashMap<String, Term>> {
     let mut path: Vec<HashMap<String, Term>> = vec![HashMap::new()];
-    for (pos, atom) in body.iter().enumerate() {
-        let (name, args) = parse_term(atom);
-        let key = format!("{name}/{}", args.len());
-        let candidates: Vec<Atom> = match pred_facts.get(&key) {
-            Some(v) => v.clone(),
-            None => Vec::new(),
-        };
-        let mut next: Vec<HashMap<String, Term>> = Vec::new();
-        for env in &path {
-            if !*pos_bool(body, pos) {
-                continue;
-            }
-            for c in &candidates {
-                let mut e2 = env.clone();
-                let cargs: Vec<Term> = parse_term(c).1;
-                let mut ok = true;
-                for (p, f) in args.iter().zip(cargs.iter()) {
-                    if !match_term(p, f, &mut e2) {
-                        ok = false;
-                        break;
+    for (positive, atom) in body.iter() {
+        if *positive {
+            let (name, args) = parse_term(atom);
+            let key = format!("{name}/{}", args.len());
+            let candidates: Vec<Atom> = match pred_facts.get(&key) {
+                Some(v) => v.clone(),
+                None => Vec::new(),
+            };
+            let mut next: Vec<HashMap<String, Term>> = Vec::new();
+            for env in &path {
+                for c in &candidates {
+                    let mut e2 = env.clone();
+                    let cargs: Vec<Term> = parse_term(c).1;
+                    if args.iter().zip(cargs.iter()).all(|(p, f)| match_term(p, f, &mut e2)) {
+                        next.push(e2);
                     }
                 }
-                if ok {
-                    next.push(e2);
-                }
             }
-        }
-        // Negated literals filter the accumulated environments.
-        if !*pos_bool(body, pos) {
+            path = next;
+        } else {
+            // A negated literal filters the environments accumulated so far.
             path = path
                 .into_iter()
                 .filter(|env| {
@@ -156,19 +144,12 @@ fn solve_body(
                     }
                 })
                 .collect();
-        } else {
-            path = next;
         }
         if path.is_empty() {
             return Vec::new();
         }
     }
-    out = path;
-    out
-}
-
-fn pos_bool(body: &[(bool, Atom)], pos: usize) -> bool {
-    body.get(pos).map(|b| b.0).unwrap_or(false)
+    path
 }
 
 /// Naive fixpoint. Returns the complete closure, including seed facts.
@@ -211,7 +192,7 @@ pub fn least_model(rules: &[RefRule], max_rounds: usize) -> (HashSet<Atom>, Vec<
     for r in &usable {
         let (_, args) = parse_term(&r.head);
         if args.iter().any(|a| a.contains('(')) {
-            skipped.push(r.clone());
+            skipped.push((*r).clone());
         }
     }
     (closure, skipped)
