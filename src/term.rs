@@ -209,7 +209,7 @@ impl TermStore {
     /// recorded without disturbing the child arena.
     fn intern(&mut self, kind: u8, sym: SymId, args: &[TermId], _const: Option<u8>) -> TermId {
         let h = content_hash(kind, sym, args);
-        if let Some(&id) = self.buckets.get(&h) {
+        if let Some(bucket) = self.buckets.get(&h) {
             for &id in bucket {
                 let c = self.nodes[id as usize];
                 if c.kind == kind && c.sym == sym && c.len as usize == args.len() {

@@ -27,7 +27,6 @@
 //! nothing panics and nothing loops. `tests/malformed.rs` asserts that.
 
 use crate::program::{Builder, Literal, Program, ProgramError};
-use crate::symbol::SK_PRED;
 use crate::term::{TermId, TermStore, T_FUN};
 
 /// Hard limits. Exceeding any of them is a parse error, not a hang.
@@ -313,7 +312,6 @@ impl<'a> Parser<'a> {
             return self.err("nesting depth limit exceeded");
         }
         let name = self.ident()?;
-        let sym_pred = self.b.symbols.predicate(&name, 0);
         if !self.eat(&Tok::LParen) {
             let s = self.b.symbols.predicate(&name, 0);
             return Ok(self.b.store.atom(s, &[]));
@@ -469,11 +467,6 @@ pub fn kind_name(store: &TermStore, t: TermId) -> &'static str {
         _ => "atom",
     }
 }
-
-const _: () = {
-    // Keep the predicate symbol class referenced so the import stays honest.
-    assert!(SK_PRED == 2);
-};
 
 #[cfg(test)]
 mod tests {
