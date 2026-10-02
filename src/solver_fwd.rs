@@ -130,13 +130,21 @@ impl Solver {
         None
     }
 
-    /// Enumerate solutions for every body position except `skip`. On success the
-    /// substitution holds the final solution.
+    /// Produce the *next* complete solution for every body position except
+    /// `skip`, leaving the substitution bound on success.
     ///
-    /// Iterative with explicit cursor and trail-mark stacks: the level count is
-    /// bounded by the body length, so no input can reach the native stack, and
-    /// the stacks are reused so the join allocates nothing per firing.
-    fn join(
+    /// This is a resumable generator, and being resumable is the whole point.
+    /// An earlier version ran the whole enumeration inside one call and returned
+    /// with only the *final* solution still bound, so each rule firing derived a
+    /// single fact. Saturation then needed one round per derived fact and the
+    /// least model was badly incomplete -- visible in the benchmarks as
+    /// semi-naive being 350x *slower* than the naive baseline, which was the
+    /// tell that something was wrong rather than something being slow.
+    ///
+    /// The cursor and trail-mark stacks live in the solver, so successive calls
+    /// resume where the previous one stopped and allocate nothing. Depth is
+    /// bounded by the body length, so no input can reach the native stack.
+    fn next_solution(
         &mut self,
         rule: RuleId,
         skip: Option<usize>,
@@ -144,61 +152,62 @@ impl Solver {
     ) -> Result<bool, Exhausted> {
         let n_body = self.ren_len(rule);
         let levels = n_body - usize::from(skip.is_some());
-        self.jc.clear();
-        self.jm.clear();
+        // Resuming: drop the previous solution's bindings before rescanning
+        // level 0 from its saved cursor.
+        if !self.jc.is_empty() {
+            self.subst.undo_to(self.jm[0]);
+        }
         let mut depth = 0usize;
-
         loop {
             if depth == levels {
-                return Ok(self.negatives_hold(rule));
-            }
-            let i = match nth_other(n_body, skip, depth) {
-                Some(i) => i,
-                None => return Ok(false),
-            };
-            let lit = self.ren_lit(rule, i);
-            let pred = self.prog.store.sym(lit.atom);
-            // A negated position is never seeded by the delta; it is checked by
-            // `negatives_hold` once every positive position has matched.
-            let bound = if lit.pos {
-                self.first_bound(lit.atom)
+                if self.negatives_hold(rule) {
+                    return Ok(true);
+                }
+                // This solution violates a negation; keep searching.
             } else {
-                None
-            };
-            if depth == self.jc.len() {
-                self.jc.push(0);
-                self.jm.push(self.subst.mark());
-            }
-            let list = self.db.candidates(pred, bound);
-            let mut cursor = self.jc[depth];
-            let mut advanced = false;
-            while cursor < list.len() {
-                let t = list[cursor];
-                cursor += 1;
-                budget.charge(1)?;
-                self.stats.candidates += 1;
-                let mark = self.subst.mark();
-                match self.subst.match_into(&self.prog.store, lit.atom, t) {
-                    Ok(()) => {
-                        advanced = true;
-                        break;
+                let i = match nth_other(n_body, skip, depth) {
+                    Some(i) => i,
+                    None => return Ok(false),
+                };
+                let lit = self.ren_lit(rule, i);
+                let pred = self.prog.store.sym(lit.atom);
+                // A negated position is never seeded by the delta; it is checked
+                // by `negatives_hold` once the positive positions have matched.
+                let bound = if lit.pos { self.first_bound(lit.atom) } else { None };
+                if depth == self.jc.len() {
+                    self.jc.push(0);
+                    self.jm.push(self.subst.mark());
+                }
+                let list = self.db.candidates(pred, bound);
+                let mut cursor = self.jc[depth];
+                let mut advanced = false;
+                while cursor < list.len() {
+                    let t = list[cursor];
+                    cursor += 1;
+                    budget.charge(1)?;
+                    self.stats.candidates += 1;
+                    let mark = self.subst.mark();
+                    match self.subst.match_into(&self.prog.store, lit.atom, t) {
+                        Ok(()) => {
+                            advanced = true;
+                            break;
+                        }
+                        Err(_) => self.subst.undo_to(mark),
                     }
-                    Err(_) => self.subst.undo_to(mark),
+                }
+                self.jc[depth] = cursor;
+                if advanced {
+                    self.stats.join_levels += 1;
+                    depth += 1;
+                    continue;
                 }
             }
-            self.jc[depth] = cursor;
-            if advanced {
-                self.stats.join_levels += 1;
-                depth += 1;
-                continue;
-            }
-            // No viable candidate at this level: undo its bindings and retry the
-            // next candidate one level up.
-            self.subst.undo_to(self.jm[depth]);
+            // No viable continuation here: back out one level and retry it.
             if depth == 0 {
                 return Ok(false);
             }
             depth -= 1;
+            self.subst.undo_to(self.jm[depth]);
         }
     }
 
@@ -228,41 +237,56 @@ impl Solver {
         seed: Option<(usize, TermId)>,
         budget: &mut Budget,
     ) -> Result<(), Exhausted> {
+        let mark = self.subst.mark();
         if let Some((i, t)) = seed {
             let lit = self.ren_lit(rule, i);
-            if self
-                .subst
-                .match_into(&self.prog.store, lit.atom, t)
-                .is_err()
-            {
+            if self.subst.match_into(&self.prog.store, lit.atom, t).is_err() {
+                self.subst.undo_to(mark);
                 return Ok(());
             }
             if !self.negatives_hold(rule) {
+                self.subst.undo_to(mark);
                 return Ok(());
             }
         }
 
-        if !self.join(rule, seed.map(|(i, _)| i), budget)? {
-            return Ok(());
-        }
-
         let head = self.ren_head(rule);
-        let concl = self.subst.resolve(&mut self.prog.store, head);
-        if !self.prog.store.is_ground(concl) {
-            // Cannot happen for a well-formed Datalog rule: every head variable
-            // is bound by matching against ground premises. Counted rather than
-            // stored, so the condition is visible if it ever occurs.
-            self.stats.non_ground_heads += 1;
-            return Ok(());
+        self.jc.clear();
+        self.jm.clear();
+        loop {
+            match self.next_solution(rule, seed.map(|(i, _)| i), budget) {
+                Err(e) => {
+                    self.subst.undo_to(mark);
+                    self.jc.clear();
+                    self.jm.clear();
+                    return Err(e);
+                }
+                Ok(false) => break,
+                Ok(true) => {
+                    let concl = self.subst.resolve(&mut self.prog.store, head);
+                    if !self.prog.store.is_ground(concl) {
+                        // Cannot happen for a well-formed Datalog rule: every head
+                        // variable is bound by matching against ground premises.
+                        // Counted rather than stored, so the condition stays
+                        // visible if it ever does.
+                        self.stats.non_ground_heads += 1;
+                    } else {
+                        let pred = self.prog.store.sym(concl);
+                        self.ensure_pred_slots(pred);
+                        if self.db.insert(&self.prog.store, concl, false) {
+                            self.delta[pred as usize].push(concl);
+                            self.stats.new_facts += 1;
+                            self.stats.derivations += 1;
+                            self.record_derivation(rule, concl);
+                        }
+                    }
+                    self.subst.undo_to(mark);
+                }
+            }
         }
-        let pred = self.prog.store.sym(concl);
-        self.ensure_pred_slots(pred);
-        if self.db.insert(&self.prog.store, concl, false) {
-            self.delta[pred as usize].push(concl);
-            self.stats.new_facts += 1;
-            self.stats.derivations += 1;
-            self.record_derivation(rule, concl);
-        }
+        self.jc.clear();
+        self.jm.clear();
+        self.subst.undo_to(mark);
         Ok(())
     }
 
