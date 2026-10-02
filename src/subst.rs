@@ -236,9 +236,15 @@ impl Subst {
                     if na.sym != nb.sym || na.len != nb.len {
                         return Err(UnifyErr::Clash);
                     }
+                    // Push the pattern child first so that the *second* pop
+                    // yields it: `y` must be the target and `x` the pattern.
+                    // Reversing this silently swaps the roles, which makes
+                    // `match_into` see a variable on the target side and
+                    // correctly report Clash -- an unsound-looking but
+                    // actually fatal ordering bug.
                     for i in (0..na.len as usize).rev() {
-                        self.stack.push(store.args(rb)[i]);
                         self.stack.push(store.args(ra)[i]);
+                        self.stack.push(store.args(rb)[i]);
                     }
                 }
                 _ => return Err(UnifyErr::Clash),
@@ -290,9 +296,15 @@ impl Subst {
                     if na.sym != nb.sym || na.len != nb.len {
                         return Err(UnifyErr::Clash);
                     }
+                    // Push the pattern child first so that the *second* pop
+                    // yields it: `y` must be the target and `x` the pattern.
+                    // Reversing this silently swaps the roles, which makes
+                    // `match_into` see a variable on the target side and
+                    // correctly report Clash -- an unsound-looking but
+                    // actually fatal ordering bug.
                     for i in (0..na.len as usize).rev() {
-                        self.stack.push(store.args(rb)[i]);
                         self.stack.push(store.args(ra)[i]);
+                        self.stack.push(store.args(rb)[i]);
                     }
                 }
                 _ => return Err(UnifyErr::Clash),
