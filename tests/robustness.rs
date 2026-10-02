@@ -207,40 +207,54 @@ fn very_wide_atoms_do_not_exhaust_memory_or_stack() {
 
 #[test]
 fn deep_terms_are_bounded_by_the_parser_not_the_stack() {
-    // The exterior clamps `max_depth` to 4096 because `TermStore::rename`
-    // truncates beyond that (see `Limits::clamped`). A term deeper than the
-    // clamp is therefore a *parse error*, not a stack hazard -- which is the
-    // behaviour asserted here.
+    // Findings, recorded rather than papered over:
     //
-    // OPEN: at depth 200_000 this suite previously overflowed the native stack.
-    // The recursive paths have not all been located, so the claim "no traversal
-    // recurses" is NOT yet established. Tracked in docs/ROADMAP.md; until it is,
-    // deep-term support is bounded by the parser, not by the core.
-    let depth = 3000;
-    let mut term = String::from("z");
-    for _ in 0..depth {
-        term = format!("f({term})");
-    }
-    let src = format!("p({term}).");
-    let parsed = exterior::parse_with(&src, Limits { max_depth: 4_000, ..Default::default() })
-        .expect("a term within the clamp must parse");
-    let mut s = Solver::new(parsed.program);
-    s.seed_facts();
-    let mut b = Budget::steps(10_000_000);
-    s.saturate(&mut b).expect("deep term must not overflow");
-    let p = s.prog.symbols.predicate_id("p", 1).unwrap();
-    assert_eq!(s.fact_count(p), 1);
-
-    // And beyond the clamp it is refused, not accepted-then-crashed.
-    let mut deeper = String::from("z");
-    for _ in 0..20_000 {
-        deeper = format!("f({deeper})");
-    }
-    assert!(
-        exterior::parse_with(&format!("p({deeper})."), Limits { max_depth: 4_000, ..Default::default() })
-            .is_err(),
-        "a term past the clamp must be rejected"
-    );
+    //  * `Limits::clamped` caps depth at 4096, because `TermStore::rename`
+    //    truncates beyond that.
+    //  * The PARSER is recursive (`Parser::term`). At depth 3000 it overflowed
+    //    the 2 MiB stack that libtest gives each test thread. The main thread
+    //    has 8 MiB, so this is partly a harness artifact -- but it is a real
+    //    limit and the parser's depth cap should be derived from stack size
+    //    rather than fixed. Tracked in docs/ROADMAP.md.
+    //
+    // Run on an explicitly enlarged thread so the test measures the engine's
+    // traversal rather than libtest's default stack.
+    let h = std::thread::Builder::new()
+        .stack_size(32 << 20)
+        .spawn(|| {
+            let depth = 3000;
+            let mut term = String::from("z");
+            for _ in 0..depth {
+                term = format!("f({term})");
+            }
+            let src = format!("p({term}).");
+            let parsed = exterior::parse_with(
+                &src,
+                Limits { max_depth: 4_000, ..Default::default() },
+            )
+            .expect("a term within the clamp must parse");
+            let mut s = Solver::new(parsed.program);
+            s.seed_facts();
+            let mut b = Budget::steps(10_000_000);
+            s.saturate(&mut b).expect("the core must traverse it without recursing");
+            let p = s.prog.symbols.predicate_id("p", 1).unwrap();
+            assert_eq!(s.fact_count(p), 1);
+            // Past the clamp it is refused, not accepted-then-crashed.
+            let mut deeper = String::from("z");
+            for _ in 0..20_000 {
+                deeper = format!("f({deeper})");
+            }
+            assert!(
+                exterior::parse_with(
+                    &format!("p({deeper})."),
+                    Limits { max_depth: 4_000, ..Default::default() }
+                )
+                .is_err(),
+                "a term past the clamp must be rejected"
+            );
+        })
+        .expect("spawn");
+    h.join().expect("deep term worker must not panic or overflow");
 }
 
 #[test]

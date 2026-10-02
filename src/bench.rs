@@ -177,7 +177,7 @@ impl Bench {
     /// killed with nothing to show for it: a suite that prints only at the end
     /// loses every result when a late benchmark turns out to be pathological,
     /// which is exactly when the numbers are most wanted.
-    fn push(&mut self, row: Row) {
+    fn record(&mut self, row: Row) {
         self.rows.push(row);
         let r = self.rows.last().expect("just pushed");
         let secs = r.wall_ms / 1000.0;
@@ -208,7 +208,7 @@ impl Bench {
             }
         }
         let wall = t0.elapsed().as_secs_f64() * 1000.0;
-        self.rows.push(Row {
+        self.record(Row {
             name: name.to_string(),
             iters,
             ops,
@@ -230,7 +230,7 @@ impl Bench {
         let t0 = Instant::now();
         let ops = f(0);
         let wall = t0.elapsed().as_secs_f64() * 1000.0;
-        self.rows.push(Row {
+        self.record(Row {
             name: name.to_string(),
             iters: 1,
             ops,
@@ -257,7 +257,7 @@ impl Bench {
                 std::hint::black_box(i);
             }
             let wall = t0.elapsed().as_secs_f64() * 1000.0;
-            self.rows.push(Row {
+            self.record(Row {
                 name: label,
                 iters,
                 ops,
