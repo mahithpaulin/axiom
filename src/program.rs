@@ -33,7 +33,7 @@
 //! stratified, and the builder rejects it rather than guessing.
 
 use crate::hash::FxHashMap;
-use crate::symbol::{SymbolTable, SK_PRED};
+use crate::symbol::SymbolTable;
 use crate::term::{TermId, TermStore, T_ATOM, T_VAR};
 use core::fmt;
 

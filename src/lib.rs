@@ -95,11 +95,15 @@ pub mod symbol;
 pub mod term;
 
 pub use budget::Budget;
+pub use db::Db;
+pub use subst::Subst;
+pub use symbol::SymbolTable;
+pub use term::TermStore;
 pub use program::{Builder, Literal, Program, ProgramError, Rule, RuleId};
 pub use proof::{CheckErr, DerivId, Derivation, Proof, Saturation};
 pub use solver::{Answer, Outcome, QueryOutcome, Solver, Stats};
 pub use status::{Exhausted, Status};
-pub use term::{TermId, TermStore};
+pub use term::TermId;
 
 #[cfg(test)]
 mod prelude {

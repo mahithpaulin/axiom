@@ -42,7 +42,7 @@
 
 use crate::db::Db;
 use crate::hash::FxHashMap;
-use crate::program::{Literal, Program};
+use crate::program::Program;
 use crate::proof::{CheckErr, DerivId, Derivation, Proof, Saturation};
 use crate::term::{TermId, TermStore, T_VAR};
 

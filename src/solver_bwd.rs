@@ -35,7 +35,7 @@ use crate::budget::Budget;
 use crate::hash::FxHashMap;
 use crate::program::{Literal, RuleId};
 use crate::proof::{Proof, ResolutionStep};
-use crate::solver::{Answer, Outcome, QueryOutcome, Solver, Stats};
+use crate::solver::{Answer, Outcome, QueryOutcome, Solver};
 use crate::status::{Exhausted, Status};
 use crate::term::TermId;
 

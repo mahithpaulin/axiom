@@ -29,7 +29,7 @@ use crate::budget::Budget;
 use crate::check;
 use crate::db::Db;
 use crate::hash::FxHashMap;
-use crate::program::{Literal, Program, ProgramError, RuleId};
+use crate::program::{Literal, Program, RuleId};
 use crate::proof::{CheckErr, DerivId, Derivation, Proof, Saturation};
 use crate::status::{Exhausted, Status};
 use crate::subst::Subst;

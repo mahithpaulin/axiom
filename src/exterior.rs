@@ -78,7 +78,7 @@ pub enum Tok {
 }
 
 #[derive(Clone, Debug)]
-struct Spanned {
+pub struct Spanned {
     tok: Tok,
     line: u32,
     col: u32,
