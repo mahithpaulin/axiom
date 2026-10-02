@@ -152,6 +152,18 @@ impl Solver {
     ) -> Result<bool, Exhausted> {
         let n_body = self.ren_len(rule);
         let levels = n_body - usize::from(skip.is_some());
+        if levels == 0 {
+            // The seed already covers every body position, so there is exactly
+            // one solution for this seed and no cursor to advance. Yielding
+            // `true` unconditionally would spin forever, because the caller
+            // asks for the next solution until exhausted.
+            if self.jc.is_empty() {
+                self.jc.push(0);
+                self.jm.push(0);
+                return Ok(self.negatives_hold(rule));
+            }
+            return Ok(false);
+        }
         // Resuming: drop the previous solution's bindings before rescanning
         // level 0 from its saved cursor.
         if !self.jc.is_empty() {
