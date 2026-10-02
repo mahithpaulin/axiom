@@ -284,6 +284,18 @@ impl Solver {
         self.db.count(pred)
     }
 
+    /// Is `t` a valid node id in this program's arena?
+    ///
+    /// `TermId` is a `u32` index into `Program::store`. Nothing stops a caller
+    /// passing an id produced by a *different* `Program` -- building the goal in
+    /// a separate `exterior::parse` call is an easy mistake, and it produced
+    /// index-out-of-bounds panics in the test suite rather than a diagnostic.
+    #[inline]
+    pub fn goal_in_range(&self, t: TermId) -> bool {
+        (t as usize) < self.prog.store.node_count()
+            && self.prog.store.kind(t) == crate::term::T_ATOM
+    }
+
     /// Clear the database and derivation log, keeping the program. Used to run
     /// a second independent experiment on the same program.
     pub fn reset_db(&mut self) {

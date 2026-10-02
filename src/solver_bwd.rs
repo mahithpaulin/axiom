@@ -239,6 +239,16 @@ impl Solver {
         max_depth: u32,
     ) -> Outcome {
         let before = self.stats;
+        if !self.goal_in_range(goal) {
+            // A TermId from a different TermStore is a caller error, not an
+            // engine error, but it must not be an index-out-of-bounds panic.
+            return Outcome::inconclusive(
+                Status::Unknown,
+                Exhausted::Malformed,
+                before,
+            )
+            .note("goal id does not belong to this program's term store");
+        }
         self.seed_facts();
         let mut note_forward_exhausted: Option<Exhausted> = None;
 
@@ -338,6 +348,9 @@ impl Solver {
     /// there are no answers.
     pub fn query(&mut self, goal: TermId, budget: &mut Budget) -> QueryOutcome {
         let before = self.stats;
+        if !self.goal_in_range(goal) {
+            return QueryOutcome::inconclusive(Status::Unknown, Exhausted::Malformed, before);
+        }
         self.seed_facts();
         let sat = match self.saturate(budget) {
             Ok(s) => s,

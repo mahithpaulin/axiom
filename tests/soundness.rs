@@ -187,9 +187,8 @@ path(X,Z) :- path(X,Y), edge(Y,Z).
 #[test]
 fn proof_mode_off_downgrades_the_status_honestly() {
     let src = "edge(a,b).\npath(X,Y) :- edge(X,Y).\n";
-    let parsed = exterior::parse(src).unwrap();
-    let gp = exterior::parse("path(a,b).").unwrap();
-    let goal = gp.queries[0];
+    let parsed = exterior::parse(&format!("{src}?- path(a,b).\n")).unwrap();
+    let goal = parsed.queries[0];
     let mut s = Solver::new(parsed.program);
     s.set_proof_mode(ProofMode::Off);
     let mut b = Budget::unlimited();
