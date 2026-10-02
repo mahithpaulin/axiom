@@ -1,0 +1,29 @@
+[package]
+name = "axiom"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "General symbolic reasoning engine: one IR, several solvers, machine-checkable proofs."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/mahithpaulin/axiom"
+readme = "README.md"
+
+# Intentionally zero dependencies. See docs/DESIGN_DECISIONS.md (DD-0007).
+[dependencies]
+
+[lib]
+name = "axiom"
+path = "src/lib.rs"
+
+[[bench]]
+name = "kernel"
+harness = false
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+debug = 1
+
+[profile.bench]
+inherits = "release"
