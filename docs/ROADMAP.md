@@ -504,3 +504,80 @@ Stated so they are not mistaken for gaps someone forgot to schedule.
 | `docs/LANGUAGE_SPEC.md` | the exterior's surface syntax, tokeniser, limits, every error message |
 | `docs/PERFORMANCE.md` | **missing.** Referenced from `src/solver.rs:42`, `src/term.rs:247`, `src/subst.rs:68`, `src/budget.rs:11`, `docs/ARCHITECTURE.md:210` and `docs/ALGORITHMS.md:157`, and it does not exist. Every measurement cited in this roadmap should land there, including the I1 counters. |
 | `README.md` | **missing.** Declared in `Cargo.toml:9`. |
+---
+
+## Open defects, numbered as referenced by the test suite
+
+These are `#[ignore]`d or failing tests, not hypotheticals. Each is a defect
+found by a parallel audit or by the differential test, with the test that
+detects it named. The suite is green **with these two exclusions**, which is
+stated plainly rather than implied.
+
+### I1 — Unbound scans dominate the join (highest priority)
+
+**Measured:** `candidates ≈ 0.5·n³` for transitive closure on a path graph, where
+the correct figure is `0.5·n²`. Instrumented at n=800: **292 075 000 unbound
+(non-indexed) scans** against **427 250 bound index lookups** (1 candidate each —
+the index itself works perfectly).
+
+**Reproduce:** `cargo bench --bench kernel -- diag`
+
+**Status:** root cause **not yet established**. The per-rule attribution run was
+started and lost. Note that `first_bound` (P0-4, since fixed) was a *plausible*
+suspect — it accepted non-ground compound terms as index keys — but it would
+cause *missed* derivations, not extra scans, so it is probably not the whole
+story. Do not assume; re-instrument per rule.
+
+### I2 — `saturate_naive` is broken
+
+The benchmark baseline in `src/solver_fwd.rs` derives ~1 200 facts where ~180 900
+are correct, which invalidates the semi-naive-vs-naive comparison entirely. Fix
+or delete; do not publish a comparison against it until fixed.
+
+### I3 — Two benchmarks measure nothing
+
+`db_index_lookup` and `db_scan_lookup` in `benches/kernel.rs` call `.len()` on a
+slice, which is O(1). They measure a pointer read, not a scan. Rewrite to touch
+every returned tuple.
+
+### I4 — `rss_kb()` is read after the solver drops
+
+In `Bench::run`/`run_once` the closure owns and drops the `Solver` before the
+harness reads RSS, so those figures **understate** peak memory. Read RSS inside
+the closure. (The scaling table reads it while the solver is alive, so those
+figures are valid — which is why the same suite reports both 3.1 GB and 6 MB.)
+
+### I5 — The engine omits derivations the reference derives
+
+Detected by `tests/soundness.rs::agrees_with_naive_reference_on_random_programs`
+(`#[ignore]`d). On the generated family the engine misses facts such as
+`q(4,4)` from `q(X,Y) :- p(X), e(_,Y).` when both `p(4)` and `e(4,4)` are present.
+This is **incompleteness of saturation**, and it is the most serious open item:
+it is the same class of bug as the four P0 defects already fixed, and it is
+caught only because `tests/reference.rs` is a genuinely independent
+implementation.
+
+### I6 — `non_ground_heads` is 3 on the transitive-closure fixture
+
+Detected by `tests/soundness.rs::no_bindings_survive_saturation` (`#[ignore]`d).
+The canary is meant to be 0. Either the canary is miscounting or a head really
+is being stored unresolved; both are defects.
+
+### I7 — `proof.root` and `proof.steps` are never validated
+
+`check::verify` inspects only `proof.goal`. A proof whose root points at an
+unrelated derivation, or whose SLD resolution trace is wrong, is currently
+accepted. `CheckErr::GoalMismatch` is dead code for this reason. Consequence:
+every `Proved` produced by the backward-resolution path carries a proof that
+verification rejects (`Unsupported`), because the goal is by construction absent
+from the fact database. Implement step checking and cross-check `root.concl ==
+goal`.
+
+### I8 — The parser is recursive and the depth cap is a magic number
+
+`Parser::term` recurses. At depth 3000 it overflowed the 2 MiB stack libtest
+gives each thread. `Limits::clamped` caps depth at 4096 because
+`TermStore::rename` truncates beyond that; the cap should instead be derived
+from available stack. `tests/robustness.rs::deep_terms_are_bounded_by_the_parser_not_the_stack`
+runs on a 32 MiB thread and passes, so the *core* traversals are iterative — it
+is the parser that is bounded, not the engine.
