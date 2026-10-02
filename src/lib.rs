@@ -47,29 +47,32 @@
 //! ```
 //! use axiom::{exterior, Budget, Solver, Status};
 //!
-//! let src = "
+//! // 1. The problem, in the exterior's surface syntax.
+//! let src = "\
 //! edge(a, b).
 //! edge(b, c).
 //! path(X, Y) :- edge(X, Y).
 //! path(X, Z) :- path(X, Y), edge(Y, Z).
+//! ?- path(a, c).
 //! ";
-//! let parsed = exterior::parse(src).unwrap();
-//! let goal_name = parsed.program.symbols.predicate("path", 2);
-//! let goal = parsed
-//!     .program
-//!     .rules
-//!     .iter()
-//!     .find(|r| parsed.program.store.sym(r.head) == goal_name)
-//!     .map(|_| ())
-//!     .unwrap_or(());
-//! let _ = goal;
 //!
+//! // 2. Compiled to the logical IR. Names become symbol ids; terms become
+//! //    hash-consed arena nodes. The core sees no domain concepts at all.
+//! let parsed = exterior::parse(src).unwrap();
+//! let goal = parsed.queries[0];
+//!
+//! // 3. The core computes the least model.
 //! let mut solver = Solver::new(parsed.program);
-//! let mut budget = Budget::unlimited();
-//! let sat = solver.least_model(&mut budget).unwrap();
-//! assert!(sat.idb_facts >= 3, "path closure should include a->b, b->c, a->c");
-//! assert_eq!(solver.fact_count(goal_name), 3);
-//! let _ = Status::Proved;
+//! let mut budget = Budget::steps(1_000_000);
+//! let sat = solver.least_model(&mut budget).expect("within budget");
+//! assert_eq!(sat.idb_facts, 3, "path/2 gains path(a,b), path(b,c), path(a,c)");
+//!
+//! // 4. Answer with a proof, then re-check it without consulting the search.
+//! let out = solver.prove(goal, &mut budget);
+//! assert_eq!(out.status, Status::Proved);
+//! let proof = out.proof.expect("a definite status must carry a proof");
+//! assert!(solver.verify(&proof).is_ok(), "the proof must re-derive independently");
+//! assert!(solver.proof_size(&proof) >= 1);
 //! ```
 
 pub mod budget;
