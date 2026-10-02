@@ -164,9 +164,9 @@ fn budget_exhaustion_is_reported_not_hidden() {
         src.push_str(&format!("e(n{i},n{}).\n", i + 1));
     }
     src.push_str("p(X,Y) :- e(X,Y).\np(X,Z) :- p(X,Y), e(Y,Z).\n");
+    src.push_str("?- p(n0,n300).\n");
     let parsed = exterior::parse(&src).unwrap();
-    let gp = exterior::parse("p(n0,n300).").unwrap();
-    let goal = gp.queries[0];
+    let goal = parsed.queries[0];
     let mut s = Solver::new(parsed.program);
     let mut b = Budget::steps(5);
     let out = s.prove(goal, &mut b);
@@ -177,10 +177,9 @@ fn budget_exhaustion_is_reported_not_hidden() {
 
 #[test]
 fn budget_of_zero_stops_immediately() {
-    let src = "e(a,b).\np(X,Y) :- e(X,Y).\n";
+    let src = "e(a,b).\np(X,Y) :- e(X,Y).\n?- p(a,b).\n";
     let parsed = exterior::parse(src).unwrap();
-    let gp = exterior::parse("p(a,b).").unwrap();
-    let goal = gp.queries[0];
+    let goal = parsed.queries[0];
     let mut s = Solver::new(parsed.program);
     let mut b = Budget::steps(0);
     let out = s.prove(goal, &mut b);
@@ -223,7 +222,8 @@ fn deep_terms_are_bounded_by_the_parser_not_the_stack() {
         term = format!("f({term})");
     }
     let src = format!("p({term}).");
-    let parsed = exterior::parse(&src).expect("a term within the clamp must parse");
+    let parsed = exterior::parse_with(&src, Limits { max_depth: 4_000, ..Default::default() })
+        .expect("a term within the clamp must parse");
     let mut s = Solver::new(parsed.program);
     s.seed_facts();
     let mut b = Budget::steps(10_000_000);
@@ -237,7 +237,8 @@ fn deep_terms_are_bounded_by_the_parser_not_the_stack() {
         deeper = format!("f({deeper})");
     }
     assert!(
-        exterior::parse(&format!("p({deeper}).")).is_err(),
+        exterior::parse_with(&format!("p({deeper})."), Limits { max_depth: 4_000, ..Default::default() })
+            .is_err(),
         "a term past the clamp must be rejected"
     );
 }
@@ -276,10 +277,9 @@ fn facts_with_identical_arguments_are_deduplicated() {
 
 #[test]
 fn a_query_with_no_answers_is_refuted_not_unknown() {
-    let src = "e(a,b).\np(X,Y) :- e(X,Y).\n";
+    let src = "e(a,b).\np(X,Y) :- e(X,Y).\n?- p(a,zzz).\n";
     let parsed = exterior::parse(src).unwrap();
-    let gp = exterior::parse("?- p(a,zzz).").unwrap();
-    let goal = gp.queries[0];
+    let goal = parsed.queries[0];
     let mut s = Solver::new(parsed.program);
     let mut b = Budget::unlimited();
     let out = s.query(goal, &mut b);
