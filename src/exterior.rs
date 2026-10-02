@@ -312,9 +312,11 @@ impl<'a> Parser<'a> {
             return self.err("nesting depth limit exceeded");
         }
         let name = self.ident()?;
+        // Delegating to `Builder::atom` matters: it is what sizes the
+        // per-predicate stratum vectors. Building the atom inline here skipped
+        // that step and every subsequent rule indexed out of bounds.
         if !self.eat(&Tok::LParen) {
-            let s = self.b.symbols.predicate(&name, 0);
-            return Ok(self.b.store.atom(s, &[]));
+            return Ok(self.b.nullary(&name));
         }
         let mut args = Vec::new();
         if self.peek() != Some(&Tok::RParen) {
@@ -329,8 +331,8 @@ impl<'a> Parser<'a> {
             }
         }
         self.expect(&Tok::RParen, "')'")?;
-        let s = self.b.symbols.predicate(&name, args.len() as u16);
-        Ok(self.b.store.atom(s, &args))
+        let arity = args.len() as u16;
+        Ok(self.b.atom(&name, arity, &args))
     }
 
     fn body(&mut self) -> Result<Vec<Literal>, ParseError> {

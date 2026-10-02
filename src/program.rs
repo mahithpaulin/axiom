@@ -516,7 +516,7 @@ mod tests {
     #[test]
     fn function_symbols_in_the_head_are_backward_only() {
         let mut b = Builder::new();
-        let q = b.atom("q", 1, &[]);
+        let q = b.nullary("q");
         let x = b.var("X");
         let succ = b.symbols.func("succ", 1);
         let hx = b.store.func(succ, &[x]);
