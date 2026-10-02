@@ -51,7 +51,11 @@ fn representation(b: &mut Bench, quick: bool) {
     b.note("");
     b.note("-- representation --");
 
-    // H: interning a term is O(arity) and duplicate interning allocates nothing.
+    // H: interning a term is O(arity); a duplicate intern allocates nothing.
+    //
+    // The symbol and constant names are interned *before* the timed region --
+    // otherwise the `format!` in the loop would dominate the allocation count
+    // and the benchmark would measure `std`, not the engine.
     b.run_once("hash_cons_1000_terms", |_| {
         let mut s = Builder::new();
         let f2 = s.symbols.func("f", 2);
@@ -59,44 +63,41 @@ fn representation(b: &mut Bench, quick: bool) {
         let mut ts = axiom::TermStore::new();
         let a = ts.constant(s.symbols.constant("a"));
         let c = ts.constant(s.symbols.constant("b"));
-        let mut built = 0u64;
+
+        let mut keys = Vec::with_capacity(1000);
         for i in 0..1000u32 {
-            let k = ts.constant(s.symbols.constant(&format!("k{i}")));
-            let y = ts.func(f2, &[k, c]);
+            keys.push(ts.constant(s.symbols.constant(&format!("k{i}"))));
+        }
+
+        // Build 1000 distinct 3-level terms.
+        for i in 0..1000usize {
+            let y = ts.func(f2, &[keys[i], c]);
             let z = ts.func(g1, &[y]);
             let w = ts.func(f2, &[a, z]);
-            built += 1;
             std::hint::black_box(w);
         }
         ts.assert_no_dead_children();
-        // Two constants (`a`, `b`) plus four fresh nodes per iteration.
-        assert_eq!(
-            ts.node_count(),
-            built as usize * 4 + 2,
-            "no duplicate nodes"
-        );
+        // 2 constants + 1000 keys + 3 nodes per iteration.
+        assert_eq!(ts.node_count(), 2 + 1000 + 3000, "no duplicate nodes");
 
-        // Same terms again: every intern must hit the existing node.
+        // Intern exactly the same terms again: every lookup must hit.
         let before_nodes = ts.node_count();
         let before_bytes = allocated_bytes();
-        for i in 0..1000u32 {
-            let k = ts.constant(s.symbols.constant(&format!("k{i}")));
-            let y = ts.func(f2, &[k, c]);
+        let before_allocs = axiom::bench::allocs();
+        for i in 0..1000usize {
+            let y = ts.func(f2, &[keys[i], c]);
             let z = ts.func(g1, &[y]);
             let w = ts.func(f2, &[a, z]);
             std::hint::black_box(w);
         }
-        assert_eq!(
-            ts.node_count(),
-            before_nodes,
-            "duplicates must not grow the arena"
-        );
+        assert_eq!(ts.node_count(), before_nodes, "duplicates must not grow the arena");
         assert_eq!(
             allocated_bytes(),
             before_bytes,
-            "duplicate interning must not allocate"
+            "duplicate interning must not request bytes from the allocator"
         );
-        built
+        assert_eq!(axiom::bench::allocs(), before_allocs, "duplicate interning must not allocate");
+        (ts.node_count() + ts.child_count()) as u64
     });
 
     // Structural sharing across rules: the same subterm is one node.
