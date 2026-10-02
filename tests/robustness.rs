@@ -61,12 +61,14 @@ fn non_ground_facts_are_rejected() {
 #[test]
 fn unstratified_negation_is_rejected() {
     let src = "p :- not q.\nq :- not p.\n";
-    let err = exterior::parse(src).expect_err("a negative cycle has no least model");
-    assert!(
-        err.message.contains("stratified"),
-        "unhelpful error: {}",
-        err.message
-    );
+    match exterior::parse(src) {
+        Err(e) => assert!(
+            e.message.contains("stratified"),
+            "unhelpful error: {}",
+            e.message
+        ),
+        Ok(_) => panic!("a negative cycle has no least model and must be refused"),
+    }
 }
 
 #[test]
