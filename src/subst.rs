@@ -380,21 +380,26 @@ mod tests {
 
     fn store_and_syms() -> (SymbolTable, TermStore) {
         let mut s = SymbolTable::new();
-        let _ = s.predicate("p", 2);
-        let _ = s.func("f", 1);
+        let _p = s.predicate("p", 2);
+        let _f = s.func("f", 1);
+        let _c = s.constant("a");
+        let _d = s.constant("b");
+        let _n = s.constant("nil");
         (s, TermStore::new())
     }
 
     #[test]
     fn match_then_resolve_yields_a_ground_term() {
-        let (s, mut st) = store_and_syms();
+        let (mut s, mut st) = store_and_syms();
         let p = s.predicate("p", 2);
         let a = st.constant(s.constant("a"));
         let b = st.constant(s.constant("b"));
         let (x, _) = st.fresh_var();
         let (y, _) = st.fresh_var();
         let pat = st.atom(p, &[x, y]);
-        let fact = st.atom(p, &[a, b]);
+        let bb = st.constant(s.constant("b"));
+        let _ = b;
+        let fact = st.atom(p, &[a, bb]);
         let mut sub = Subst::new();
         sub.match_into(&st, pat, fact).expect("should match");
         let r = sub.resolve(&mut st, pat);
@@ -404,7 +409,7 @@ mod tests {
 
     #[test]
     fn resolve_is_idempotent_on_ground_terms() {
-        let (s, mut st) = store_and_syms();
+        let (mut s, mut st) = store_and_syms();
         let f = s.func("f", 1);
         let a = st.constant(s.constant("a"));
         let t = st.func(f, &[a]);
@@ -415,7 +420,7 @@ mod tests {
 
     #[test]
     fn undo_restores_the_table_exactly() {
-        let (s, mut st) = store_and_syms();
+        let (mut s, mut st) = store_and_syms();
         let p = s.predicate("p", 2);
         let a = st.constant(s.constant("a"));
         let (x, _) = st.fresh_var();
@@ -424,7 +429,8 @@ mod tests {
         let mut sub = Subst::new();
         let before = sub.binding_count(st.node_count());
         let mark = sub.mark();
-        sub.match_into(&st, pat, st.atom(p, &[a, a])).unwrap();
+        let fact = st.atom(p, &[a, a]);
+        sub.match_into(&st, pat, fact).unwrap();
         assert!(sub.binding_count(st.node_count()) > before);
         sub.undo_to(mark);
         assert_eq!(sub.binding_count(st.node_count()), before, "leaked bindings");
@@ -433,7 +439,7 @@ mod tests {
 
     #[test]
     fn occurs_check_blocks_cyclic_terms() {
-        let (s, mut st) = store_and_syms();
+        let (mut s, mut st) = store_and_syms();
         let f = s.func("f", 1);
         let (x, _) = st.fresh_var();
         let fx = st.func(f, &[x]);
@@ -447,7 +453,7 @@ mod tests {
 
     #[test]
     fn clash_on_distinct_symbols() {
-        let (s, mut st) = store_and_syms();
+        let (mut s, mut st) = store_and_syms();
         let a = st.constant(s.constant("a"));
         let b = st.constant(s.constant("b"));
         let mut sub = Subst::new();
@@ -458,7 +464,7 @@ mod tests {
     fn variable_never_becomes_the_root_over_a_term() {
         // Union by rank must not elect a variable as representative when it
         // meets a function term, or the binding becomes invisible.
-        let (s, mut st) = store_and_syms();
+        let (mut s, mut st) = store_and_syms();
         let f = s.func("f", 1);
         let a = st.constant(s.constant("a"));
         let fa = st.func(f, &[a]);
@@ -473,7 +479,7 @@ mod tests {
 
     #[test]
     fn deep_terms_resolve_without_native_recursion() {
-        let (s, mut st) = store_and_syms();
+        let (mut s, mut st) = store_and_syms();
         let cons = s.func("cons", 2);
         let nil = st.constant(s.constant("nil"));
         let mut t = nil;
