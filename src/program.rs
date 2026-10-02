@@ -558,6 +558,6 @@ mod tests {
         let mut b = Builder::new();
         let a = b.atom("p", 1, &[]);
         assert_eq!(b.store.kind(a), T_ATOM);
-        assert_eq!(b.symbols.kind(b.store.sym(a)), SK_PRED);
+        assert_eq!(b.symbols.kind(b.store.sym(a)), crate::symbol::SK_PRED);
     }
 }
