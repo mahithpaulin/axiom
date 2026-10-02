@@ -402,7 +402,8 @@ mod tests {
         let fa = ts.func(f, &[a]);
         assert!(ts.is_ground(fa));
         let (v, _) = ts.fresh_var();
-        assert!(!ts.is_ground(ts.func(f, &[v])));
+        let fv = ts.func(f, &[v]);
+        assert!(!ts.is_ground(fv));
         assert!(ts.is_ground(a));
     }
 
