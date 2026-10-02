@@ -78,13 +78,11 @@ fn representation(b: &mut Bench, quick: bool) {
         // Same terms again: every intern must hit the existing node.
         let before_nodes = ts.node_count();
         let before_bytes = allocated_bytes();
-        let mut dups = 0u64;
         for i in 0..1000u32 {
             let k = ts.constant(s.symbols.constant(&format!("k{i}")));
             let y = ts.func(f2, &[k, c]);
             let z = ts.func(g1, &[y]);
             let w = ts.func(f2, &[a, z]);
-            dups += 1;
             std::hint::black_box(w);
         }
         assert_eq!(
