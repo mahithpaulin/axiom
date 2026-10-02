@@ -116,9 +116,8 @@ impl Solver {
             }
 
             if ok {
-                let concl = self
-                    .subst
-                    .resolve(&mut self.prog.store, self.ren_head(rule));
+                let h = self.ren_head(rule);
+                let concl = self.subst.resolve(&mut self.prog.store, h);
                 let inst = self.instantiation(rule);
                 let premises: Vec<u32> = Vec::new();
                 trace.append(&mut sub_trace);
@@ -269,7 +268,9 @@ impl Solver {
                 answers.push(Answer { subst, proof });
             }
             self.subst.undo_to(mark);
-            budget.charge(1)?;
+            if let Err(e) = budget.charge(1) {
+                return QueryOutcome::inconclusive(Status::Exhausted, e, self.stats.delta(&before));
+            }
         }
         QueryOutcome {
             status: if answers.is_empty() { Status::Refuted } else { Status::Found },

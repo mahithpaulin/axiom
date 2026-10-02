@@ -316,7 +316,8 @@ impl Subst {
             let r = self.find(node);
             let n = store.node(r);
             if i < n.len {
-                self.work[self.work.len() - 1].1 = i + 1;
+                let last = self.work.len() - 1;
+                self.work[last].1 = i + 1;
                 let child = store.args(r)[i as usize];
                 self.work.push((child, 0));
                 continue;

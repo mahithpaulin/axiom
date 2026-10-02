@@ -51,7 +51,7 @@ pub struct TermNode {
     pub len: u16,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct TermStore {
     nodes: Vec<TermNode>,
     children: Vec<TermId>,
@@ -210,7 +210,7 @@ impl TermStore {
     fn intern(&mut self, kind: u8, sym: SymId, args: &[TermId], _const: Option<u8>) -> TermId {
         let h = content_hash(kind, sym, args);
         if let Some(&id) = self.buckets.get(&h) {
-            for &id in id {
+            for &id in bucket {
                 let c = self.nodes[id as usize];
                 if c.kind == kind && c.sym == sym && c.len as usize == args.len() {
                     let (s, l) = (c.start as usize, c.len as usize);

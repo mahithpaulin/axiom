@@ -46,7 +46,8 @@
 use crate::budget::Budget;
 use crate::program::RuleId;
 use crate::proof::{DerivId, Derivation, Saturation};
-use crate::solver::{Literal, Solver};
+use crate::program::Literal;
+use crate::solver::Solver;
 use crate::status::Exhausted;
 use crate::symbol::SymId;
 use crate::term::{TermId, T_VAR};

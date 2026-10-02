@@ -70,7 +70,7 @@ pub struct Rule {
     pub backward_only: bool,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ProgramError {
     /// `p` appears both positively and negatively in a cycle, so no
     /// stratification exists.
@@ -105,6 +105,7 @@ impl fmt::Display for ProgramError {
     }
 }
 
+#[derive(Clone)]
 pub struct Program {
     pub symbols: SymbolTable,
     pub store: TermStore,

@@ -44,7 +44,7 @@ pub struct Db {
     /// the whole engine deterministic, which the benchmarks depend on.
     pub by_pred: Vec<Vec<TermId>>,
     /// Predicate -> first argument -> tuples.
-    pub by_first: Vec<Vec<FxHashMap<TermId, Vec<TermId>>>>,
+    pub by_first: Vec<FxHashMap<TermId, Vec<TermId>>>,
 }
 
 impl Default for Db {
@@ -68,7 +68,7 @@ impl Db {
         let n = pred as usize + 1;
         if self.by_pred.len() < n {
             self.by_pred.resize(n, Vec::new());
-            self.by_first.resize(n, Vec::new());
+            self.by_first.resize(n, FxHashMap::default());
         }
     }
 

@@ -86,7 +86,7 @@ pub struct Solver {
     pub stats: Stats,
     renamed: Vec<Option<Renamed>>,
     /// Rules whose body is entirely extensional: evaluated once per stratum.
-    static_done: Vec<bool>,
+    pub(crate) static_done: Vec<bool>,
     /// New facts since the last round, per predicate.
     pub(crate) delta: Vec<Vec<TermId>>,
     /// Snapshot of the delta for the round in progress, per predicate.
@@ -117,7 +117,7 @@ impl Solver {
             derivs: Vec::new(),
             deriv_of: FxHashMap::default(),
             stats: Stats::default(),
-            renamed: vec![None; n],
+            renamed: (0..n).map(|_| None).collect(),
             static_done: vec![false; n],
             delta: vec![Vec::new(); np],
             work: vec![Vec::new(); np],
@@ -331,6 +331,7 @@ impl QueryOutcome {
             answers: Vec::new(),
             stats,
             reason: Some(reason),
+            saturation: None,
         }
     }
 }

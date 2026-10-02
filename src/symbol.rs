@@ -29,7 +29,7 @@ struct Sym {
     kind: u8,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct SymbolTable {
     name_ids: FxHashMap<Box<str>, NameId>,
     names: Vec<Box<str>>,
