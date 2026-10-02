@@ -191,7 +191,7 @@ fn budget_of_zero_stops_immediately() {
 
 #[test]
 fn very_wide_atoms_do_not_exhaust_memory_or_stack() {
-    let mut src = String::from();
+    let mut src = String::new();
     let arity = 2000;
     let args: Vec<String> = (0..arity).map(|i| format!("a{i}")).collect();
     src.push_str(&format!("w({}).\n", args.join(",")));
@@ -235,7 +235,7 @@ fn deeply_nested_terms_do_not_overflow_the_stack() {
 fn many_facts_of_one_predicate_stay_indexable() {
     let mut src = String::new();
     for i in 0..2000 {
-        src.push_str(&format!("e(k{i % 100},v{i}).\n"));
+        src.push_str(&format!("e(k{},v{i}).\n", i % 100));
     }
     src.push_str("p(X,Y) :- e(X,Y).\n");
     let parsed = exterior::parse(&src).unwrap();
