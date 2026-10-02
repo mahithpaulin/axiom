@@ -146,7 +146,13 @@ fn unification(b: &mut Bench, quick: bool) {
     b.note("");
     b.note("-- unification --");
 
-    let prog = term_program(4000, 0x5EED);
+    let mut prog = term_program(4000, 0x5EED);
+    // Build the pattern once, outside the timed region: the closure captures
+    // `prog` immutably and cannot intern new nodes.
+    let pat_pred = prog.symbols.predicate("t", 1);
+    let px = prog.store.fresh_var().0;
+    let py = prog.store.fresh_var().0;
+    let pat2 = prog.store.atom(pat_pred, &[px, py]);
 
     b.run("unify_ground_pairs", 4000, |_| {
         let mut sub = axiom::Subst::new();
@@ -164,17 +170,12 @@ fn unification(b: &mut Bench, quick: bool) {
     });
 
     // Matching a variable-bearing pattern against a ground tuple is the hot
-    // path in forward chaining.
+    // path in forward chaining, so it is measured on its own.
     b.run("match_pattern_vs_fact", 4000, |_| {
         let mut sub = axiom::Subst::new();
-        let store = &prog.store;
-        let x = store.var(0);
-        let y = store.var(1);
-        let pat = store.atom(prog.symbols.predicate("t", 1), &[x]);
-        let _ = y;
         let mut ok = 0u64;
         for r in &prog.rules {
-            if sub.match_into(store, pat, r.head).is_ok() {
+            if sub.match_into(&prog.store, pat2, r.head).is_ok() {
                 ok += 1;
             }
             sub.undo_to(0);
@@ -185,11 +186,9 @@ fn unification(b: &mut Bench, quick: bool) {
     // H: the occurs check must not dominate on realistic terms.
     b.run("occurs_check_cost", 4000, |_| {
         let mut sub = axiom::Subst::new();
-        let store = &prog.store;
-        let x = store.var(0);
         let mut n = 0u64;
         for r in &prog.rules {
-            if sub.occurs(store, x as u32, r.head) {
+            if sub.occurs(&prog.store, px as u32, r.head) {
                 n += 1;
             }
             sub.undo_to(0);
@@ -311,7 +310,7 @@ fn algorithms(b: &mut Bench, quick: bool) {
         &[200, 1_000, 5_000, 20_000]
     };
     for n in sizes {
-        b.run_once(&format!("tc_path_n{n}"), || {
+        b.run_once(&format!("tc_path_n{n}"), |_| {
             let prog = path_graph(*n);
             let mut s = Solver::new(prog);
             let mut budget = Budget::steps(4_000_000_000);
