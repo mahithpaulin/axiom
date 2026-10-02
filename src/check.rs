@@ -329,7 +329,8 @@ mod tests {
         let t = st.func(f, &[x]);
         assert!(!ground(&st, t));
         let c = st.constant(s.constant("c"));
-        assert!(ground(&st, st.func(f, &[c])));
+        let fc = st.func(f, &[c]);
+        assert!(ground(&st, fc));
     }
 
     #[test]

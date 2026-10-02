@@ -179,7 +179,7 @@ mod tests {
 
     #[test]
     fn dedup_and_counts() {
-        let (_s, st, mut db, p, a, b) = setup();
+        let (_s, mut st, mut db, p, a, b) = setup();
         let e1 = st.atom(p, &[a, b]);
         assert!(db.insert(&st, e1, false));
         assert!(!db.insert(&st, e1, false));
@@ -189,11 +189,15 @@ mod tests {
 
     #[test]
     fn first_arg_index_selects() {
-        let (_s, st, mut db, p, a, b) = setup();
-        let c = st.constant(_s.constant("c"));
-        db.insert(&st, st.atom(p, &[a, b]), false);
-        db.insert(&st, st.atom(p, &[a, c]), false);
-        db.insert(&st, st.atom(p, &[b, a]), false);
+        let (_s, mut st, mut db, p, a, b) = setup();
+        let mut cs = _s;
+        let c = st.constant(cs.constant("c"));
+        let e1 = st.atom(p, &[a, b]);
+        let e2 = st.atom(p, &[a, c]);
+        let e3 = st.atom(p, &[b, a]);
+        db.insert(&st, e1, false);
+        db.insert(&st, e2, false);
+        db.insert(&st, e3, false);
         assert_eq!(db.candidates(p, Some(a)).len(), 2);
         assert_eq!(db.candidates(p, Some(b)).len(), 1);
         assert_eq!(db.candidates(p, Some(c)).len(), 0);
@@ -202,7 +206,7 @@ mod tests {
 
     #[test]
     fn seed_membership_is_tracked_separately() {
-        let (_s, st, mut db, p, a, b) = setup();
+        let (_s, mut st, mut db, p, a, b) = setup();
         let e = st.atom(p, &[a, b]);
         db.insert(&st, e, true);
         assert!(db.seed.contains(&e));
@@ -213,6 +217,7 @@ mod tests {
     fn unknown_predicate_yields_no_candidates() {
         let (_s, _st, db, p, a, _b) = setup();
         assert!(db.candidates(p + 99, Some(a)).is_empty());
+        assert!(db.candidates(p, None).is_empty());
     }
 
     #[test]

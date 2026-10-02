@@ -506,7 +506,7 @@ mod tests {
         let pe = b.pos("e", 1, &[x]);
         let ne = Literal::neg(e);
         b.rule(p, vec![pe, ne]);
-        let prog = b.build().unwrap();
+        let mut prog = b.build().unwrap();
         let pp = prog.symbols.predicate("p", 0);
         let ee = prog.symbols.predicate("e", 1);
         assert!(prog.pred_stratum[pp as usize] > prog.pred_stratum[ee as usize]);
@@ -516,18 +516,17 @@ mod tests {
     #[test]
     fn function_symbols_in_the_head_are_backward_only() {
         let mut b = Builder::new();
-        let s = b.func("succ", 1, &[b.constant("0")]);
         let q = b.atom("q", 1, &[]);
         let x = b.var("X");
-        b.rule(
-            b.atom("q", 1, &[b.func("succ", 1, &[x])]),
-            vec![Literal::pos(q)],
-        );
+        let succ = b.symbols.func("succ", 1);
+        let hx = b.store.func(succ, &[x]);
+        let head = b.atom("q", 1, &[hx]);
+        let pq = Literal::pos(q);
+        b.rule(head, vec![pq]);
         let prog = b.build().unwrap();
         assert_eq!(prog.forward_rules(), 0);
         assert_eq!(prog.rules.len(), 1);
         assert!(prog.rules[0].backward_only);
-        let _ = s;
     }
 
     #[test]
