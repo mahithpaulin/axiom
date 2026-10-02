@@ -260,9 +260,12 @@ fn indexing(b: &mut Bench, _quick: bool) {
     println!("    scan   examines {scan_total} tuples total");
     println!("    index  examines {index_total} tuples total");
     println!(
-        "    ratio  {:.2}x fewer (average degree {:.1})",
-        scan_total as f64 / index_total.max(1) as f64,
-        scan_total as f64 / keys.len() as f64
+        "    ratio  {:.2}x fewer tuples examined",
+        scan_total as f64 / index_total.max(1) as f64
+    );
+    println!(
+        "    average tuples per distinct first argument: {:.1}",
+        index_total as f64 / keys.len().max(1) as f64
     );
 
     b.run("db_index_lookup", 50_000, |_| {

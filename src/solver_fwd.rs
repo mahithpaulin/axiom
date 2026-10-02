@@ -211,6 +211,11 @@ impl Solver {
         budget: &mut Budget,
     ) -> Result<(), Exhausted> {
         self.ensure_renamed(rule);
+        // The union-find table is indexed by node id, so it must cover the
+        // whole arena before any `find`. A static (all-extensional) rule reaches
+        // `first_bound` -> `find` without ever calling `match_into`, which is
+        // where the `ensure` used to live. Found by the benchmark suite.
+        self.subst.ensure(self.prog.store.node_count());
         let mark = self.subst.mark();
         let r = self.eval_rule_inner(rule, seed, budget);
         self.subst.undo_to(mark);
@@ -301,6 +306,7 @@ impl Solver {
     /// recomputation (see `check::verify_saturation`).
     pub fn saturate(&mut self, budget: &mut Budget) -> Result<Saturation, Exhausted> {
         self.seed_facts();
+        self.subst.ensure(self.prog.store.node_count());
         let np = self.prog.num_preds();
         for v in self.delta.iter_mut() {
             v.clear();
@@ -391,6 +397,7 @@ impl Solver {
     /// baseline for `bench_semi_naive_vs_fixpoint`; no solver path calls it.
     pub fn saturate_naive(&mut self, budget: &mut Budget) -> Result<Saturation, Exhausted> {
         self.seed_facts();
+        self.subst.ensure(self.prog.store.node_count());
         let rules: Vec<RuleId> = self
             .prog
             .rules
