@@ -512,11 +512,11 @@ mod tests {
     fn stratified_negation_gets_a_strictly_higher_stratum() {
         let mut b = Builder::new();
         b.fact_n("e", &["x"]);
-        let e = b.atom("e", 1, &[]);
-        let p = b.atom("p", 0, &[]);
         let x = b.var("X");
+        let p = b.atom("p", 0, &[]);
+        let ex = b.atom("e", 1, &[x]);
         let pe = b.pos("e", 1, &[x]);
-        let ne = Literal::neg(e);
+        let ne = Literal::neg(ex);
         b.rule(p, vec![pe, ne]);
         let mut prog = b.build().unwrap();
         let pp = prog.symbols.predicate("p", 0);
