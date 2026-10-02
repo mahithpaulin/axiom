@@ -56,7 +56,13 @@ pub struct Subst {
     trail: Vec<Trail>,
     seen: Vec<u32>,
     seen_gen: u32,
+    /// Work stack for `unify` / `match_into` pair processing.
     stack: Vec<TermId>,
+    /// Separate stack for `occurs`. These two must not share: `occurs` is
+    /// called *from inside* the unification loop and clears its stack, which
+    /// would discard the sibling argument pairs still queued for matching.
+    /// That bug bound exactly one variable per compound literal.
+    occurs_stack: Vec<TermId>,
     vals: Vec<TermId>,
     work: Vec<(TermId, u16)>,
     // ---- instrumentation (see docs/PERFORMANCE.md) ----
@@ -81,6 +87,7 @@ impl Subst {
             seen: Vec::new(),
             seen_gen: 0,
             stack: Vec::new(),
+            occurs_stack: Vec::new(),
             vals: Vec::new(),
             work: Vec::new(),
             unify_calls: 0,
@@ -173,9 +180,9 @@ impl Subst {
             self.seen_gen = 1;
         }
         let gen = self.seen_gen;
-        self.stack.clear();
-        self.stack.push(t);
-        while let Some(x) = self.stack.pop() {
+        self.occurs_stack.clear();
+        self.occurs_stack.push(t);
+        while let Some(x) = self.occurs_stack.pop() {
             self.occurs_nodes += 1;
             let r = self.find(x);
             if self.seen[r as usize] == gen {
@@ -189,7 +196,7 @@ impl Subst {
                 continue;
             }
             for &a in store.args(r) {
-                self.stack.push(a);
+                self.occurs_stack.push(a);
             }
         }
         false
@@ -368,7 +375,8 @@ impl Subst {
     }
 
     /// Total number of live bindings; used by tests to assert no leakage.
-    pub fn binding_count(&self, nodes: usize) -> usize {
+    pub fn binding_count(&mut self, nodes: usize) -> usize {
+        self.ensure(nodes);
         (0..nodes).filter(|&i| self.parent[i] != i as u32).count()
     }
 }
