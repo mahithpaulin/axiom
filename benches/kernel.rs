@@ -29,6 +29,11 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let quick = args.iter().any(|a| a == "quick");
 
+    if args.iter().any(|a| a == "diag") {
+        scaling_diagnostic();
+        return;
+    }
+
     let mut b = Bench::new("axiom -- Stage 1 kernel benchmarks");
     b.note("single-threaded, one core; wall and CPU time reported separately");
     b.note("work bounded by deterministic step budgets; time measured, never used as a limit");
@@ -501,6 +506,29 @@ fn exterior_and_end_to_end(b: &mut Bench, quick: bool) {
             0
         }
     });
+}
+
+/// Focused scaling probe. Prints the deterministic work counters next to wall
+/// time so that "slow" can be attributed to the algorithm rather than guessed at.
+fn scaling_diagnostic() {
+    eprintln!("{:>8} {:>12} {:>8} {:>12} {:>12} {:>10}", "n", "facts", "rounds", "derivations", "candidates", "ms");
+    for n in [100usize, 200, 400, 800] {
+        let prog = path_graph(n);
+        let mut s = Solver::new(prog);
+        let mut b = Budget::steps(20_000_000_000);
+        let t0 = std::time::Instant::now();
+        let sat = s.least_model(&mut b);
+        let ms = t0.elapsed().as_secs_f64() * 1000.0;
+        eprintln!(
+            "{:>8} {:>12} {:>8} {:>12} {:>12} {:>10.1}",
+            n,
+            sat.map(|x| x.idb_facts).unwrap_or(0),
+            s.stats.rounds,
+            s.stats.derivations,
+            s.stats.candidates,
+            ms
+        );
+    }
 }
 
 // ---- scaling table -------------------------------------------------------

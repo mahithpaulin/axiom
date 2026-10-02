@@ -195,12 +195,15 @@ impl Bench {
     /// which is exactly when the numbers are most wanted.
     fn push(&mut self, row: Row) {
         let r = self.rows.last().expect("just pushed");
+        let r = r;
         let secs = r.wall_ms / 1000.0;
         let mops = if secs > 0.0 { r.ops as f64 / secs / 1e6 } else { 0.0 };
         let ai = if r.iters > 0 { r.allocs / r.iters } else { 0 };
         let bo = if r.ops > 0 { r.alloc_bytes / r.ops } else { 0 };
-        println!(
-            "  {:<30} {:>7} it {:>9.2} ms {:>7} Mops/s {:>9} allocs/it {:>10} B/op {:>8} rss kB",
+        // stderr, not stdout: stdout is block-buffered when redirected to a
+        // file, which hid every row from a run that had to be killed.
+        eprintln!(
+            "  {:<30} {:>7} it {:>10.2} ms {:>9} Mops/s {:>9} allocs/it {:>10} B/op {:>8} rss kB",
             r.name, r.iters, r.wall_ms, mops, ai, bo, r.rss_kb
         );
         let _ = row;
