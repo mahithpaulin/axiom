@@ -474,7 +474,8 @@ mod tests {
         let mut sub = Subst::new();
         sub.unify(&st, x, y).unwrap();
         sub.unify(&st, x, fa).unwrap();
-        assert_eq!(st.show(sub.resolve(&mut st, y), &s), "f(a)");
+        let r = sub.resolve(&mut st, y);
+        assert_eq!(st.show(r, &s), "f(a)");
     }
 
     #[test]
