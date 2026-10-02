@@ -502,3 +502,43 @@ mod regressions {
         assert_eq!(s.stats.rounds, 2, "path(a,c) needs exactly one extra round");
     }
 }
+
+#[cfg(test)]
+mod regressions {
+    use super::*;
+
+    /// A one-literal rule whose predicate is itself defined by facts. The
+    /// bottom-up evaluator treats that predicate as IDB, so the delta seeds the
+    /// only body position and the join has zero levels. This must yield exactly
+    /// one solution per seed rather than spinning forever.
+    #[test]
+    fn single_literal_rule_terminates_and_derives() {
+        let mut b = Builder::new();
+        b.fact_n("edge", &["a", "b"]);
+        b.fact_n("edge", &["b", "c"]);
+        b.fact_n("edge", &["c", "d"]);
+        let x = b.var("X");
+        let y = b.var("Y");
+        let h = b.atom("path", 2, &[x, y]);
+        let l = b.pos("edge", 2, &[x, y]);
+        b.rule(h, vec![l]);
+        let prog = b.build().unwrap();
+        let mut s = Solver::new(prog);
+        let mut budget = Budget::steps(100_000);
+        let sat = s.saturate(&mut budget).expect("must terminate");
+        // 3 edge facts + 3 path facts.
+        assert_eq!(sat.idb_facts, 6);
+    }
+
+    /// The join must enumerate *all* solutions for a seed, not just the last.
+    #[test]
+    fn every_solution_for_a_seed_is_derived() {
+        let (prog, _) = super::tests_fixtures::transitive_closure_program();
+        let mut s = Solver::new(prog);
+        let mut budget = Budget::steps(100_000);
+        let sat = s.saturate(&mut budget).expect("within budget");
+        // path(a,b), path(b,c), path(a,c) plus the two edge facts.
+        assert_eq!(sat.idb_facts, 5);
+        assert_eq!(s.stats.rounds, 2, "path(a,c) needs exactly one extra round");
+    }
+}
