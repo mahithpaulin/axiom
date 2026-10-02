@@ -69,9 +69,10 @@ fn representation(b: &mut Bench, quick: bool) {
             std::hint::black_box(w);
         }
         ts.assert_no_dead_children();
+        // Two constants (`a`, `b`) plus four fresh nodes per iteration.
         assert_eq!(
             ts.node_count(),
-            built as usize * 4 + 3,
+            built as usize * 4 + 2,
             "no duplicate nodes"
         );
 
