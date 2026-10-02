@@ -275,7 +275,13 @@ impl Solver {
         let mut trace = Vec::new();
         let mut failed = FxHashMap::default();
         let mut declined = FxHashMap::default();
-        match self.sld_ground(goal, 0, max_depth, budget, &mut trace, &mut failed, &mut declined)? {
+        let sld = match self.sld_ground(goal, 0, max_depth, budget, &mut trace, &mut failed, &mut declined) {
+            Ok(v) => v,
+            Err(e) => {
+                return Outcome::inconclusive(Status::Exhausted, e, self.stats.delta(&before))
+            }
+        };
+        match sld {
             SldOutcome::Proved => {
                 let proof = Proof { goal, root: None, steps: trace, saturation: None };
                 return Outcome::definite(Status::Proved, Some(proof), self.stats.delta(&before))
