@@ -184,11 +184,10 @@ pub fn tokenize(src: &str, limits: &Limits) -> Result<Vec<Spanned>, ParseError> 
                         col: start_col,
                     });
                 } else {
-                    out.push(Spanned {
-                        tok: Tok::Ident(word.to_ascii_lowercase()),
-                        line,
-                        col: start_col,
-                    });
+                    // Case is *preserved*. Lowercasing collapses `X` into the
+                    // constant `x`, silently turning every rule into a ground
+                    // fact -- a soundness bug, not a style choice.
+                    out.push(Spanned { tok: Tok::Ident(word), line, col: start_col });
                 }
             }
         }
@@ -382,6 +381,7 @@ impl<'a> Parser<'a> {
                 return self.err("rule head must be an atom");
             }
             self.b.rule(head, body);
+            self.expect(&Tok::Dot, "'.' after rule")?;
         } else {
             self.expect(&Tok::Dot, "'.' or ':-'")?;
             if self.b.store.kind(head) != crate::term::T_ATOM {
