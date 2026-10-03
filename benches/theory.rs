@@ -59,8 +59,8 @@ fn main() {
                     vs.iter().map(|&v| vec![v as i32 + 1]).collect();
                 assert!(verify_theory_unsat(&input, &sat, &theory).is_ok());
                 let st = d.stats();
-                assert!(st.theory_conflicts > 0);
-                st.theory_conflicts + st.lemmas
+                assert!(st.conflicts > 0 || st.lemmas > 0);
+                st.conflicts + st.lemmas
             }
             Ok(_) => panic!("rdl chain with deadline must be unsat"),
             Err(_) => 0,

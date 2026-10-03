@@ -14,12 +14,13 @@ fn consts(b: &mut Builder, names: &[&str]) -> Vec<TermId> {
 }
 
 fn check_unsat(
-    sat_input: &[Vec<i32>],
+    sat_input: &[&[i32]],
     sat_proof: &UnsatProof,
     theory: &TheoryProof,
 ) {
+    let owned: Vec<Vec<i32>> = sat_input.iter().map(|c| c.to_vec()).collect();
     assert!(
-        verify_theory_unsat(sat_input, sat_proof, theory).is_ok(),
+        verify_theory_unsat(&owned, sat_proof, theory).is_ok(),
         "theory unsat proof must verify"
     );
 }

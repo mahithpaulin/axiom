@@ -733,13 +733,10 @@ impl SatSolver {
                             let mut h = self.theory.take().expect("present");
                             let resp = h.theory_step(store, &self.assign, true);
                             self.theory = Some(h);
-                            match resp {
-                                TheoryResponse::Conflict(lemma) => {
-                                    self.add_theory_lemma(lemma.clause.clone());
-                                    self.backtrack(0);
-                                    continue;
-                                }
-                                _ => {}
+                            if let TheoryResponse::Conflict(lemma) = resp {
+                                self.add_theory_lemma(lemma.clause.clone());
+                                self.backtrack(0);
+                                continue;
                             }
                         }
                         return Ok(SatOutcome::Sat {
