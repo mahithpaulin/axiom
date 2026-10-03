@@ -42,6 +42,9 @@ impl Diff {
 
 // ---- difference logic: Floyd-Warshall over asserted constraints -------------
 
+/// Distance + next-hop tables from Floyd-Warshall.
+type FloydTables = (Vec<Tvar>, Vec<Vec<i64>>, Vec<Vec<Option<usize>>>);
+
 /// A set of asserted difference constraints with all-pairs shortest paths.
 /// Cubic in the number of distinct variables; asserted sets here are small
 /// (formula atoms, not solver state), and the bound is honest, not hidden.
@@ -49,6 +52,7 @@ impl Diff {
 pub struct DiffSet {
     edges: Vec<Diff>,
 }
+type FloydTables = (Vec<Tvar>, Vec<Vec<i64>>, Vec<Vec<Option<usize>>>);
 
 impl DiffSet {
     pub fn new() -> Self {
@@ -76,7 +80,12 @@ impl DiffSet {
 
     /// All-pairs shortest paths. Returns the distance table and a
     /// next-hop table for path reconstruction.
-    fn floyd(&self) -> (Vec<Tvar>, Vec<Vec<i64>>, Vec<Vec<Option<usize>>>) {
+    ///
+    /// Triple-index Floyd-Warshall is inherently index-based; an iterator
+    /// transcription would obscure the textbook shape without changing the
+    /// cubic bound, so the range loops stay (deliberately, not lazily).
+    #[allow(clippy::needless_range_loop)]
+    fn floyd(&self) -> FloydTables {
         let nodes = self.nodes();
         let n = nodes.len();
         const INF: i64 = i64::MAX / 4;
@@ -139,11 +148,7 @@ impl DiffSet {
         let mut out = Vec::new();
         let mut cur = start;
         let mut guard = 0usize;
-        loop {
-            let h = match next[cur][start] {
-                Some(h) => h,
-                None => break,
-            };
+        while let Some(h) = next[cur][start] {
             let (u, v) = (nodes[cur], nodes[h]);
             // The tightest asserted edge u -> v, i.e. some `x - y <= c`
             // with y == u and x == v.
@@ -353,9 +358,8 @@ impl Congruence {
                 .filter(|&t| store.kind(t) == T_FUN)
                 .collect();
             let mut merged = false;
-            for i in 0..apps.len() {
-                for j in (i + 1)..apps.len() {
-                    let (a, b) = (apps[i], apps[j]);
+            for (i, &a) in apps.iter().enumerate() {
+                for &b in apps.iter().skip(i + 1) {
                     if self.find(a) == self.find(b) {
                         continue;
                     }
@@ -394,11 +398,7 @@ impl Congruence {
         assert_lits: &FxHashMap<(TermId, TermId), Vec<i32>>,
     ) -> Option<Vec<i32>> {
         // Paths to the common root.
-        fn path_to_root(
-            cc: &Congruence,
-            mut x: TermId,
-            root: TermId,
-        ) -> Option<Vec<TermId>> {
+        fn path_to_root(cc: &Congruence, mut x: TermId, root: TermId) -> Option<Vec<TermId>> {
             let mut path = vec![x];
             let mut guard = 0usize;
             while x != root {
@@ -435,15 +435,11 @@ impl Congruence {
             match self.witness.get(&x) {
                 // Edge x -> y was an asserted equality (in either direction).
                 Some(Witness::Asserted) => {
-                    match assert_lits.get(&key) {
-                        Some(ls) => {
-                            for &l in ls {
-                                if !out.contains(&l) {
-                                    out.push(l);
-                                }
-                            }
+                    let ls = assert_lits.get(&key)?;
+                    for &l in ls {
+                        if !out.contains(&l) {
+                            out.push(l);
                         }
-                        None => return None,
                     }
                 }
                 // Congruence edge: unfold over the children.
@@ -463,10 +459,9 @@ impl Congruence {
                         if rx != ry {
                             return None;
                         }
-                        if let (Some(px), Some(py)) = (
-                            path_to_root(self, cx, rx),
-                            path_to_root(self, cy, ry),
-                        ) {
+                        if let (Some(px), Some(py)) =
+                            (path_to_root(self, cx, rx), path_to_root(self, cy, ry))
+                        {
                             for w in px.windows(2).chain(py.windows(2)) {
                                 work.push((w[0], w[1]));
                             }
@@ -555,11 +550,7 @@ impl Combination {
     /// Difference conflicts are reported before any exchange: bounds are
     /// meaningless on inconsistent sets, so exchange and propagation run
     /// only past this point.
-    pub fn check(
-        &mut self,
-        store: &TermStore,
-        shared: &[TermId],
-    ) -> Option<Vec<i32>> {
+    pub fn check(&mut self, store: &TermStore, shared: &[TermId]) -> Option<Vec<i32>> {
         // Difference conflicts first.
         if let Some(cycle) = self.diff.conflict() {
             let mut out = Vec::new();
@@ -582,8 +573,7 @@ impl Combination {
                     }
                     let fwd = self.diff.bound(x, y);
                     let bwd = self.diff.bound(y, x);
-                    if matches!((fwd, bwd), (Some(a), Some(b)) if a <= 0 && b <= 0)
-                    {
+                    if matches!((fwd, bwd), (Some(a), Some(b)) if a <= 0 && b <= 0) {
                         let mut wit = self.diff.explain_bound(x, y);
                         wit.extend(self.diff.explain_bound(y, x));
                         let mut lits = Vec::new();
@@ -692,10 +682,7 @@ mod tests {
         let x = const_term(&mut b, "x");
         let y = const_term(&mut b, "y");
         let mut d = DiffSet::new();
-        let (e1, e2) = (
-            Diff { x, y, c: -1 },
-            Diff { x: y, y: x, c: -1 },
-        );
+        let (e1, e2) = (Diff { x, y, c: -1 }, Diff { x: y, y: x, c: -1 });
         d.assert(e1);
         d.assert(e2);
         let c = d.conflict().expect("negative cycle");
@@ -775,35 +762,44 @@ mod tests {
         assert!(conflict.contains(&5));
     }
 
-    /// Naive reference: brute force over {-2..=2}^vars. Shares no code with
-    /// Floyd-Warshall (integer grids, direct comparison), so agreement is
-    /// genuine evidence rather than tautology — the `tests/reference.rs`
-    /// discipline applied to theories.
+    /// Naive reference: brute force over a bounded integer box. Shares no
+    /// code with Floyd-Warshall (integer grids, direct comparison), so
+    /// agreement is genuine evidence — the `tests/reference.rs` discipline
+    /// applied to theories. The box radius covers the small-model bound:
+    /// satisfiable difference constraints over `n` variables have a model
+    /// within ±(n-1)·max|c|, and the radius below exceeds that for the
+    /// fixed n=3 pools used here.
+    fn box_radius(constraints: &[(i64, i64, i64)]) -> i64 {
+        3 * constraints.iter().map(|c| c.2.abs()).max().unwrap_or(0) + 2
+    }
+
     fn naive_sat(constraints: &[(i64, i64, i64)], nvars: usize) -> bool {
         // Constraints as (x, y, c) index triples meaning v[x] - v[y] <= c.
-        fn rec(cs: &[(i64, i64, i64)], nvars: usize, assign: &mut Vec<i64>) -> bool {
+        fn rec(
+            cs: &[(i64, i64, i64)],
+            nvars: usize,
+            assign: &mut Vec<i64>,
+            r: i64,
+        ) -> bool {
             if assign.len() == nvars {
                 return cs
                     .iter()
                     .all(|&(x, y, c)| assign[x as usize] - assign[y as usize] <= c);
             }
-            for v in -2..=2 {
+            for v in -r..=r {
                 assign.push(v);
-                if rec(cs, nvars, assign) {
+                if rec(cs, nvars, assign, r) {
                     return true;
                 }
                 assign.pop();
             }
             false
         }
-        rec(constraints, nvars, &mut Vec::new())
+        let r = box_radius(constraints);
+        rec(constraints, nvars, &mut Vec::new(), r)
     }
 
-    fn naive_entails(
-        constraints: &[(i64, i64, i64)],
-        nvars: usize,
-        q: (i64, i64, i64),
-    ) -> bool {
+    fn naive_entails(constraints: &[(i64, i64, i64)], nvars: usize, q: (i64, i64, i64)) -> bool {
         // Entailed iff constraints + ¬q are unsatisfiable; ¬(x-y≤c) is y-x≤-c-1.
         let mut with_neg = constraints.to_vec();
         with_neg.push((q.1, q.0, -q.2 - 1));
@@ -916,9 +912,8 @@ mod tests {
                 let apps: Vec<usize> = (0..self.terms.len())
                     .filter(|&i| matches!(self.terms[i], NT::F(..)))
                     .collect();
-                for i in 0..apps.len() {
-                    for j in (i + 1)..apps.len() {
-                        let (a, b) = (apps[i], apps[j]);
+                for (i, &a) in apps.iter().enumerate() {
+                    for &b in apps.iter().skip(i + 1) {
                         let (NT::F(fa, ca), NT::F(fb, cb)) =
                             (self.terms[a].clone(), self.terms[b].clone())
                         else {
@@ -1017,6 +1012,9 @@ mod tests {
                 check.intern(if x == fa { nfa.clone() } else { ngfa.clone() }),
                 check.intern(if y == fb { nfb.clone() } else { ngfc.clone() }),
             );
+            // Interning does not close: run the fixpoint explicitly, exactly
+            // as `union` would have.
+            check.close();
             assert!(check.find(jx) == check.find(jy));
         }
     }
