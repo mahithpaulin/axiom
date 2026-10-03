@@ -1328,6 +1328,9 @@ pub fn verify_theory_sat(model: &[i8], theory: &TheoryProof) -> bool {
     }
     comb.check(&rb.store, &shared).is_none()
 }
+
+#[cfg(test)]
+mod tests {
     use super::*;
     use crate::program::Builder;
 
