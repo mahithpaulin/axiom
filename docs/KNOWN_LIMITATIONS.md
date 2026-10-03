@@ -226,9 +226,29 @@ caller raises a limit. Detail in `docs/LANGUAGE_SPEC.md` §4.1.
 * `max_depth > 4096`: `TermStore::rename` returns subterms **un-renamed** past its
   hard-coded `const MAX: usize = 4096` (`src/term.rs:288-292`), so a deeply nested
   rule gets a renamed copy whose inner variables were never freshened.
-  `tests/robustness.rs:218-225` already parses a 200 000-deep term under
-  `max_depth: 500_000`; that program has no rules, so the bug is not reached
-  today.
+   `tests/robustness.rs:218-225` already parses a 200 000-deep term under
+   `max_depth: 500_000`; that program has no rules, so the bug is not reached
+   today.
+
+### A9. Backward resolution reused cached renamings across recursion — FIXED
+
+**Severity when open: high. Wrong answers in both directions.**
+
+`sld_ground` unified each candidate rule through the cached forward renaming
+(`ensure_renamed`, built once per rule). Forward chaining reuses it soundly
+because every firing is enclosed in a trail mark; backward search recurses
+through the same rule with the parent's bindings still live, so the child's
+unification saw the parent's values: a goal 10 deep over
+`link(X, f(Y)) :- link(X, Y).` clashed at depth 1 and reported `Refuted` —
+for a goal that is *provable*. Found by the new A1(iii) regression test
+(`refutation_is_never_unearned_beyond_depth_bound`), which failed with
+`Refuted` where `Unknown` was expected, and confirmed by an SLD trace showing
+no call past depth 1.
+
+**What removed it.** `Solver::freshen_rule` (`src/solver_bwd.rs`): every SLD
+step maps the rule's locals to new fresh variables. Regression coverage both
+ways: `deep_backward_proof_with_fresh_variables_per_step` (10 deep proves)
+and the A1(iii) depth-bound test (70 deep is `Unknown`).
 
 ---
 
@@ -562,6 +582,7 @@ reverse it. See `docs/ROADMAP.md`, "Triggers to revisit existing decisions".
 | A6 | `saturate_naive` derives 1 200 of 180 900 facts | correctness | **yes**, for benchmark figures only | small |
 | A7 | two benchmarks measure nothing; RSS understated | measurement | no | small |
 | A8 | raised `Limits` corrupt terms silently | correctness | yes, if limits are raised | small |
+| A9 | SLD reused cached renamings across recursion (FIXED) | correctness | **yes**, both directions | small |
 | B1 | stratified Datalog only | scope | no | large |
 | B2 | undecidability | scope | no — not fixable | n/a |
 | B3 | non-ground negation blocks derivations | incompleteness | reported as `Refuted` | large |

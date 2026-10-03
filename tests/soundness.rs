@@ -199,6 +199,32 @@ fn refutation_is_never_unearned_nonground_subgoal() {
     assert!(out.proof.is_none());
 }
 
+/// Backward resolution recurses through the same rule, so each step needs
+/// fresh variables (KNOWN_LIMITATIONS A9). A goal 10 deep proves; 70 deep
+/// (past the 64 bound) is `Unknown`, never `Refuted`.
+#[test]
+fn deep_backward_proof_with_fresh_variables_per_step() {
+    let mut chain10 = String::from("f(w)");
+    for _ in 0..9 {
+        chain10 = format!("f({chain10})");
+    }
+    let src = format!("link(z, w).\nlink(X, f(Y)) :- link(X, Y).\n?- link(z, {chain10}).\n");
+    let parsed = exterior::parse(&src).unwrap();
+    let goal = parsed.queries[0];
+    let mut s = Solver::new(parsed.program);
+    let mut b = Budget::unlimited();
+    let out = s.prove(goal, &mut b);
+    assert_eq!(
+        out.status,
+        Status::Proved,
+        "a 10-deep chain is provable, got {:?}",
+        out.status
+    );
+    // No `verify`: backward proofs carry a resolution trace that the checker
+    // does not yet validate (ROADMAP I7). Status only.
+    assert!(out.proof.is_some());
+}
+
 /// KNOWN_LIMITATIONS A1(iii): a `backward_only` chain longer than the depth
 /// bound (64). Resolution declines at the bound; the answer is `Unknown`.
 #[test]

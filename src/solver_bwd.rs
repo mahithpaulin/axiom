@@ -12,8 +12,11 @@
 //! ## What is and is not implemented
 //!
 //! Implemented: depth-bounded SLD for **ground** goals, positive body literals,
-//! rule reuse across recursive calls, and failure memoisation keyed by
-//! (goal, remaining depth).
+//! per-call rule freshening, and failure memoisation keyed by
+//! (goal, remaining depth). Freshening is load-bearing, not hygiene: the
+//! cached forward renaming is reused across recursion depths, which leaks the
+//! parent call's bindings into the child's unification and makes deep goals
+//! spuriously clash (KNOWN_LIMITATIONS A9).
 //!
 //! Not implemented, deliberately: negation in backward mode, and non-ground
 //! goals. Both are recorded in KNOWN_LIMITATIONS.md. Negation-as-failure would
@@ -85,6 +88,35 @@ impl DeclineReason {
 }
 
 impl Solver {
+    /// Freshen a rule's variables for one backward-resolution step.
+    ///
+    /// Unlike `ensure_renamed` (cached, correct for forward chaining where
+    /// every firing is enclosed in a trail mark), backward search recurses
+    /// through the same rule, so a cached renaming leaks the parent call's
+    /// bindings into the child's unification and deep goals spuriously clash.
+    /// Each SLD step therefore gets its own variables. Costs an allocation
+    /// per candidate tried; SLD is goal-directed and small, not the hot path.
+    fn freshen_rule(&mut self, rule: RuleId) -> (TermId, Vec<Literal>, Vec<(u32, TermId)>) {
+        let r = self.prog.rules[rule as usize].clone();
+        let mut env: FxHashMap<u32, TermId> =
+            FxHashMap::with_capacity_and_hasher(r.local_vars.len(), Default::default());
+        let mut map = Vec::with_capacity(r.local_vars.len());
+        for &v in &r.local_vars {
+            let (g, _) = self.prog.store.fresh_var();
+            env.insert(v, g);
+            map.push((v, g));
+        }
+        let head = self.prog.store.rename(r.head, &env, 0);
+        let mut body = Vec::with_capacity(r.body.len());
+        for l in &r.body {
+            body.push(Literal {
+                pos: l.pos,
+                atom: self.prog.store.rename(l.atom, &env, 0),
+            });
+        }
+        (head, body, map)
+    }
+
     /// Depth-bounded SLD for a ground goal.
     ///
     /// Returns true with the proof trace in `trace` when the goal is provable.
@@ -127,25 +159,23 @@ impl Solver {
             None => Vec::new(),
         };
         for rule in candidates {
-            self.ensure_renamed(rule);
+            // Fresh variables per step: reusing the cached forward renaming
+            // across recursion depths is unsound (KNOWN_LIMITATIONS A9).
+            let (rhead, rbody, rmap) = self.freshen_rule(rule);
             let mark = self.subst.mark();
             let mut ok = true;
 
-            if self
-                .subst
-                .unify(&self.prog.store, self.ren_head(rule), goal)
-                .is_err()
-            {
+            if self.subst.unify(&self.prog.store, rhead, goal).is_err() {
                 self.subst.undo_to(mark);
                 continue;
             }
             // Resolve the body left to right. A negated body literal has no
             // backward semantics yet, so such a rule is skipped rather than
             // approximated.
-            let blen = self.ren_len(rule);
+            let blen = rbody.len();
             let mut sub_trace: Vec<ResolutionStep> = Vec::new();
             for i in 0..blen {
-                let lit = self.ren_lit(rule, i);
+                let lit = rbody[i];
                 if !lit.pos {
                     // No backward semantics for negation: record that this rule
                     // was not usable rather than treating it as a failure.
@@ -189,9 +219,11 @@ impl Solver {
             }
 
             if ok {
-                let h = self.ren_head(rule);
-                let concl = self.subst.resolve(&mut self.prog.store, h);
-                let inst = self.instantiation(rule);
+                let concl = self.subst.resolve(&mut self.prog.store, rhead);
+                let mut inst = Vec::with_capacity(rmap.len());
+                for &(local, g) in &rmap {
+                    inst.push((local, self.subst.find(g)));
+                }
                 let premises: Vec<u32> = Vec::new();
                 trace.append(&mut sub_trace);
                 trace.push(ResolutionStep {
@@ -213,18 +245,6 @@ impl Solver {
             failed.insert((goal, depth), ());
             Ok(SldOutcome::NotProvable)
         }
-    }
-
-    /// Current binding of a rule's local variables, as ground terms.
-    fn instantiation(&mut self, rule: RuleId) -> Vec<(u32, TermId)> {
-        let nvars = self.prog.rules[rule as usize].local_vars.len();
-        let mut out = Vec::with_capacity(nvars);
-        for i in 0..nvars {
-            let (local, g) = self.ren_map_at(rule, i);
-            let r = self.subst.find(g);
-            out.push((local, r));
-        }
-        out
     }
 
     /// Decide a ground goal.
