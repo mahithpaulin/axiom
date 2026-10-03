@@ -315,12 +315,12 @@ impl<'a> Parser<'a> {
             return Ok(self.b.atom(&f.name, arity, &f.args));
         }
         // `pending` holds a completed value awaiting placement in the top
-        // frame; `expect_value` mirrors the old per-level loop (after a comma
-        // a `)` is "expected a term", not an empty list).
+        // frame. When it is empty we must parse a value: after a comma a `)`
+        // is "expected a term", not an empty list (only the atom entry frame
+        // allows `()`, handled above).
         let mut pending: Option<TermId> = None;
-        let mut expect_value = true;
         loop {
-            if pending.is_none() && expect_value {
+            if pending.is_none() {
                 if stack.len() > self.limits.max_depth {
                     return self.err("nesting depth limit exceeded");
                 }
@@ -352,7 +352,6 @@ impl<'a> Parser<'a> {
                     }
                     _ => return self.err("expected a term"),
                 }
-                expect_value = false;
             }
             let v = pending.take().expect("parser holds a value here");
             stack
@@ -364,7 +363,6 @@ impl<'a> Parser<'a> {
                 return self.err("arity limit exceeded");
             }
             if self.eat(&Tok::Comma) {
-                expect_value = true;
                 continue;
             }
             self.expect(&Tok::RParen, "')'")?;
@@ -383,7 +381,6 @@ impl<'a> Parser<'a> {
                 return Ok(node);
             }
             pending = Some(node);
-            expect_value = false;
         }
     }
 
