@@ -81,12 +81,8 @@ fn uf_propagates_congruence_through_lemmas() {
     let f = b.symbols.func("f", 1);
     let (fa, fb) = (b.store.func(f, &[a]), b.store.func(f, &[c]));
     let mut d = TheoryDriver::new();
-    let v1 = d
-        .theory_var(&b.store, TheoryAtom::Eq(a, c))
-        .unwrap();
-    let v2 = d
-        .theory_var(&b.store, TheoryAtom::Eq(fa, fb))
-        .unwrap();
+    let v1 = d.theory_var(&b.store, TheoryAtom::Eq(a, c)).unwrap();
+    let v2 = d.theory_var(&b.store, TheoryAtom::Eq(fa, fb)).unwrap();
     d.add_clause(&[v1 as i32 + 1]);
     // v2 constrained to false would conflict; here it is free to propagate.
     let mut budget = Budget::unlimited();
@@ -111,12 +107,8 @@ fn disequality_against_merge_is_unsat() {
     let v = consts(&mut b, &["a", "c"]);
     let (a, c) = (v[0], v[1]);
     let mut d = TheoryDriver::new();
-    let v1 = d
-        .theory_var(&b.store, TheoryAtom::Eq(a, c))
-        .unwrap();
-    let v2 = d
-        .theory_var(&b.store, TheoryAtom::Neq(a, c))
-        .unwrap();
+    let v1 = d.theory_var(&b.store, TheoryAtom::Eq(a, c)).unwrap();
+    let v2 = d.theory_var(&b.store, TheoryAtom::Neq(a, c)).unwrap();
     d.add_clause(&[v1 as i32 + 1]);
     d.add_clause(&[v2 as i32 + 1]);
     let mut budget = Budget::unlimited();

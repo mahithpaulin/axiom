@@ -1196,7 +1196,11 @@ fn concl_holds(rb: &mut Rebuilt, comb: &mut Combination, desc: &AtomDesc, positi
             let (Ok(rx), Ok(ry)) = (rb.build(x), rb.build(y)) else {
                 return false;
             };
-            let d = Diff { x: rx, y: ry, c: *c };
+            let d = Diff {
+                x: rx,
+                y: ry,
+                c: *c,
+            };
             comb.diff.entails(if positive { d } else { d.negate() })
         }
         AtomDesc::Eq(s, t) => {
