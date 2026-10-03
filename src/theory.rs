@@ -549,8 +549,10 @@ impl Combination {
         self.diff.assert(d);
     }
 
-    /// Check consistency. Returns a conflicting SAT-literal set on
-    /// inconsistency (a theory conflict clause, negated), else `None`.
+    /// Check consistency. Returns the jointly inconsistent set of asserted
+    /// (true) SAT literals, or `None`. The driver negates the set into the
+    /// conflict clause; every returned literal is true under the current
+    /// assignment, which `analyze` relies on.
     /// Difference conflicts are reported before any exchange: bounds are
     /// meaningless on inconsistent sets, so exchange and propagation run
     /// only past this point.
@@ -612,7 +614,7 @@ impl Combination {
                     .cc
                     .explain(store, s, t, &self.eq_lits)
                     .expect("congruent pairs explain");
-                out.push(-lit);
+                out.push(lit);
                 return Some(out);
             }
         }
@@ -1381,7 +1383,7 @@ mod tests {
         comb.assert_ne(a, c, 9);
         let conflict = comb.check(&b.store, &[]).expect("conflict");
         assert!(conflict.contains(&7));
-        assert!(conflict.contains(&-9));
+        assert!(conflict.contains(&9));
     }
 
     #[test]
@@ -1394,7 +1396,7 @@ mod tests {
         comb.assert_diff(Diff { x: y, y: x, c: 0 }, 5);
         comb.assert_ne(x, y, 9);
         let conflict = comb.check(&b.store, &[x, y]).expect("conflict");
-        assert!(conflict.contains(&-9));
+        assert!(conflict.contains(&9));
         // Both bound justifications travel with it.
         assert!(conflict.contains(&3));
         assert!(conflict.contains(&5));
