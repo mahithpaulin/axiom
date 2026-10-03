@@ -89,6 +89,9 @@ impl Solver {
     ///
     /// Returns true with the proof trace in `trace` when the goal is provable.
     #[allow(clippy::type_complexity)]
+    // 8 args: goal, depths, budget, trace and two memo tables. Bundling them
+    // into a context struct is churn; the arity is the honest signature.
+    #[allow(clippy::too_many_arguments)]
     fn sld_ground(
         &mut self,
         goal: TermId,
@@ -303,8 +306,8 @@ impl Solver {
                     steps: trace,
                     saturation: None,
                 };
-                return Outcome::definite(Status::Proved, Some(proof), self.stats.delta(&before))
-                    .note("proved by backward resolution; the proof is a rule-resolution trace");
+                Outcome::definite(Status::Proved, Some(proof), self.stats.delta(&before))
+                    .note("proved by backward resolution; the proof is a rule-resolution trace")
             }
             SldOutcome::NotProvable => match sat {
                 Some(s) => {
@@ -322,11 +325,11 @@ impl Solver {
                         "bottom-up saturation completed; goal absent from the least model"
                             .to_string(),
                     );
-                    return o;
+                    o
                 }
                 None => {
                     let e = note_forward_exhausted.unwrap_or(Exhausted::Steps);
-                    return Outcome::inconclusive(Status::Exhausted, e, self.stats.delta(&before));
+                    Outcome::inconclusive(Status::Exhausted, e, self.stats.delta(&before))
                 }
             },
             SldOutcome::Declined(reason) => {
@@ -342,7 +345,7 @@ impl Solver {
                     "backward resolution declined: {}; a negative answer is not established",
                     reason.as_str()
                 ));
-                return o;
+                o
             }
         }
     }

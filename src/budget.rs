@@ -58,10 +58,11 @@ impl Budget {
         if self.steps > self.max_steps {
             return Err(Exhausted::Steps);
         }
-        if self.max_time_ms != u64::MAX && self.steps & 0xFFF == 0 {
-            if self.start.elapsed().as_millis() as u64 > self.max_time_ms {
-                return Err(Exhausted::Time);
-            }
+        if self.max_time_ms != u64::MAX
+            && self.steps & 0xFFF == 0
+            && self.start.elapsed().as_millis() as u64 > self.max_time_ms
+        {
+            return Err(Exhausted::Time);
         }
         Ok(())
     }

@@ -381,7 +381,7 @@ impl QueryOutcome {
 /// negative answer's certificate without disturbing the original.
 pub fn recompute_saturation(prog: &Program) -> Result<Saturation, Exhausted> {
     let mut s = Solver::new(prog.clone());
-    let _ = s.seed_facts();
+    s.seed_facts();
     let mut b = Budget::unlimited();
     s.saturate(&mut b)
 }

@@ -113,7 +113,7 @@ impl Subst {
     #[inline]
     pub fn find(&self, x: TermId) -> TermId {
         let mut y = x;
-        while self.parent[y as usize] != y as u32 {
+        while self.parent[y as usize] != y {
             y = self.parent[y as usize];
         }
         y
@@ -121,7 +121,7 @@ impl Subst {
 
     #[inline]
     pub fn bound(&self, x: TermId) -> bool {
-        self.parent[x as usize] != x as u32
+        self.parent[x as usize] != x
     }
 
     /// Merge two variable roots, union by rank. Both sides are variables, so
@@ -219,18 +219,18 @@ impl Subst {
             let ka = store.kind(ra);
             let kb = store.kind(rb);
             match (ka, kb) {
-                (T_VAR, T_VAR) => self.link_vars(ra as u32, rb as u32),
+                (T_VAR, T_VAR) => self.link_vars(ra, rb),
                 (T_VAR, _) => {
-                    if self.occurs(store, ra as u32, rb) {
+                    if self.occurs(store, ra, rb) {
                         return Err(UnifyErr::Occurs);
                     }
-                    self.link_var_under(ra as u32, rb as u32);
+                    self.link_var_under(ra, rb);
                 }
                 (_, T_VAR) => {
-                    if self.occurs(store, rb as u32, ra) {
+                    if self.occurs(store, rb, ra) {
                         return Err(UnifyErr::Occurs);
                     }
-                    self.link_var_under(rb as u32, ra as u32);
+                    self.link_var_under(rb, ra);
                 }
                 (T_CONST, T_CONST) => {
                     if store.sym(ra) != store.sym(rb) {
@@ -284,12 +284,12 @@ impl Subst {
             let ka = store.kind(ra);
             let kb = store.kind(rb);
             match (ka, kb) {
-                (T_VAR, T_VAR) => self.link_vars(ra as u32, rb as u32),
+                (T_VAR, T_VAR) => self.link_vars(ra, rb),
                 (T_VAR, _) => {
-                    if self.occurs(store, ra as u32, rb) {
+                    if self.occurs(store, ra, rb) {
                         return Err(UnifyErr::Occurs);
                     }
-                    self.link_var_under(ra as u32, rb as u32);
+                    self.link_var_under(ra, rb);
                 }
                 (_, T_VAR) => return Err(UnifyErr::Clash),
                 (T_CONST, T_CONST) => {

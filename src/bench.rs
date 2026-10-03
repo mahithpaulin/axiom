@@ -119,6 +119,9 @@ impl Rng {
         Rng(seed)
     }
     #[inline]
+    // Not `Iterator::next`: the harness drives `below` directly and an
+    // `Option<u64>` return would touch every call site for no gain.
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> u64 {
         self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
         let mut z = self.0;
@@ -186,8 +189,8 @@ impl Bench {
         } else {
             0.0
         };
-        let ai = if r.iters > 0 { r.allocs / r.iters } else { 0 };
-        let bo = if r.ops > 0 { r.alloc_bytes / r.ops } else { 0 };
+        let ai = r.allocs.checked_div(r.iters).unwrap_or(0);
+        let bo = r.alloc_bytes.checked_div(r.ops).unwrap_or(0);
         // stderr, not stdout: stdout is block-buffered when redirected to a
         // file, which hid every row from a run that had to be killed.
         eprintln!(
@@ -301,8 +304,8 @@ impl Bench {
             } else {
                 0.0
             };
-            let ai = if r.iters > 0 { r.allocs / r.iters } else { 0 };
-            let bo = if r.ops > 0 { r.alloc_bytes / r.ops } else { 0 };
+            let ai = r.allocs.checked_div(r.iters).unwrap_or(0);
+            let bo = r.alloc_bytes.checked_div(r.ops).unwrap_or(0);
             println!(
                 "{:<28} {:>8} {:>11.2} {:>9} {:>10.2} {:>10} {:>14} {:>11}",
                 r.name, r.iters, r.wall_ms, r.cpu_ms, mops, ai, bo, r.rss_kb

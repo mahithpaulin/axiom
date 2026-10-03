@@ -476,8 +476,7 @@ impl Solver {
                         let lit = self.ren_lit(rule_id, i);
                         let p = self.prog.store.sym(lit.atom) as usize;
                         let facts = std::mem::take(&mut self.work[p]);
-                        for k in 0..facts.len() {
-                            let t = facts[k];
+                        for &t in facts.iter() {
                             self.eval_rule(rule_id, Some((i, t)), budget)?;
                         }
                         self.work[p] = facts;

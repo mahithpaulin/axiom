@@ -419,11 +419,7 @@ impl<'a> Parser<'a> {
 }
 
 fn is_variable(name: &str) -> bool {
-    let mut cs = name.chars();
-    match cs.next() {
-        Some(c) if c.is_ascii_uppercase() || c == '_' => true,
-        _ => false,
-    }
+    matches!(name.chars().next(), Some(c) if c.is_ascii_uppercase() || c == '_')
 }
 
 /// Parse a whole program.

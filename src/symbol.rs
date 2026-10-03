@@ -95,7 +95,7 @@ impl SymbolTable {
     /// Render as `name/arity`, the conventional logical notation.
     pub fn render(&self, s: SymId) -> String {
         let sym = self.syms[s as usize];
-        format!("{}/{}", &self.names[sym.name as usize], sym.arity)
+        format!("{}/{}", self.names[sym.name as usize], sym.arity)
     }
 
     #[inline]
