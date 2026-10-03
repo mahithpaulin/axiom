@@ -16,7 +16,7 @@
 use crate::budget::Budget;
 use crate::hash::FxHashMap;
 use crate::sat::{
-    AtomDesc, SatOutcome, SatSolver, STerm, TheoryLemma, TheoryResponse, TheoryStats, UnsatProof,
+    AtomDesc, STerm, SatOutcome, SatSolver, TheoryLemma, TheoryResponse, TheoryStats, UnsatProof,
 };
 use crate::status::Exhausted;
 use crate::symbol::SymbolTable;
@@ -634,12 +634,7 @@ impl Combination {
     }
 
     /// Justifying SAT literals for a congruent pair, if explainable.
-    pub fn eq_witness(
-        &self,
-        store: &TermStore,
-        s: TermId,
-        t: TermId,
-    ) -> Option<Vec<i32>> {
+    pub fn eq_witness(&self, store: &TermStore, s: TermId, t: TermId) -> Option<Vec<i32>> {
         self.cc.explain(store, s, t, &self.eq_lits)
     }
 }
@@ -722,7 +717,11 @@ impl Reasoner {
             if m == 0 {
                 continue;
             }
-            let lit = if m == 1 { vi as i32 + 1 } else { -(vi as i32 + 1) };
+            let lit = if m == 1 {
+                vi as i32 + 1
+            } else {
+                -(vi as i32 + 1)
+            };
             match atom {
                 TheoryAtom::Rdl(d) => {
                     self.comb
@@ -816,12 +815,7 @@ impl Reasoner {
 }
 
 impl crate::sat::TheoryHandler for Reasoner {
-    fn theory_step(
-        &mut self,
-        store: &TermStore,
-        assign: &[i8],
-        full: bool,
-    ) -> TheoryResponse {
+    fn theory_step(&mut self, store: &TermStore, assign: &[i8], full: bool) -> TheoryResponse {
         self.stats.rounds += 1;
         self.refresh(store, assign);
         let shared = self.shared_leaves(store);
@@ -899,11 +893,7 @@ fn render_term(store: &TermStore, symbols: &SymbolTable, t: TermId) -> Option<ST
     vals.pop()
 }
 
-fn render_atom(
-    store: &TermStore,
-    symbols: &SymbolTable,
-    atom: &TheoryAtom,
-) -> Option<AtomDesc> {
+fn render_atom(store: &TermStore, symbols: &SymbolTable, atom: &TheoryAtom) -> Option<AtomDesc> {
     match atom {
         TheoryAtom::Rdl(d) => Some(AtomDesc::Rdl {
             x: render_term(store, symbols, d.x)?,
@@ -972,11 +962,7 @@ impl TheoryDriver {
     /// The SAT variable abstracting a theory atom (deduplicated). Equality
     /// and disequality over predicate atoms are rejected: predicates are
     /// not terms.
-    pub fn theory_var(
-        &mut self,
-        store: &TermStore,
-        atom: TheoryAtom,
-    ) -> Result<u32, TheoryError> {
+    pub fn theory_var(&mut self, store: &TermStore, atom: TheoryAtom) -> Result<u32, TheoryError> {
         match &atom {
             TheoryAtom::Eq(s, t) | TheoryAtom::Neq(s, t) => {
                 if store.kind(*s) == T_ATOM || store.kind(*t) == T_ATOM {
@@ -1145,8 +1131,7 @@ pub fn verify_theory_unsat(
         for &h in &lem.hyps {
             let v = h.unsigned_abs() - 1;
             let desc = meaning.get(&v).ok_or(TheoryCheckErr::BadAtom)?;
-            assert_hyp(&mut rb, &mut comb, desc, h > 0)
-                .map_err(|_| TheoryCheckErr::BadAtom)?;
+            assert_hyp(&mut rb, &mut comb, desc, h > 0).map_err(|_| TheoryCheckErr::BadAtom)?;
         }
         match lem.concl {
             None => {
@@ -1176,7 +1161,11 @@ fn assert_hyp(
     match desc {
         AtomDesc::Rdl { x, y, c } => {
             let (rx, ry) = (rb.build(x)?, rb.build(y)?);
-            let d = Diff { x: rx, y: ry, c: *c };
+            let d = Diff {
+                x: rx,
+                y: ry,
+                c: *c,
+            };
             comb.assert_diff(if positive { d } else { d.negate() }, 0);
             Ok(())
         }
@@ -1201,12 +1190,7 @@ fn assert_hyp(
     }
 }
 
-fn concl_holds(
-    rb: &mut Rebuilt,
-    comb: &mut Combination,
-    desc: &AtomDesc,
-    positive: bool,
-) -> bool {
+fn concl_holds(rb: &mut Rebuilt, comb: &mut Combination, desc: &AtomDesc, positive: bool) -> bool {
     match desc {
         AtomDesc::Rdl { x, y, c } => {
             let (Ok(rx), Ok(ry)) = (rb.build(x), rb.build(y)) else {

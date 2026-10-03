@@ -13,11 +13,7 @@ fn consts(b: &mut Builder, names: &[&str]) -> Vec<TermId> {
     names.iter().map(|n| b.constant(n)).collect()
 }
 
-fn check_unsat(
-    sat_input: &[&[i32]],
-    sat_proof: &UnsatProof,
-    theory: &TheoryProof,
-) {
+fn check_unsat(sat_input: &[&[i32]], sat_proof: &UnsatProof, theory: &TheoryProof) {
     let owned: Vec<Vec<i32>> = sat_input.iter().map(|c| c.to_vec()).collect();
     assert!(
         verify_theory_unsat(&owned, sat_proof, theory).is_ok(),
@@ -36,11 +32,7 @@ fn rdl_conflict_is_unsat_with_proof() {
         .theory_var(&b.store, TheoryAtom::Rdl(Diff { x, y, c: 0 }))
         .unwrap();
     let v2 = d
-        .theory_var(&b.store, TheoryAtom::Rdl(Diff {
-            x: y,
-            y: x,
-            c: -1,
-        }))
+        .theory_var(&b.store, TheoryAtom::Rdl(Diff { x: y, y: x, c: -1 }))
         .unwrap();
     d.add_clause(&[v1 as i32 + 1]);
     d.add_clause(&[v2 as i32 + 1]);
@@ -65,11 +57,7 @@ fn rdl_chain_is_sat_with_verified_model() {
         .theory_var(&b.store, TheoryAtom::Rdl(Diff { x, y, c: 5 }))
         .unwrap();
     let v2 = d
-        .theory_var(&b.store, TheoryAtom::Rdl(Diff {
-            x: y,
-            y: z,
-            c: 2,
-        }))
+        .theory_var(&b.store, TheoryAtom::Rdl(Diff { x: y, y: z, c: 2 }))
         .unwrap();
     d.add_clause(&[v1 as i32 + 1]);
     d.add_clause(&[v2 as i32 + 1]);
@@ -153,11 +141,7 @@ fn nelson_oppen_exchange_fires() {
         .theory_var(&b.store, TheoryAtom::Rdl(Diff { x, y, c: 0 }))
         .unwrap();
     let v2 = d
-        .theory_var(&b.store, TheoryAtom::Rdl(Diff {
-            x: y,
-            y: x,
-            c: 0,
-        }))
+        .theory_var(&b.store, TheoryAtom::Rdl(Diff { x: y, y: x, c: 0 }))
         .unwrap();
     let v3 = d.theory_var(&b.store, TheoryAtom::Neq(x, y)).unwrap();
     d.add_clause(&[v1 as i32 + 1]);
@@ -186,11 +170,7 @@ fn inconsistent_model_does_not_verify() {
         .theory_var(&b.store, TheoryAtom::Rdl(Diff { x, y, c: 0 }))
         .unwrap();
     let v2 = d
-        .theory_var(&b.store, TheoryAtom::Rdl(Diff {
-            x: y,
-            y: x,
-            c: -1,
-        }))
+        .theory_var(&b.store, TheoryAtom::Rdl(Diff { x: y, y: x, c: -1 }))
         .unwrap();
     let mut budget = Budget::unlimited();
     // Force both conflicting atoms true so the outcome is unsat.

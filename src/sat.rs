@@ -759,8 +759,7 @@ impl SatSolver {
                                 let mut added = false;
                                 for (lit, lemma) in items {
                                     if lit_value(&self.assign, lit) != 1 {
-                                        let cid =
-                                            self.add_theory_lemma(lemma.clause.clone());
+                                        let cid = self.add_theory_lemma(lemma.clause.clone());
                                         if lit_value(&self.assign, lit) == 0 {
                                             self.enqueue(lit, Some(cid));
                                         }

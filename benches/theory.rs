@@ -55,8 +55,7 @@ fn main() {
         let mut budget = Budget::steps(100_000_000);
         match d.solve(&bd.store, &bd.symbols, &mut budget) {
             Ok(TheoryOutcome::Unsat { sat, theory }) => {
-                let input: Vec<Vec<i32>> =
-                    vs.iter().map(|&v| vec![v as i32 + 1]).collect();
+                let input: Vec<Vec<i32>> = vs.iter().map(|&v| vec![v as i32 + 1]).collect();
                 assert!(verify_theory_unsat(&input, &sat, &theory).is_ok());
                 let st = d.stats();
                 assert!(st.conflicts > 0 || st.lemmas > 0);
