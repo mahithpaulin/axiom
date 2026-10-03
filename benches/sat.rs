@@ -14,6 +14,17 @@ const CORPUS: &[(&str, &str, bool)] = &[
     ("unsat_xor01", include_str!("data/unsat_xor01.cnf"), false),
     ("unsat_php32", include_str!("data/unsat_php32.cnf"), false),
     ("sat_chain7", include_str!("data/sat_chain7.cnf"), true),
+    ("unsat_php43", include_str!("data/unsat_php43.cnf"), false),
+    (
+        "sat_planted50",
+        include_str!("data/sat_planted50.cnf"),
+        true,
+    ),
+    (
+        "sat_planted100",
+        include_str!("data/sat_planted100.cnf"),
+        true,
+    ),
 ];
 
 fn main() {

@@ -62,6 +62,9 @@ fn frozen_corpus_labels_hold_with_checked_certs() {
         (include_str!("../benches/data/unsat_xor01.cnf"), false),
         (include_str!("../benches/data/unsat_php32.cnf"), false),
         (include_str!("../benches/data/sat_chain7.cnf"), true),
+        (include_str!("../benches/data/unsat_php43.cnf"), false),
+        (include_str!("../benches/data/sat_planted50.cnf"), true),
+        (include_str!("../benches/data/sat_planted100.cnf"), true),
     ];
     for (src, expect_sat) in corpus {
         let (_, clauses) = parse_dimacs(src).expect("corpus parses");
@@ -138,4 +141,18 @@ fn engine_and_sat_agree_on_joins() {
          p(X) :- e(X,_).\nq(X,Y) :- p(X), e(X,Y).\n\
          ?- q(a,b).\n?- q(b,a).\n?- p(d).\n?- q(a,d).\n",
     );
+}
+
+#[test]
+fn tiny_budget_reports_exhaustion_not_an_answer() {
+    let (_, clauses) = parse_dimacs(include_str!("../benches/data/unsat_php43.cnf")).unwrap();
+    let mut s = SatSolver::new();
+    for c in &clauses {
+        s.add_clause(c);
+    }
+    let mut b = Budget::steps(5);
+    match s.solve(&mut b) {
+        Err(_) => {}
+        Ok(_) => panic!("5 steps cannot decide php43"),
+    }
 }

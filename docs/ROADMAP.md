@@ -232,11 +232,26 @@ suite that runs in CI, not only by a unit test.
 assumes the previous one is finished, measured and green. `docs/ALGORITHMS.md`
 §8 is the corresponding "not implemented" list.
 
-### II1. CDCL SAT core
+### II1. CDCL SAT core — DONE
 
-**Why next.** Highest capability per line of anything on the list. It is also
-the substrate for everything after it: theory combination, propagators, and the
-state-space lowering all consume a clause store and a conflict analysis.
+**Why it was next.** Highest capability per line of anything on the list. It
+is also the substrate for everything after it: theory combination,
+propagators, and the state-space lowering all consume a clause store and a
+conflict analysis.
+
+**Evidence.** `src/sat.rs`: clause DB, two-watched literals with blockers,
+first-UIP learning, VSIDS, phase saving, Luby restarts, activity-based
+detachment (storage kept so proof refs stay stable, DD-0019). Certificates:
+satisfiable instances carry a model checked by satisfaction; unsatisfiable
+ones carry learnt clauses in order, each RUP-checked against the input plus
+earlier learnts with an independent propagator (DD-0018, DD-0010). Frozen
+corpus `benches/data/` (9 files: trivial, xor, php32, php43, chain,
+planted 50/100): **9 of 9 solved** with checked certs (`tests/sat.rs`,
+`cargo bench --bench sat` reports conflicts/decisions/propagations/learned).
+Cross-engine differential on positive programs: engine `Proved` iff
+clauses+¬q unsat, `Refuted` iff sat with a verified model. Over-budget
+instances return `Err(Exhausted)`; `Status::Unknown` is never produced and no
+definite status ever lacks its certificate.
 
 **Depends on.** I1–I5. Architecturally it depends on nothing — it lowers the IR
 into its own flat literal array, per DD-0001: the IR is the interchange format,
