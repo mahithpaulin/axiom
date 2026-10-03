@@ -1,0 +1,59 @@
+name: axiom CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Public repo: Actions minutes are free, but each job caps at 6h.
+# So work is split by step budgets + deterministic counters (DD-0016),
+# never by wall-clock cutoffs. Quick + diag only in CI; full scaling
+# (n=20000, O(n^3) until I1 is fixed) is manual via scaling.yml.
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo test (all targets, 80 pass + 2 ignored)
+        run: cargo test --all-targets --verbose
+      - name: fmt check
+        run: cargo fmt --all -- --check
+      - name: clippy (deny warnings)
+        run: cargo clippy --all-targets -- -D warnings
+
+  known-defects:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: run the 2 ignored I5/I6 tests (expected to fail until fixed)
+        run: cargo test -- --ignored --nocapture
+
+  bench-quick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: fast subset (no 20k scaling table)
+        run: cargo bench --bench kernel -- quick
+
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: I1 scaling probe (n=100..800, candidates slope must go 3 -> 2)
+        run: cargo bench --bench kernel -- diag
