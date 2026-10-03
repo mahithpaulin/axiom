@@ -23,6 +23,10 @@ harness = false
 name = "sat"
 harness = false
 
+[[bench]]
+name = "theory"
+harness = false
+
 [profile.release]
 opt-level = 3
 lto = true

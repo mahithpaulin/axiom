@@ -89,6 +89,16 @@ jobs:
       - name: SAT core on the frozen corpus
         run: cargo bench --bench sat
 
+  bench-theory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: theories through the DPLL(T) driver
+        run: cargo bench --bench theory
+
   diag:
     runs-on: ubuntu-latest
     timeout-minutes: 10

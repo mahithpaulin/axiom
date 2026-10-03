@@ -13,8 +13,14 @@
 //! without E-matching. Full linear arithmetic and quantifier instantiation
 //! extend the same trait surface later; see ROADMAP II2b.
 
+use crate::budget::Budget;
 use crate::hash::FxHashMap;
-use crate::term::{TermId, TermStore, T_FUN};
+use crate::sat::{
+    AtomDesc, SatOutcome, SatSolver, STerm, TheoryLemma, TheoryResponse, TheoryStats, UnsatProof,
+};
+use crate::status::Exhausted;
+use crate::symbol::SymbolTable;
+use crate::term::{TermId, TermStore, T_ATOM, T_CONST, T_FUN, T_VAR};
 use std::collections::HashSet;
 
 /// A theory variable is just a term id: constants and variables are leaves in
@@ -613,59 +619,715 @@ impl Combination {
         None
     }
 
-    /// Entailed equalities between shared leaves (for propagation): pairs the
-    /// combination derives but was never told, each with its justification.
-    /// Empty on inconsistent sets: propagation from a conflict proves
-    /// nothing, and bounds there are ex-falso noise.
-    pub fn implied_eqs(
-        &mut self,
-        store: &TermStore,
-        shared: &[TermId],
-        known: &[(TermId, TermId)],
-    ) -> Vec<((TermId, TermId), Vec<i32>)> {
-        if self.diff.conflict().is_some() {
-            return Vec::new();
-        }
+    /// Justifying SAT literals for an entailed `x - y <= c` (requires
+    /// entailment; call after [`DiffSet::entails`]).
+    pub fn diff_witness(&self, x: TermId, y: TermId) -> Vec<i32> {
         let mut out = Vec::new();
-        for &x in shared {
-            for &y in shared {
-                if x >= y {
-                    continue;
-                }
-                if known.contains(&(x, y)) || known.contains(&(y, x)) {
-                    continue;
-                }
-                // Via UF (exchange-sourced merges included: their RDL
-                // justifications travel in `eq_lits`).
-                if congruent(&self.cc, x, y) {
-                    if let Some(w) = self.cc.explain(store, x, y, &self.eq_lits) {
-                        out.push(((x, y), w));
-                        continue;
-                    }
-                }
-                // Via RDL bounds both ways.
-                let (fwd, bwd) = (self.diff.bound(x, y), self.diff.bound(y, x));
-                if matches!((fwd, bwd), (Some(a), Some(b)) if a <= 0 && b <= 0) {
-                    let mut w = self.diff.explain_bound(x, y);
-                    w.extend(self.diff.explain_bound(y, x));
-                    let mut lits = Vec::new();
-                    for e in w {
-                        if let Some(&l) = self.diff_lits.get(&e) {
-                            if !lits.contains(&l) {
-                                lits.push(l);
-                            }
-                        }
-                    }
-                    out.push(((x, y), lits));
+        for e in self.diff.explain_bound(x, y) {
+            if let Some(&l) = self.diff_lits.get(&e) {
+                if !out.contains(&l) {
+                    out.push(l);
                 }
             }
         }
         out
     }
+
+    /// Justifying SAT literals for a congruent pair, if explainable.
+    pub fn eq_witness(
+        &self,
+        store: &TermStore,
+        s: TermId,
+        t: TermId,
+    ) -> Option<Vec<i32>> {
+        self.cc.explain(store, s, t, &self.eq_lits)
+    }
 }
 
-#[cfg(test)]
-mod tests {
+// ---- DPLL(T) driver: boolean abstraction + theory lemmas ---------------------
+
+/// A theory atom for boolean abstraction: difference constraint, equality,
+/// or disequality over terms. Hashable, so abstraction is deduplicated.
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub enum TheoryAtom {
+    Rdl(Diff),
+    Eq(TermId, TermId),
+    Neq(TermId, TermId),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum TheoryError {
+    /// Equality/disequality over predicate atoms (predicates are not terms).
+    PredicateAsTerm,
+}
+
+impl core::fmt::Display for TheoryError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            TheoryError::PredicateAsTerm => {
+                write!(f, "equality over predicate atoms is not a theory term")
+            }
+        }
+    }
+}
+
+impl core::error::Error for TheoryError {}
+
+/// Leaves of a term: variables, constants, and nullary applications.
+fn term_leaves(store: &TermStore, t: TermId, out: &mut Vec<TermId>) {
+    let mut stack = vec![t];
+    while let Some(u) = stack.pop() {
+        match store.kind(u) {
+            T_VAR | T_CONST => {
+                if !out.contains(&u) {
+                    out.push(u);
+                }
+            }
+            _ => {
+                let args = store.args(u);
+                if args.is_empty() {
+                    if !out.contains(&u) {
+                        out.push(u);
+                    }
+                } else {
+                    stack.extend(args.iter().copied());
+                }
+            }
+        }
+    }
+}
+
+/// The [`crate::sat::TheoryHandler`] implementation: a fresh [`Combination`]
+/// per call (assertions follow the current assignment, so nothing goes stale),
+/// justifications from explanations, everything recorded for the proof.
+struct Reasoner {
+    comb: Combination,
+    var_atom: Vec<Option<TheoryAtom>>,
+    lemmas: Vec<TheoryLemma>,
+    stats: TheoryStats,
+}
+
+impl Reasoner {
+    fn refresh(&mut self, store: &TermStore, assign: &[i8]) {
+        self.comb = Combination::new();
+        for (vi, opt) in self.var_atom.iter().enumerate() {
+            let atom = match opt {
+                Some(a) => a,
+                None => continue,
+            };
+            if vi >= assign.len() {
+                continue;
+            }
+            let m = assign[vi];
+            if m == 0 {
+                continue;
+            }
+            let lit = if m == 1 { vi as i32 + 1 } else { -(vi as i32 + 1) };
+            match atom {
+                TheoryAtom::Rdl(d) => {
+                    self.comb
+                        .assert_diff(if m == 1 { *d } else { d.negate() }, lit);
+                }
+                TheoryAtom::Eq(s, t) => {
+                    if m == 1 {
+                        self.comb.assert_eq(store, *s, *t, lit);
+                    } else {
+                        self.comb.assert_ne(*s, *t, lit);
+                    }
+                }
+                TheoryAtom::Neq(s, t) => {
+                    if m == 1 {
+                        self.comb.assert_ne(*s, *t, lit);
+                    } else {
+                        self.comb.assert_eq(store, *s, *t, lit);
+                    }
+                }
+            }
+        }
+    }
+
+    fn shared_leaves(&self, store: &TermStore) -> Vec<TermId> {
+        let mut out = Vec::new();
+        for opt in &self.var_atom {
+            match opt {
+                Some(TheoryAtom::Rdl(d)) => {
+                    term_leaves(store, d.x, &mut out);
+                    term_leaves(store, d.y, &mut out);
+                }
+                Some(TheoryAtom::Eq(s, t)) | Some(TheoryAtom::Neq(s, t)) => {
+                    term_leaves(store, *s, &mut out);
+                    term_leaves(store, *t, &mut out);
+                }
+                None => {}
+            }
+        }
+        out
+    }
+
+    fn mk_lemma(&mut self, just: Vec<i32>, concl: Option<i32>) -> TheoryLemma {
+        let mut clause: Vec<i32> = just.iter().map(|&l| -l).collect();
+        if let Some(l) = concl {
+            clause.push(l);
+        }
+        let lemma = TheoryLemma {
+            clause,
+            hyps: just,
+            concl,
+        };
+        self.stats.lemmas += 1;
+        self.lemmas.push(lemma.clone());
+        lemma
+    }
+
+    fn implication_for(
+        &mut self,
+        store: &TermStore,
+        vi: usize,
+        atom: &TheoryAtom,
+    ) -> Option<(i32, TheoryLemma)> {
+        match atom {
+            TheoryAtom::Rdl(d) => {
+                if self.comb.diff.entails(*d) {
+                    let just = self.comb.diff_witness(d.x, d.y);
+                    let lemma = self.mk_lemma(just, Some(vi as i32 + 1));
+                    return Some((vi as i32 + 1, lemma));
+                }
+                let nd = d.negate();
+                if self.comb.diff.entails(nd) {
+                    let just = self.comb.diff_witness(nd.x, nd.y);
+                    let lemma = self.mk_lemma(just, Some(-(vi as i32 + 1)));
+                    return Some((-(vi as i32 + 1), lemma));
+                }
+                None
+            }
+            TheoryAtom::Eq(s, t) => {
+                if congruent(&self.comb.cc, *s, *t) {
+                    let just = self.comb.eq_witness(store, *s, *t)?;
+                    let lemma = self.mk_lemma(just, Some(vi as i32 + 1));
+                    return Some((vi as i32 + 1, lemma));
+                }
+                None
+            }
+            // No disequality propagation: a separated pair is always
+            // satisfiable by splitting, so nothing is ever implied.
+            TheoryAtom::Neq(..) => None,
+        }
+    }
+}
+
+impl crate::sat::TheoryHandler for Reasoner {
+    fn theory_step(
+        &mut self,
+        store: &TermStore,
+        assign: &[i8],
+        full: bool,
+    ) -> TheoryResponse {
+        self.stats.rounds += 1;
+        self.refresh(store, assign);
+        let shared = self.shared_leaves(store);
+        if let Some(conflict) = self.comb.check(store, &shared) {
+            self.stats.conflicts += 1;
+            let lemma = self.mk_lemma(conflict, None);
+            return TheoryResponse::Conflict(lemma);
+        }
+        if full {
+            return TheoryResponse::Consistent;
+        }
+        let mut out = Vec::new();
+        for vi in 0..self.var_atom.len() {
+            if vi < assign.len() && assign[vi] != 0 {
+                continue;
+            }
+            let atom = match &self.var_atom[vi] {
+                Some(a) => a.clone(),
+                None => continue,
+            };
+            if let Some((lit, lemma)) = self.implication_for(store, vi, &atom) {
+                self.stats.propagations += 1;
+                out.push((lit, lemma));
+            }
+        }
+        TheoryResponse::Implications(out)
+    }
+
+    fn take_lemmas(&mut self) -> Vec<TheoryLemma> {
+        std::mem::take(&mut self.lemmas)
+    }
+
+    fn stats(&self) -> TheoryStats {
+        self.stats
+    }
+}
+
+/// Render a term structurally (iterative: depth is input-controlled).
+fn render_term(store: &TermStore, symbols: &SymbolTable, t: TermId) -> Option<STerm> {
+    fn sym_name(store: &TermStore, symbols: &SymbolTable, u: TermId) -> String {
+        symbols.name(store.sym(u)).to_string()
+    }
+    let mut todo: Vec<(TermId, bool)> = vec![(t, false)];
+    let mut vals: Vec<STerm> = Vec::new();
+    while let Some((u, expanded)) = todo.pop() {
+        if expanded {
+            match store.kind(u) {
+                T_VAR => vals.push(STerm::Var(sym_name(store, symbols, u))),
+                T_CONST => vals.push(STerm::Const(sym_name(store, symbols, u))),
+                _ => {
+                    let arity = store.args(u).len();
+                    let mut kids = Vec::with_capacity(arity);
+                    for _ in 0..arity {
+                        kids.push(vals.pop().expect("arity many values"));
+                    }
+                    kids.reverse();
+                    vals.push(STerm::App(sym_name(store, symbols, u), kids));
+                }
+            }
+            continue;
+        }
+        match store.kind(u) {
+            T_VAR | T_CONST => {
+                todo.push((u, true));
+            }
+            T_ATOM => return None,
+            _ => {
+                todo.push((u, true));
+                for &c in store.args(u) {
+                    todo.push((c, false));
+                }
+            }
+        }
+    }
+    vals.pop()
+}
+
+fn render_atom(
+    store: &TermStore,
+    symbols: &SymbolTable,
+    atom: &TheoryAtom,
+) -> Option<AtomDesc> {
+    match atom {
+        TheoryAtom::Rdl(d) => Some(AtomDesc::Rdl {
+            x: render_term(store, symbols, d.x)?,
+            y: render_term(store, symbols, d.y)?,
+            c: d.c,
+        }),
+        TheoryAtom::Eq(s, t) => Some(AtomDesc::Eq(
+            render_term(store, symbols, *s)?,
+            render_term(store, symbols, *t)?,
+        )),
+        TheoryAtom::Neq(s, t) => Some(AtomDesc::Neq(
+            render_term(store, symbols, *s)?,
+            render_term(store, symbols, *t)?,
+        )),
+    }
+}
+
+/// Complete theory proof: atom meanings plus lemmas.
+#[derive(Clone, Debug, Default)]
+pub struct TheoryProof {
+    pub atoms: Vec<(u32, AtomDesc)>,
+    pub lemmas: Vec<TheoryLemma>,
+}
+
+#[derive(Clone, Debug)]
+pub enum TheoryOutcome {
+    Sat {
+        model: Vec<i8>,
+        theory: TheoryProof,
+    },
+    Unsat {
+        sat: UnsatProof,
+        theory: TheoryProof,
+    },
+}
+
+/// Boolean-abstraction driver: owns the SAT solver, lends it a [`Reasoner`]
+/// per solve, and assembles certificates. Single-shot per problem (fresh
+/// driver per formula, like the usage in `tests/`).
+pub struct TheoryDriver {
+    sat: SatSolver,
+    atom_of: FxHashMap<TheoryAtom, u32>,
+    var_atom: Vec<Option<TheoryAtom>>,
+    stats: TheoryStats,
+}
+
+impl TheoryDriver {
+    pub fn new() -> Self {
+        TheoryDriver {
+            sat: SatSolver::new(),
+            atom_of: FxHashMap::default(),
+            var_atom: Vec::new(),
+            stats: TheoryStats::default(),
+        }
+    }
+
+    pub fn stats(&self) -> TheoryStats {
+        self.stats
+    }
+
+    /// A pure boolean variable (no theory meaning).
+    pub fn bool_var(&mut self) -> u32 {
+        self.sat.new_var()
+    }
+
+    /// The SAT variable abstracting a theory atom (deduplicated). Equality
+    /// and disequality over predicate atoms are rejected: predicates are
+    /// not terms.
+    pub fn theory_var(
+        &mut self,
+        store: &TermStore,
+        atom: TheoryAtom,
+    ) -> Result<u32, TheoryError> {
+        match &atom {
+            TheoryAtom::Eq(s, t) | TheoryAtom::Neq(s, t) => {
+                if store.kind(*s) == T_ATOM || store.kind(*t) == T_ATOM {
+                    return Err(TheoryError::PredicateAsTerm);
+                }
+            }
+            TheoryAtom::Rdl(d) => {
+                if store.kind(d.x) == T_ATOM || store.kind(d.y) == T_ATOM {
+                    return Err(TheoryError::PredicateAsTerm);
+                }
+            }
+        }
+        if let Some(&v) = self.atom_of.get(&atom) {
+            return Ok(v);
+        }
+        let v = self.sat.new_var();
+        self.atom_of.insert(atom.clone(), v);
+        if self.var_atom.len() <= v as usize {
+            self.var_atom.resize(v as usize + 1, None);
+        }
+        self.var_atom[v as usize] = Some(atom);
+        Ok(v)
+    }
+
+    pub fn add_clause(&mut self, lits: &[i32]) -> Option<usize> {
+        self.sat.add_clause(lits)
+    }
+
+    pub fn solve(
+        &mut self,
+        store: &TermStore,
+        symbols: &SymbolTable,
+        budget: &mut Budget,
+    ) -> Result<TheoryOutcome, Exhausted> {
+        let reasoner = Reasoner {
+            comb: Combination::new(),
+            var_atom: self.var_atom.clone(),
+            lemmas: Vec::new(),
+            stats: TheoryStats::default(),
+        };
+        self.sat.theory = Some(Box::new(reasoner));
+        let outcome = self.sat.solve_theory(budget, store);
+        // Reclaim the handler's record through the trait (no downcast).
+        let (lemmas, tstats) = match self.sat.theory.as_mut() {
+            Some(h) => (h.take_lemmas(), h.stats()),
+            None => (Vec::new(), TheoryStats::default()),
+        };
+        self.stats = tstats;
+        let mut atoms = Vec::new();
+        for (vi, opt) in self.var_atom.iter().enumerate() {
+            if let Some(a) = opt {
+                let desc = render_atom(store, symbols, a).expect("registered atoms render");
+                atoms.push((vi as u32, desc));
+            }
+        }
+        let theory = TheoryProof { atoms, lemmas };
+        match outcome {
+            Ok(SatOutcome::Sat { model }) => Ok(TheoryOutcome::Sat { model, theory }),
+            Ok(SatOutcome::Unsat { .. }) => {
+                let sat_proof = self.sat.take_proof();
+                Ok(TheoryOutcome::Unsat {
+                    sat: sat_proof,
+                    theory,
+                })
+            }
+            Err(e) => Err(e),
+        }
+    }
+}
+
+impl Default for TheoryDriver {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum TheoryCheckErr {
+    Sat(crate::sat::SatCheckErr),
+    /// A lemma references an unknown variable or malformed atom.
+    BadAtom,
+    /// A lemma's justification does not hold.
+    Lemma(usize),
+    /// The final state does not conflict.
+    NotEmpty,
+}
+
+impl core::fmt::Display for TheoryCheckErr {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            TheoryCheckErr::Sat(e) => write!(f, "propositional check failed: {e}"),
+            TheoryCheckErr::BadAtom => write!(f, "lemma references an unknown atom"),
+            TheoryCheckErr::Lemma(i) => write!(f, "theory lemma {i} unjustified"),
+            TheoryCheckErr::NotEmpty => write!(f, "final state does not conflict"),
+        }
+    }
+}
+
+impl core::error::Error for TheoryCheckErr {}
+
+/// Rebuild a checker store from structural terms.
+struct Rebuilt {
+    store: TermStore,
+    symbols: SymbolTable,
+    vars: FxHashMap<String, TermId>,
+}
+
+impl Rebuilt {
+    fn build(&mut self, t: &STerm) -> Result<TermId, TheoryCheckErr> {
+        match t {
+            STerm::Var(name) => {
+                if let Some(&v) = self.vars.get(name) {
+                    return Ok(v);
+                }
+                let (v, _) = self.store.fresh_var();
+                self.vars.insert(name.clone(), v);
+                Ok(v)
+            }
+            STerm::Const(name) => {
+                let s = self.symbols.constant(name);
+                Ok(self.store.constant(s))
+            }
+            STerm::App(name, kids) => {
+                if kids.len() > u16::MAX as usize {
+                    return Err(TheoryCheckErr::BadAtom);
+                }
+                let mut args = Vec::with_capacity(kids.len());
+                for k in kids {
+                    args.push(self.build(k)?);
+                }
+                let s = self.symbols.func(name, args.len() as u16);
+                Ok(self.store.func(s, &args))
+            }
+        }
+    }
+
+    fn build_diff(
+        &mut self,
+        x: &STerm,
+        y: &STerm,
+        c: i64,
+    ) -> Result<Diff, TheoryCheckErr> {
+        Ok(Diff {
+            x: self.build(x)?,
+            y: self.build(y)?,
+            c,
+        })
+    }
+}
+
+/// Verify a theory-unsat certificate: RUP over everything propositional,
+/// then every theory lemma replayed in a fresh theory state, then the final
+/// conflict. The checker shares no search code with the solver: unit
+/// propagation and the theory procedures run here over rebuilt terms.
+pub fn verify_theory_unsat(
+    sat_input: &[Vec<i32>],
+    sat_proof: &UnsatProof,
+    theory: &TheoryProof,
+) -> Result<(), TheoryCheckErr> {
+    use crate::sat::verify_unsat;
+    // Atom meanings by variable.
+    let mut meaning: HashMap<u32, &AtomDesc> = HashMap::new();
+    for (v, d) in &theory.atoms {
+        meaning.insert(*v, d);
+    }
+    // 1. Propositional RUP over inputs plus theory-lemma clauses (a superset:
+    // monotone, so over-approximating the database stays sound).
+    let mut db: Vec<Vec<i32>> = sat_input.to_vec();
+    db.extend(theory.lemmas.iter().map(|l| l.clause.clone()));
+    verify_unsat(&db, sat_proof).map_err(TheoryCheckErr::Sat)?;
+    // 2. Every theory lemma, in a fresh state.
+    for (i, lem) in theory.lemmas.iter().enumerate() {
+        let mut rb = Rebuilt {
+            store: TermStore::new(),
+            symbols: SymbolTable::new(),
+            vars: FxHashMap::default(),
+        };
+        let mut comb = Combination::new();
+        for &h in &lem.hyps {
+            let v = h.unsigned_abs() - 1;
+            let desc = meaning.get(&v).ok_or(TheoryCheckErr::BadAtom)?;
+            assert_hyp(&mut rb, &mut comb, desc, h > 0)
+                .map_err(|_| TheoryCheckErr::BadAtom)?;
+        }
+        match lem.concl {
+            None => {
+                let shared = all_leaves(lem, meaning)?;
+                if comb.check(&rb.store, &shared).is_none() {
+                    return Err(TheoryCheckErr::Lemma(i));
+                }
+            }
+            Some(l) => {
+                let v = l.unsigned_abs() - 1;
+                let desc = meaning.get(&v).ok_or(TheoryCheckErr::BadAtom)?;
+                if !concl_holds(&mut rb, &mut comb, desc, l > 0) {
+                    return Err(TheoryCheckErr::Lemma(i));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn assert_hyp(
+    rb: &mut Rebuilt,
+    comb: &mut Combination,
+    desc: &AtomDesc,
+    positive: bool,
+) -> Result<(), TheoryCheckErr> {
+    match desc {
+        AtomDesc::Rdl { x, y, c } => {
+            let (rx, ry) = (rb.build(x)?, rb.build(y)?);
+            let d = Diff { x: rx, y: ry, c: *c };
+            comb.assert_diff(if positive { d } else { d.negate() }, 0);
+            Ok(())
+        }
+        AtomDesc::Eq(s, t) => {
+            let (rs, rt) = (rb.build(s)?, rb.build(t)?);
+            if positive {
+                comb.assert_eq(&rb.store, rs, rt, 0);
+            } else {
+                comb.assert_ne(rs, rt, 0);
+            }
+            Ok(())
+        }
+        AtomDesc::Neq(s, t) => {
+            let (rs, rt) = (rb.build(s)?, rb.build(t)?);
+            if positive {
+                comb.assert_ne(rs, rt, 0);
+            } else {
+                comb.assert_eq(&rb.store, rs, rt, 0);
+            }
+            Ok(())
+        }
+    }
+}
+
+fn concl_holds(
+    rb: &mut Rebuilt,
+    comb: &mut Combination,
+    desc: &AtomDesc,
+    positive: bool,
+) -> bool {
+    match desc {
+        AtomDesc::Rdl { x, y, c } => {
+            let (Ok(rx), Ok(ry)) = (rb.build(x), rb.build(y)) else {
+                return false;
+            };
+            let d = Diff { x: rx, y: ry, c: *c };
+            comb.diff.entails(if positive { d } else { d.negate() })
+        }
+        AtomDesc::Eq(s, t) => {
+            if !positive {
+                // No disequality propagation exists; a negated-equality
+                // conclusion is malformed proof material.
+                return false;
+            }
+            let (Ok(rs), Ok(rt)) = (rb.build(s), rb.build(t)) else {
+                return false;
+            };
+            congruent(&comb.cc, rs, rt)
+        }
+        // Same: the driver never propagates disequalities.
+        AtomDesc::Neq(..) => false,
+    }
+}
+
+fn all_leaves(
+    lem: &TheoryLemma,
+    meaning: &HashMap<u32, &AtomDesc>,
+) -> Result<Vec<TermId>, TheoryCheckErr> {
+    // Rebuilt lazily per lemma would duplicate stores; leaves need terms, so
+    // rebuild once more into a scratch store purely for leaf collection.
+    let mut rb = Rebuilt {
+        store: TermStore::new(),
+        symbols: SymbolTable::new(),
+        vars: FxHashMap::default(),
+    };
+    let mut out = Vec::new();
+    let mut atoms = Vec::new();
+    for &h in lem.hyps.iter().chain(lem.concl.iter()) {
+        let v = h.unsigned_abs() - 1;
+        atoms.push(meaning.get(&v).ok_or(TheoryCheckErr::BadAtom)?);
+    }
+    for desc in atoms {
+        match desc {
+            AtomDesc::Rdl { x, y, .. } => {
+                for t in [x, y] {
+                    let rt = rb.build(t)?;
+                    term_leaves(&rb.store, rt, &mut out);
+                }
+            }
+            AtomDesc::Eq(s, t) | AtomDesc::Neq(s, t) => {
+                for t in [s, t] {
+                    let rt = rb.build(t)?;
+                    term_leaves(&rb.store, rt, &mut out);
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Verify a theory model: assert the model's theory atoms (both polarities)
+/// in a fresh state and confirm consistency.
+pub fn verify_theory_sat(model: &[i8], theory: &TheoryProof) -> bool {
+    let mut meaning: HashMap<u32, &AtomDesc> = HashMap::new();
+    for (v, d) in &theory.atoms {
+        meaning.insert(*v, d);
+    }
+    let mut rb = Rebuilt {
+        store: TermStore::new(),
+        symbols: SymbolTable::new(),
+        vars: FxHashMap::default(),
+    };
+    let mut comb = Combination::new();
+    for (v, d) in &theory.atoms {
+        if *v as usize >= model.len() {
+            return false;
+        }
+        let m = model[*v as usize];
+        if m == 0 {
+            continue;
+        }
+        if assert_hyp(&mut rb, &mut comb, d, m == 1).is_err() {
+            return false;
+        }
+    }
+    let mut shared = Vec::new();
+    for (_, d) in &theory.atoms {
+        match d {
+            AtomDesc::Rdl { x, y, .. } => {
+                for t in [x, y] {
+                    let Ok(rt) = rb.build(t) else {
+                        return false;
+                    };
+                    term_leaves(&rb.store, rt, &mut shared);
+                }
+            }
+            AtomDesc::Eq(s, t) | AtomDesc::Neq(s, t) => {
+                for t in [s, t] {
+                    let Ok(rt) = rb.build(t) else {
+                        return false;
+                    };
+                    term_leaves(&rb.store, rt, &mut shared);
+                }
+            }
+        }
+    }
+    comb.check(&rb.store, &shared).is_none()
+}
     use super::*;
     use crate::program::Builder;
 

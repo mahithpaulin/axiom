@@ -101,13 +101,20 @@ pub use db::Db;
 pub use exterior::{Limits, ParseError};
 pub use program::{Builder, Literal, Program, ProgramError, Rule, RuleId};
 pub use proof::{CheckErr, DerivId, Derivation, Proof, Saturation};
-pub use sat::{Grounding, Lit, SatCheckErr, SatOutcome, SatSolver, SatStats, UnsatProof, Var};
+pub use sat::{
+    AtomDesc, Grounding, Lit, STerm, SatCheckErr, SatOutcome, SatSolver, SatStats, TheoryHandler,
+    TheoryLemma, TheoryResponse, TheoryStats, UnsatProof, Var,
+};
 pub use solver::{Answer, Outcome, ProofMode, QueryOutcome, Solver, Stats};
 pub use status::{Exhausted, Status};
 pub use subst::Subst;
 pub use symbol::SymbolTable;
 pub use term::TermId;
 pub use term::TermStore;
+pub use theory::{
+    Combination, Congruence, Diff, DiffSet, TheoryAtom, TheoryDriver, TheoryError, TheoryOutcome,
+    TheoryProof,
+};
 
 /// Compile-time check that the two promises in the charter which can be checked
 /// mechanically are actually true. Each is a real test in `tests/`, and this

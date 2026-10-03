@@ -85,6 +85,77 @@ struct Watcher {
     blocker: Lit,
 }
 
+/// Structural term for theory proofs: names, not arena ids, so a proof
+/// survives the arena that made it. Rendered from terms at emission,
+/// rebuilt into a fresh store by the checker.
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub enum STerm {
+    Var(String),
+    Const(String),
+    App(String, Vec<STerm>),
+}
+
+/// Meaning of one theory SAT variable, structurally.
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub enum AtomDesc {
+    Rdl { x: STerm, y: STerm, c: i64 },
+    Eq(STerm, STerm),
+    Neq(STerm, STerm),
+}
+
+/// One theory lemma: `hyps => concl` (`None` = conflict), with the emitted
+/// `clause` (negated hypotheses, plus the conclusion literal when present).
+/// Checked by asserting the hypotheses in a fresh theory state, never by unit
+/// propagation (which is incomplete for theory reasoning).
+#[derive(Clone, Debug)]
+pub struct TheoryLemma {
+    pub clause: Vec<Lit>,
+    pub hyps: Vec<Lit>,
+    pub concl: Option<Lit>,
+}
+
+/// Theory solver plug-in for DPLL(T). Implemented by `theory.rs`; the core
+/// only sees literal vectors and justification clauses, never terms.
+///
+/// The single entry point keeps the protocol small: `full=false` after each
+/// propagation fixpoint (partial assignment: propagate, report conflict, or
+/// stay silent), `full=true` on complete assignments (confirm or conflict).
+/// Every returned lemma is recorded by the handler itself; the solver only
+/// files its clause.
+pub trait TheoryHandler {
+    fn theory_step(
+        &mut self,
+        store: &crate::term::TermStore,
+        assign: &[i8],
+        full: bool,
+    ) -> TheoryResponse;
+    /// Move recorded lemmas out (proof assembly).
+    fn take_lemmas(&mut self) -> Vec<TheoryLemma>;
+    /// (rounds, conflicts, propagations, lemmas) — see [`TheoryStats`].
+    fn stats(&self) -> TheoryStats;
+}
+
+/// Handler response for one theory call.
+pub enum TheoryResponse {
+    /// Implied literals with justifying lemmas. Each lemma's clause is
+    /// added; unassigned literals are enqueued with it as reason.
+    Implications(Vec<(Lit, TheoryLemma)>),
+    /// Inconsistent under the current assignment; the lemma explains why.
+    Conflict(TheoryLemma),
+    /// Nothing to report.
+    Consistent,
+}
+
+/// Theory-side counters: solver rounds entered, conflicts, implications, and
+/// lemmas emitted through this channel.
+#[derive(Clone, Copy, Default, Debug)]
+pub struct TheoryStats {
+    pub rounds: u64,
+    pub conflicts: u64,
+    pub propagations: u64,
+    pub lemmas: u64,
+}
+
 /// An unsatisfiability proof: learnt clauses in learning order. Each one is
 /// verified by reverse unit propagation (RUP) against the input plus earlier
 /// learnts, and the whole set together must propagate to conflict. Clause
@@ -159,6 +230,9 @@ pub struct SatSolver {
     ok: bool,
     /// Learnt clauses in learning order: the RUP proof under construction.
     proof_learnts: Vec<Vec<Lit>>,
+    /// Optional DPLL(T) plug-in. `None` (plain SAT) costs one branch per
+    /// loop iteration and nothing else.
+    pub theory: Option<Box<dyn TheoryHandler>>,
     pub stats: SatStats,
 }
 
@@ -191,6 +265,7 @@ impl SatSolver {
             has_empty: false,
             ok: true,
             proof_learnts: Vec::new(),
+            theory: None,
             stats: SatStats::default(),
         }
     }
@@ -534,6 +609,18 @@ impl SatSolver {
 
     fn store_learnt(&mut self, lits: Vec<Lit>) -> usize {
         self.proof_learnts.push(lits.clone());
+        self.push_learnt(lits)
+    }
+
+    /// Add a theory lemma: watched, stored and deletable like a learnt clause
+    /// (it participates in propagation, reasons and deletion), but recorded in
+    /// the theory proof channel instead of the RUP stream — its justification
+    /// is theory reasoning, which unit propagation cannot replay.
+    pub fn add_theory_lemma(&mut self, lits: Vec<Lit>) -> usize {
+        self.push_learnt(lits)
+    }
+
+    fn push_learnt(&mut self, lits: Vec<Lit>) -> usize {
         self.clauses.push(Clause {
             lits,
             learnt: true,
@@ -548,13 +635,34 @@ impl SatSolver {
     }
 
     /// Move the accumulated learnt clauses out as the RUP proof.
-    fn take_proof(&mut self) -> UnsatProof {
+    pub(crate) fn take_proof(&mut self) -> UnsatProof {
         UnsatProof {
             learnts: std::mem::take(&mut self.proof_learnts),
         }
     }
 
     pub fn solve(&mut self, budget: &mut Budget) -> Result<SatOutcome, Exhausted> {
+        // No theory configured: the store is unused. It exists so the
+        // theory-enabled path shares one implementation below.
+        let store = crate::term::TermStore::new();
+        self.solve_inner(budget, &store)
+    }
+
+    /// Solve with theory hooks enabled. Requires `self.theory` to be `Some`;
+    /// without it this behaves exactly like [`SatSolver::solve`].
+    pub fn solve_theory(
+        &mut self,
+        budget: &mut Budget,
+        store: &crate::term::TermStore,
+    ) -> Result<SatOutcome, Exhausted> {
+        self.solve_inner(budget, store)
+    }
+
+    fn solve_inner(
+        &mut self,
+        budget: &mut Budget,
+        store: &crate::term::TermStore,
+    ) -> Result<SatOutcome, Exhausted> {
         if self.has_empty {
             return Ok(SatOutcome::Unsat {
                 proof: UnsatProof::default(),
@@ -620,9 +728,59 @@ impl SatSolver {
                 }
                 None => {
                     if self.assign.iter().all(|&a| a != 0) {
+                        // Theory verdict on full models; plain SAT returns here.
+                        if self.theory.is_some() {
+                            let mut h = self.theory.take().expect("present");
+                            let resp = h.theory_step(store, &self.assign, true);
+                            self.theory = Some(h);
+                            match resp {
+                                TheoryResponse::Conflict(lemma) => {
+                                    self.add_theory_lemma(lemma.clause.clone());
+                                    self.backtrack(0);
+                                    continue;
+                                }
+                                _ => {}
+                            }
+                        }
                         return Ok(SatOutcome::Sat {
                             model: self.assign.clone(),
                         });
+                    }
+                    // Theory propagation hook: implied literals arrive with
+                    // justifying lemmas and re-enter propagation as clauses.
+                    // With no theory configured this is one branch, nothing more.
+                    if self.theory.is_some() {
+                        let mut h = self.theory.take().expect("present");
+                        let resp = h.theory_step(store, &self.assign, false);
+                        self.theory = Some(h);
+                        match resp {
+                            TheoryResponse::Implications(items) => {
+                                // Progress accounting: an implication whose
+                                // literal is already true adds nothing —
+                                // re-adding its lemma every round would spin
+                                // forever on duplicates.
+                                let mut added = false;
+                                for (lit, lemma) in items {
+                                    if lit_value(&self.assign, lit) != 1 {
+                                        let cid =
+                                            self.add_theory_lemma(lemma.clause.clone());
+                                        if lit_value(&self.assign, lit) == 0 {
+                                            self.enqueue(lit, Some(cid));
+                                        }
+                                        added = true;
+                                    }
+                                }
+                                if added {
+                                    continue;
+                                }
+                            }
+                            TheoryResponse::Conflict(lemma) => {
+                                self.add_theory_lemma(lemma.clause.clone());
+                                self.backtrack(0);
+                                continue;
+                            }
+                            TheoryResponse::Consistent => {}
+                        }
                     }
                     self.decide();
                     budget.charge(1)?;
