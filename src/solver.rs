@@ -116,6 +116,11 @@ pub struct Solver {
     /// Join backtracking stacks, reused to keep the join allocation-free.
     pub(crate) jc: Vec<usize>,
     pub(crate) jm: Vec<usize>,
+    /// Diagnostic only: tuples examined by (rule, body position) as
+    /// (bound, unbound). Never cleared per eval; read it off a fresh solver
+    /// per measurement (ROADMAP I1). Not part of `Stats` because it is keyed,
+    /// not scalar.
+    pub(crate) scan_attr: FxHashMap<(RuleId, usize), (u64, u64)>,
     /// Rules bucketed by head predicate, for goal-directed resolution.
     pub rules_by_pred: Vec<Vec<RuleId>>,
 }
@@ -146,6 +151,7 @@ impl Solver {
             work: vec![Vec::new(); np],
             jc: Vec::new(),
             jm: Vec::new(),
+            scan_attr: FxHashMap::default(),
             rules_by_pred,
         }
     }
@@ -279,6 +285,18 @@ impl Solver {
 
     pub fn derivations_for(&self, proof: &Proof) -> Vec<DerivId> {
         check::derivations_for(&self.derivs, &self.deriv_of, proof.goal)
+    }
+
+    /// Tuples examined by (rule, body position) as (bound, unbound),
+    /// sorted by unbound descending. Diagnostic surface for ROADMAP I1.
+    pub fn scan_attribution(&self) -> Vec<(RuleId, usize, u64, u64)> {
+        let mut v: Vec<(RuleId, usize, u64, u64)> = self
+            .scan_attr
+            .iter()
+            .map(|(&(r, i), &(b, u))| (r, i, b, u))
+            .collect();
+        v.sort_by(|a, b| b.3.cmp(&a.3));
+        v
     }
 
     /// Every atom in the database for a predicate, for inspection and tests.

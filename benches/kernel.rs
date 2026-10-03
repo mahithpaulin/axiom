@@ -562,6 +562,11 @@ fn scaling_diagnostic() {
             s.stats.candidates,
             ms
         );
+        // Per-(rule, body position) attribution, worst unbound first
+        // (ROADMAP I1 step 1: name the rule shape responsible, don't guess).
+        for (r, i, bound, unbound) in s.scan_attribution().iter().take(3) {
+            eprintln!("           rule={r} pos={i} bound={bound} unbound={unbound}");
+        }
     }
 }
 

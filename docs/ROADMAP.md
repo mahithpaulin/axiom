@@ -37,20 +37,13 @@ n ∈ {100, 200, 400, 800}: `facts`, `rounds`, `derivations`, `candidates`, `ms`
 which count as IDB per DD-0017. `candidates` is the column that is wrong. Fit
 `log(candidates)` against `log(n)`: the slope is currently ≈ 3.
 
-**Step 1 — instrument, do not guess.** Add two counters to `Solver` and split
-them by `(rule, body position)` in `next_solution`, around the `db.candidates`
-call at `src/solver_fwd.rs:193`:
-
-```
-bound_scans[rule][pos]   // candidates(pred, Some(k))
-unbound_scans[rule][pos] // candidates(pred, None)
-```
-
-One `diag` run then names the rule shape and body position responsible. Anything
-else is inference. In particular, the two obvious candidates have already been
-checked and are *not* it: `first_bound` does scan all arguments
-(`src/solver_fwd.rs:121-131`), and a wrong index key reduces scans rather than
-inflating them (`src/db.rs:109-127`).
+**Step 1 — instrument, do not guess.** Done: `Solver::scan_attr` counts tuples
+examined by `(rule, body position)` split into bound vs unbound
+(`src/solver_fwd.rs`, `src/solver.rs::scan_attribution`), and `diag` prints
+the worst unbound contributors per n. Run it before theorising. The two
+obvious candidates were already checked and are *not* it: `first_bound` looks
+only at argument 0 and only at ground values (fixed), and a wrong index key
+reduces scans rather than inflating them (`src/db.rs:109-127`).
 
 **Step 2 — fix.** Depending on what step 1 shows. Two distinct defects are
 already known and are separate work:
@@ -96,7 +89,16 @@ retained only as the baseline for `semi_naive_vs_fixpoint_n600`
 **Done means.** `saturate_naive` and `saturate` return the same `idb_facts` and
 the same `closure_hash` on the same program, asserted in a test — not just
 compared in a benchmark. That single assertion would have caught this the first
-time it ran.
+time it ran. Locked by
+`tests/soundness.rs::naive_and_semi_naive_agree_on_transitive_closure`.
+
+**Root cause.** The resumable join kept one cursor per depth across solutions,
+but an inner level's candidate list changes identity when outer bindings move
+to a different index bucket. Resuming the stale cursor skipped the bucket's
+contents, so unseeded multi-level joins derived ~1 fact and stopped. **Fix:**
+truncate the cursor/mark stacks on every advancing match
+(`src/solver_fwd.rs`), so re-descent restarts inner levels from zero with
+current bindings — textbook nested-loop semantics.
 
 **Benchmarked by.** `semi_naive_vs_fixpoint_n600[A|B]`, which is currently
 uninterpretable and can only be filled in after this. The A/B rows must be
@@ -508,9 +510,10 @@ Stated so they are not mistaken for gaps someone forgot to schedule.
 
 ## Open defects, numbered as referenced by the test suite
 
-These were `#[ignore]`d or failing tests, not hypotheticals. I5 and I6 are
-fixed (root cause and fix recorded below); the suite is green with no
-exclusions. I1–I4, I7, I8 remain open.
+These were `#[ignore]`d or failing tests, not hypotheticals. I2, I5 and I6
+are fixed (root cause and fix recorded below); the suite is green with no
+exclusions. I1, I7, I8 remain open. I3's measurement defects are fixed; I4
+(compiling the suites + CI) is done.
 
 ### I1 — Unbound scans dominate the join (highest priority)
 
@@ -527,11 +530,10 @@ suspect — it accepted non-ground compound terms as index keys — but it would
 cause *missed* derivations, not extra scans, so it is probably not the whole
 story. Do not assume; re-instrument per rule.
 
-### I2 — `saturate_naive` is broken
+### I2 — `saturate_naive` is broken — FIXED (stale join cursors)
 
-The benchmark baseline in `src/solver_fwd.rs` derives ~1 200 facts where ~180 900
-are correct, which invalidates the semi-naive-vs-naive comparison entirely. Fix
-or delete; do not publish a comparison against it until fixed.
+The benchmark baseline in `src/solver_fwd.rs` derived ~1 200 facts where ~180 900
+are correct, which invalidated the semi-naive-vs-naive comparison entirely.
 
 ### I3 — Two benchmarks measure nothing
 

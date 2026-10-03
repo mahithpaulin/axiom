@@ -242,6 +242,15 @@ impl Solver {
                     self.jm.push(self.subst.mark());
                 }
                 let list = self.db.candidates(pred, bound);
+                // Attribute tuples examined by (rule, body position), split
+                // into bound index lookups vs unbound scans (ROADMAP I1).
+                let probed = list.len() as u64;
+                let e = self.scan_attr.entry((rule, i)).or_default();
+                if bound.is_some() {
+                    e.0 += probed;
+                } else {
+                    e.1 += probed;
+                }
                 let mut cursor = self.jc[depth];
                 let mut advanced = false;
                 while cursor < list.len() {
@@ -261,6 +270,15 @@ impl Solver {
                 self.jc[depth] = cursor;
                 if advanced {
                     self.stats.join_levels += 1;
+                    // A new match at this level invalidates every deeper
+                    // cursor and mark: the candidate set below depends on the
+                    // bindings just made. Drop them so re-descent restarts
+                    // from zero with current bindings. Resuming a stale cursor
+                    // in a different index bucket silently lost solutions:
+                    // the naive baseline derived 61 facts where 495 were
+                    // correct (ROADMAP I2).
+                    self.jc.truncate(depth + 1);
+                    self.jm.truncate(depth + 1);
                     depth += 1;
                     continue;
                 }
