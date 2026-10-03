@@ -1,7 +1,15 @@
 //! The Stage-1 benchmark suite.
 //!
 //! Run with `cargo bench --bench kernel`, or `cargo bench --bench kernel -- quick`
-//! for the fast subset.
+//! for the fast subset, or `cargo bench --bench kernel -- ci` for the CI subset
+//! (quick sizes, no scaling table — the n=5000 scaling row alone costs hours
+//! until ROADMAP I1 is fixed).
+//!
+//! NOTE: never run this target via `cargo test --all-targets`. That flag
+//! includes `--benches`, and with `harness = false` cargo executes `main()`
+//! as the bench's test binary — the full suite including `tc_path_n20000`,
+//! in the debug profile. Diagnosed 2026-10-03: it hung CI for the full
+//! 20-minute job timeout with no output.
 //!
 //! ## What each benchmark is testing
 //!
@@ -23,11 +31,12 @@
 //! first; a constant-factor change shows up only in the time columns.
 
 use axiom::bench::{allocated_bytes, peak_rss_kb, rss_kb, Bench, Rng};
-use axiom::{exterior, Budget, Builder, Db, Literal, ProofMode, Program, Solver, Status, TermId};
+use axiom::{exterior, Budget, Builder, Db, Literal, Program, ProofMode, Solver, Status, TermId};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let quick = args.iter().any(|a| a == "quick");
+    let ci = args.iter().any(|a| a == "ci");
+    let quick = ci || args.iter().any(|a| a == "quick");
 
     if args.iter().any(|a| a == "diag") {
         scaling_diagnostic();
@@ -48,7 +57,9 @@ fn main() {
     exterior_and_end_to_end(&mut b, quick);
 
     b.report();
-    scaling_table(quick);
+    if !ci {
+        scaling_table(quick);
+    }
 }
 
 // ---- representation ------------------------------------------------------
@@ -96,13 +107,21 @@ fn representation(b: &mut Bench, quick: bool) {
             let w = ts.func(f2, &[a, z]);
             std::hint::black_box(w);
         }
-        assert_eq!(ts.node_count(), before_nodes, "duplicates must not grow the arena");
+        assert_eq!(
+            ts.node_count(),
+            before_nodes,
+            "duplicates must not grow the arena"
+        );
         assert_eq!(
             allocated_bytes(),
             before_bytes,
             "duplicate interning must not request bytes from the allocator"
         );
-        assert_eq!(axiom::bench::allocs(), before_allocs, "duplicate interning must not allocate");
+        assert_eq!(
+            axiom::bench::allocs(),
+            before_allocs,
+            "duplicate interning must not allocate"
+        );
         (ts.node_count() + ts.child_count()) as u64
     });
 
@@ -433,7 +452,11 @@ fn memory(b: &mut Bench, quick: bool) {
     let n = if quick { 1_000 } else { 2_000 };
 
     for mode in [ProofMode::Full, ProofMode::Off] {
-        let label = if mode == ProofMode::Full { "proofs on" } else { "proofs off" };
+        let label = if mode == ProofMode::Full {
+            "proofs on"
+        } else {
+            "proofs off"
+        };
         let prog = path_graph(n);
         let mut s = Solver::new(prog);
         s.set_proof_mode(mode);
@@ -511,7 +534,10 @@ fn exterior_and_end_to_end(b: &mut Bench, quick: bool) {
 /// Focused scaling probe. Prints the deterministic work counters next to wall
 /// time so that "slow" can be attributed to the algorithm rather than guessed at.
 fn scaling_diagnostic() {
-    eprintln!("{:>8} {:>12} {:>8} {:>12} {:>12} {:>10}", "n", "facts", "rounds", "derivations", "candidates", "ms");
+    eprintln!(
+        "{:>8} {:>12} {:>8} {:>12} {:>12} {:>10}",
+        "n", "facts", "rounds", "derivations", "candidates", "ms"
+    );
     for n in [100usize, 200, 400, 800] {
         let prog = path_graph(n);
         let mut s = Solver::new(prog);

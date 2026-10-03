@@ -44,9 +44,9 @@
 //! they can be asserted in tests, not just printed.
 
 use crate::budget::Budget;
+use crate::program::Literal;
 use crate::program::RuleId;
 use crate::proof::{DerivId, Derivation, Saturation};
-use crate::program::Literal;
 use crate::solver::{ProofMode, Solver};
 use crate::status::Exhausted;
 use crate::symbol::SymId;
@@ -303,7 +303,11 @@ impl Solver {
         let mark = self.subst.mark();
         if let Some((i, t)) = seed {
             let lit = self.ren_lit(rule, i);
-            if self.subst.match_into(&self.prog.store, lit.atom, t).is_err() {
+            if self
+                .subst
+                .match_into(&self.prog.store, lit.atom, t)
+                .is_err()
+            {
                 self.subst.undo_to(mark);
                 return Ok(());
             }

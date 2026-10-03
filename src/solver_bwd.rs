@@ -242,12 +242,8 @@ impl Solver {
         if !self.goal_in_range(goal) {
             // A TermId from a different TermStore is a caller error, not an
             // engine error, but it must not be an index-out-of-bounds panic.
-            return Outcome::inconclusive(
-                Status::Unknown,
-                Exhausted::Malformed,
-                before,
-            )
-            .note("goal id does not belong to this program's term store");
+            return Outcome::inconclusive(Status::Unknown, Exhausted::Malformed, before)
+                .note("goal id does not belong to this program's term store");
         }
         self.seed_facts();
         let mut note_forward_exhausted: Option<Exhausted> = None;
@@ -285,7 +281,15 @@ impl Solver {
         let mut trace = Vec::new();
         let mut failed = FxHashMap::default();
         let mut declined = FxHashMap::default();
-        let sld = match self.sld_ground(goal, 0, max_depth, budget, &mut trace, &mut failed, &mut declined) {
+        let sld = match self.sld_ground(
+            goal,
+            0,
+            max_depth,
+            budget,
+            &mut trace,
+            &mut failed,
+            &mut declined,
+        ) {
             Ok(v) => v,
             Err(e) => {
                 return Outcome::inconclusive(Status::Exhausted, e, self.stats.delta(&before))
@@ -293,7 +297,12 @@ impl Solver {
         };
         match sld {
             SldOutcome::Proved => {
-                let proof = Proof { goal, root: None, steps: trace, saturation: None };
+                let proof = Proof {
+                    goal,
+                    root: None,
+                    steps: trace,
+                    saturation: None,
+                };
                 return Outcome::definite(Status::Proved, Some(proof), self.stats.delta(&before))
                     .note("proved by backward resolution; the proof is a rule-resolution trace");
             }
@@ -301,13 +310,14 @@ impl Solver {
                 Some(s) => {
                     // Bottom-up completed and the backward engine exhausted its
                     // options: the atom is absent from the least model.
-                    let proof =
-                        Proof { goal, root: None, steps: Vec::new(), saturation: Some(s) };
-                    let mut o = Outcome::definite(
-                        Status::Refuted,
-                        Some(proof),
-                        self.stats.delta(&before),
-                    );
+                    let proof = Proof {
+                        goal,
+                        root: None,
+                        steps: Vec::new(),
+                        saturation: Some(s),
+                    };
+                    let mut o =
+                        Outcome::definite(Status::Refuted, Some(proof), self.stats.delta(&before));
                     o.notes.push(
                         "bottom-up saturation completed; goal absent from the least model"
                             .to_string(),
@@ -316,11 +326,7 @@ impl Solver {
                 }
                 None => {
                     let e = note_forward_exhausted.unwrap_or(Exhausted::Steps);
-                    return Outcome::inconclusive(
-                        Status::Exhausted,
-                        e,
-                        self.stats.delta(&before),
-                    );
+                    return Outcome::inconclusive(Status::Exhausted, e, self.stats.delta(&before));
                 }
             },
             SldOutcome::Declined(reason) => {
@@ -392,7 +398,11 @@ impl Solver {
             }
         }
         QueryOutcome {
-            status: if answers.is_empty() { Status::Refuted } else { Status::Found },
+            status: if answers.is_empty() {
+                Status::Refuted
+            } else {
+                Status::Found
+            },
             answers,
             stats: self.stats.delta(&before),
             reason: None,

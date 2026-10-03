@@ -10,22 +10,54 @@ on:
 # So work is split by step budgets + deterministic counters (DD-0016),
 # never by wall-clock cutoffs. Quick + diag only in CI; full scaling
 # (n=20000, O(n^3) until I1 is fixed) is manual via scaling.yml.
+#
+# NEVER use `cargo test --all-targets` here: it includes `--benches`, and
+# with `harness = false` cargo executes the bench's main() as its test
+# binary — the full suite including tc_path_n20000 in the debug profile.
+# Diagnosed 2026-10-03: hung the job for the full timeout with no output.
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: unit + integration (80 pass, 2 ignored)
+        run: cargo test --lib --tests
+
+  doc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: doc tests (shell timeout so a hang fails fast with signal)
+        run: timeout 300 cargo test --doc
+
+  fmt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy, rustfmt
-      - uses: Swatinem/rust-cache@v2
-      - name: cargo test (all targets, 80 pass + 2 ignored)
-        run: cargo test --all-targets --verbose
+          components: rustfmt
       - name: fmt check
         run: cargo fmt --all -- --check
-      - name: clippy (deny warnings)
-        run: cargo clippy --all-targets -- -D warnings
+
+  clippy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: clippy (deny warnings, lib + tests only)
+        run: cargo clippy --lib --tests -- -D warnings
 
   known-defects:
     runs-on: ubuntu-latest
@@ -36,21 +68,21 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: run the 2 ignored I5/I6 tests (expected to fail until fixed)
-        run: cargo test -- --ignored --nocapture
+        run: cargo test --test soundness -- --ignored --nocapture
 
-  bench-quick:
+  bench-ci:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: fast subset (no 20k scaling table)
-        run: cargo bench --bench kernel -- quick
+      - name: CI bench subset (quick sizes, no scaling table)
+        run: cargo bench --bench kernel -- ci
 
   diag:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

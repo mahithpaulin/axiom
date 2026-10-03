@@ -441,7 +441,11 @@ mod tests {
         sub.match_into(&st, pat, fact).unwrap();
         assert!(sub.binding_count(st.node_count()) > before);
         sub.undo_to(mark);
-        assert_eq!(sub.binding_count(st.node_count()), before, "leaked bindings");
+        assert_eq!(
+            sub.binding_count(st.node_count()),
+            before,
+            "leaked bindings"
+        );
         assert!(!sub.bound(x) && !sub.bound(y));
     }
 

@@ -407,11 +407,7 @@ impl Builder {
                 let h = self.store.sym(r.head) as usize;
                 for l in &r.body {
                     let p = self.store.sym(l.atom) as usize;
-                    let want = if l.pos {
-                        stratum[p]
-                    } else {
-                        stratum[p] + 1
-                    };
+                    let want = if l.pos { stratum[p] } else { stratum[p] + 1 };
                     if stratum[h] < want {
                         stratum[h] = want;
                         changed = true;

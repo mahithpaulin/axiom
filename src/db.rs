@@ -156,7 +156,9 @@ impl Db {
                 // key/value table overhead at load factor, plus the per-bucket
                 // vectors. An estimate, not an exact allocator figure.
                 m.capacity() * (std::mem::size_of::<TermId>() * 2 + 16)
-                    + m.values().map(|v: &Vec<TermId>| v.capacity() * 4).sum::<usize>()
+                    + m.values()
+                        .map(|v: &Vec<TermId>| v.capacity() * 4)
+                        .sum::<usize>()
             })
             .sum();
         vec_bytes + map_bytes + self.facts.capacity() * 8 + self.seed.capacity() * 8

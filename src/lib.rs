@@ -95,22 +95,16 @@ pub mod symbol;
 pub mod term;
 
 pub use budget::Budget;
-pub use exterior::{Limits, ParseError};
 pub use db::Db;
-pub use subst::Subst;
-pub use symbol::SymbolTable;
-pub use term::TermStore;
+pub use exterior::{Limits, ParseError};
 pub use program::{Builder, Literal, Program, ProgramError, Rule, RuleId};
 pub use proof::{CheckErr, DerivId, Derivation, Proof, Saturation};
 pub use solver::{Answer, Outcome, ProofMode, QueryOutcome, Solver, Stats};
 pub use status::{Exhausted, Status};
+pub use subst::Subst;
+pub use symbol::SymbolTable;
 pub use term::TermId;
-
-#[cfg(test)]
-mod prelude {
-    //! Convenience for building programs in tests and examples.
-    pub use crate::program::{Builder, Literal};
-}
+pub use term::TermStore;
 
 /// Compile-time check that the two promises in the charter which can be checked
 /// mechanically are actually true. Each is a real test in `tests/`, and this
@@ -209,7 +203,11 @@ mod regressions {
 
         // Assert the least model itself, not a proxy. Round counts are an
         // implementation detail; the set of derived tuples is the semantics.
-        let path = s.prog.symbols.predicate_id("path", 2).expect("path/2 exists");
+        let path = s
+            .prog
+            .symbols
+            .predicate_id("path", 2)
+            .expect("path/2 exists");
         let mut got: Vec<String> = s
             .facts_of(path)
             .iter()

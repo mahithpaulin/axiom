@@ -109,7 +109,10 @@ fn apply(s: &str, env: &HashMap<String, Term>) -> Term {
 /// All ground instances of a rule body, left to right with backtracking.
 /// Results are `Option<()>`-free because the body is always satisfiable or not;
 /// a `None` bound map simply means "no solution".
-fn solve_body(body: &[(bool, Atom)], pred_facts: &HashMap<String, Vec<Atom>>) -> Vec<HashMap<String, Term>> {
+fn solve_body(
+    body: &[(bool, Atom)],
+    pred_facts: &HashMap<String, Vec<Atom>>,
+) -> Vec<HashMap<String, Term>> {
     let mut path: Vec<HashMap<String, Term>> = vec![HashMap::new()];
     for (positive, atom) in body.iter() {
         if *positive {
@@ -124,7 +127,11 @@ fn solve_body(body: &[(bool, Atom)], pred_facts: &HashMap<String, Vec<Atom>>) ->
                 for c in &candidates {
                     let mut e2 = env.clone();
                     let cargs: Vec<Term> = parse_term(c).1;
-                    if args.iter().zip(cargs.iter()).all(|(p, f)| match_term(p, f, &mut e2)) {
+                    if args
+                        .iter()
+                        .zip(cargs.iter())
+                        .all(|(p, f)| match_term(p, f, &mut e2))
+                    {
                         next.push(e2);
                     }
                 }

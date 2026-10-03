@@ -230,13 +230,17 @@ fn deep_terms_are_bounded_by_the_parser_not_the_stack() {
             let src = format!("p({term}).");
             let parsed = exterior::parse_with(
                 &src,
-                Limits { max_depth: 4_000, ..Default::default() },
+                Limits {
+                    max_depth: 4_000,
+                    ..Default::default()
+                },
             )
             .expect("a term within the clamp must parse");
             let mut s = Solver::new(parsed.program);
             s.seed_facts();
             let mut b = Budget::steps(10_000_000);
-            s.saturate(&mut b).expect("the core must traverse it without recursing");
+            s.saturate(&mut b)
+                .expect("the core must traverse it without recursing");
             let p = s.prog.symbols.predicate_id("p", 1).unwrap();
             assert_eq!(s.fact_count(p), 1);
             // Past the clamp it is refused, not accepted-then-crashed.
@@ -247,14 +251,18 @@ fn deep_terms_are_bounded_by_the_parser_not_the_stack() {
             assert!(
                 exterior::parse_with(
                     &format!("p({deeper})."),
-                    Limits { max_depth: 4_000, ..Default::default() }
+                    Limits {
+                        max_depth: 4_000,
+                        ..Default::default()
+                    }
                 )
                 .is_err(),
                 "a term past the clamp must be rejected"
             );
         })
         .expect("spawn");
-    h.join().expect("deep term worker must not panic or overflow");
+    h.join()
+        .expect("deep term worker must not panic or overflow");
 }
 
 #[test]

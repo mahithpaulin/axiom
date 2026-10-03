@@ -205,7 +205,11 @@ pub fn tokenize(src: &str, limits: &Limits) -> Result<Vec<Spanned>, ParseError> 
                     // Case is *preserved*. Lowercasing collapses `X` into the
                     // constant `x`, silently turning every rule into a ground
                     // fact -- a soundness bug, not a style choice.
-                    out.push(Spanned { tok: Tok::Ident(word), line, col: start_col });
+                    out.push(Spanned {
+                        tok: Tok::Ident(word),
+                        line,
+                        col: start_col,
+                    });
                 }
             }
         }

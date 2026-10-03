@@ -181,7 +181,11 @@ impl Bench {
         self.rows.push(row);
         let r = self.rows.last().expect("just pushed");
         let secs = r.wall_ms / 1000.0;
-        let mops = if secs > 0.0 { r.ops as f64 / secs / 1e6 } else { 0.0 };
+        let mops = if secs > 0.0 {
+            r.ops as f64 / secs / 1e6
+        } else {
+            0.0
+        };
         let ai = if r.iters > 0 { r.allocs / r.iters } else { 0 };
         let bo = if r.ops > 0 { r.alloc_bytes / r.ops } else { 0 };
         // stderr, not stdout: stdout is block-buffered when redirected to a

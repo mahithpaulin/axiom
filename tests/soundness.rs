@@ -92,9 +92,10 @@ fn a_tampered_proof_is_rejected() {
     // (tracked in docs/ROADMAP.md I7). This test therefore covers the goal
     // substitution only; a proof whose root points at an unrelated derivation
     // is currently accepted.
-    let parsed =
-        exterior::parse("edge(a,b).\nedge(b,c).\npath(X,Y) :- edge(X,Y).\n?- path(a,b).\n?- path(a,zzz).\n")
-            .unwrap();
+    let parsed = exterior::parse(
+        "edge(a,b).\nedge(b,c).\npath(X,Y) :- edge(X,Y).\n?- path(a,b).\n?- path(a,zzz).\n",
+    )
+    .unwrap();
     let goal = parsed.queries[0];
     let bad_goal = parsed.queries[1];
     let mut s = Solver::new(parsed.program);
@@ -102,7 +103,10 @@ fn a_tampered_proof_is_rejected() {
     let mut b = Budget::unlimited();
     s.saturate(&mut b).unwrap();
     assert!(s.db.contains(goal));
-    assert!(!s.db.contains(bad_goal), "the negative control must be underivable");
+    assert!(
+        !s.db.contains(bad_goal),
+        "the negative control must be underivable"
+    );
 
     let real = axiom::Proof {
         goal,
@@ -147,7 +151,9 @@ fn an_exhausted_search_is_never_reported_as_refuted() {
     for i in 0..200 {
         src.push_str(&format!("edge(n{i},n{}).\n", i + 1));
     }
-    src.push_str("path(X,Y) :- edge(X,Y).\npath(X,Z) :- path(X,Y), edge(Y,Z).\n?- path(n0,n200).\n");
+    src.push_str(
+        "path(X,Y) :- edge(X,Y).\npath(X,Z) :- path(X,Y), edge(Y,Z).\n?- path(n0,n200).\n",
+    );
     let parsed = exterior::parse(&src).unwrap();
     let goal = parsed.queries[0];
     let mut s = Solver::new(parsed.program);
