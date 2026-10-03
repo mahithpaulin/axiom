@@ -87,8 +87,8 @@ fn representation(b: &mut Bench, quick: bool) {
         }
 
         // Build 1000 distinct 3-level terms.
-        for i in 0..1000usize {
-            let y = ts.func(f2, &[keys[i], c]);
+        for key in &keys {
+            let y = ts.func(f2, &[*key, c]);
             let z = ts.func(g1, &[y]);
             let w = ts.func(f2, &[a, z]);
             std::hint::black_box(w);
@@ -101,8 +101,8 @@ fn representation(b: &mut Bench, quick: bool) {
         let before_nodes = ts.node_count();
         let before_bytes = allocated_bytes();
         let before_allocs = axiom::bench::allocs();
-        for i in 0..1000usize {
-            let y = ts.func(f2, &[keys[i], c]);
+        for key in &keys {
+            let y = ts.func(f2, &[*key, c]);
             let z = ts.func(g1, &[y]);
             let w = ts.func(f2, &[a, z]);
             std::hint::black_box(w);
@@ -213,7 +213,7 @@ fn unification(b: &mut Bench, quick: bool) {
         let mut sub = axiom::Subst::new();
         let mut n = 0u64;
         for r in &prog.rules {
-            if sub.occurs(&prog.store, px as u32, r.head) {
+            if sub.occurs(&prog.store, px, r.head) {
                 n += 1;
             }
             sub.undo_to(0);
@@ -689,7 +689,8 @@ fn tc_program(n: usize) -> (Program, TermId) {
         b.fact(h);
     }
     add_tc_rules(&mut b);
-    let goal = b.goal_n("path", &[&format!("n0"), &format!("n{n}")]);
+    let nn = format!("n{n}");
+    let goal = b.goal_n("path", &["n0", nn.as_str()]);
     let prog = b.build().unwrap();
     (prog, goal)
 }

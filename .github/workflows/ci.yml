@@ -79,6 +79,16 @@ jobs:
       - name: CI bench subset (quick sizes, no scaling table)
         run: cargo bench --bench kernel -- ci
 
+  bench-sat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: SAT core on the frozen corpus
+        run: cargo bench --bench sat
+
   diag:
     runs-on: ubuntu-latest
     timeout-minutes: 10

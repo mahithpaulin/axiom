@@ -167,10 +167,13 @@ and the 13× memory attribution are in `PERFORMANCE.md`.
 
 Named so their absence is unambiguous. Each has a ROADMAP entry:
 
-* **SAT / CDCL** — clause learning, watched literals, VSIDS. Highest
-  capability-per-line of anything on the list; planned next.
+* **SAT / CDCL** — implemented (`src/sat.rs`): two-watched propagation,
+  first-UIP learning, VSIDS, phase saving, Luby restarts, activity-based
+  detachment. Certificates both ways (models by satisfaction, unsat by RUP),
+  frozen DIMACS corpus in `benches/data/`, cross-engine differential in
+  `tests/sat.rs`.
 * **CDCL(T) / theory combination** — linear integer/real arithmetic, congruence
-  closure. Requires the SAT core first.
+  closure. Requires the SAT core first (now present).
 * **Constraint propagation** — domains, propagators, MAC search, *explanation
   producing*. The explanation requirement is the interesting part: a propagator
   that removes a value without recording why cannot support a proof.

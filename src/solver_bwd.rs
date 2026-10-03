@@ -351,19 +351,55 @@ impl Solver {
                 }
             },
             SldOutcome::Declined(reason) => {
-                // An inconclusive result must not carry a proof, and must say
-                // why. `Unknown` is the honest status: the engine did not
-                // establish either answer.
-                let mut o = Outcome::inconclusive(
-                    Status::Unknown,
-                    reason.exhausted().unwrap_or(Exhausted::Depth),
-                    self.stats.delta(&before),
-                );
-                o.notes.push(format!(
-                    "backward resolution declined: {}; a negative answer is not established",
-                    reason.as_str()
-                ));
-                o
+                // A decline vetoes `Refuted` only when saturation left rules
+                // unexamined. With no `backward_only` rule for the goal's
+                // predicate, saturation covered every candidate rule, so a
+                // completed closure plus an absent goal is a sound `Refuted`
+                // and the decline is irrelevant.
+                let pred = self.prog.store.sym(goal);
+                let skipped = self
+                    .rules_by_pred
+                    .get(pred as usize)
+                    .map(|rs| {
+                        rs.iter()
+                            .any(|&r| self.prog.rules[r as usize].backward_only)
+                    })
+                    .unwrap_or(false);
+                match (sat, skipped) {
+                    (Some(s), false) => {
+                        let proof = Proof {
+                            goal,
+                            root: None,
+                            steps: Vec::new(),
+                            saturation: Some(s),
+                        };
+                        let mut o = Outcome::definite(
+                            Status::Refuted,
+                            Some(proof),
+                            self.stats.delta(&before),
+                        );
+                        o.notes.push(
+                            "bottom-up saturation completed; goal absent from the least model"
+                                .to_string(),
+                        );
+                        o
+                    }
+                    _ => {
+                        // An inconclusive result must not carry a proof, and
+                        // must say why. `Unknown` is the honest status: the
+                        // engine did not establish either answer.
+                        let mut o = Outcome::inconclusive(
+                            Status::Unknown,
+                            reason.exhausted().unwrap_or(Exhausted::Depth),
+                            self.stats.delta(&before),
+                        );
+                        o.notes.push(format!(
+                            "backward resolution declined: {}; a negative answer is not established",
+                            reason.as_str()
+                        ));
+                        o
+                    }
+                }
             }
         }
     }

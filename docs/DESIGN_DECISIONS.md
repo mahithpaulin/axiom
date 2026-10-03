@@ -323,4 +323,56 @@ than being evaluated once as static rules; `idb_fact_count` counts them; and a
 single-literal rule over one reaches the zero-level join path that DD-0011's fix
 had to handle. Observed in benchmarks as `edge` contributing to `idb_facts`.
 Recorded because the surprise cost real debugging time and will surprise the next
-reader of the numbers.
+reader of the numbers.---
+
+## DD-0018 — Unsat certificates by RUP, not resolution chains
+
+**Hypothesis.** A resolution chain per learnt clause is the natural proof.
+
+**Decision.** Rejected in favour of reverse unit propagation (RUP): each learnt
+clause, negated, must propagate to conflict against the input plus earlier
+learnts, and the whole set together must propagate to conflict with no
+assumptions.
+
+**Reasoning.** First-UIP learnt clauses are not resolvents of recorded parents
+— the UIP literal has no reason to resolve against — so a pure-resolution
+chain cannot derive them, and wiring arena clause ids through the proof
+couples the checker to solver internals (normalisation, detachment). RUP
+needs only the learnt literal vectors in order plus an independent unit
+propagator (~40 lines, no watches, no shared search code). The checker never
+sees tautologies or duplicates specially: they are inert under UP.
+
+---
+
+## DD-0019 — Learned-clause deletion detaches; storage is never compacted
+
+**Hypothesis.** Deletion should free memory.
+
+**Decision.** Detachment only: detached clauses are skipped by propagation but
+kept in the arena (tombstones).
+
+**Reasoning.** Compaction would renumber the arena and invalidate every proof
+reference recorded before the collection. The corpus this tier targets is
+small enough that tombstone storage is noise; when a workload makes it
+matter, the honest fix is proof-preserving remap, not silent renumbering.
+Deletion still serves its performance purpose — detached clauses cost no
+propagation — and the locked-clause rule (never detach a reason of a current
+assignment) is enforced.
+
+---
+
+## DD-0020 — Rule grounding covers the negation-free forward fragment
+
+**Hypothesis.** Ground everything, including negation and function heads.
+
+**Decision.** Rejected. Grounding (`ground_positive_program`) covers facts and
+negation-free rules over a constant domain; `backward_only` rules (infinite
+instances) and negated bodies (completion vs least-model semantics diverge)
+are skipped and counted.
+
+**Reasoning.** The grounding exists to run the cross-engine differential
+(`tests/sat.rs`): on definite Horn programs the least model and SAT entailment
+coincide in both directions, so agreement is genuine evidence. Extending it to
+stratified negation would compare against Clark completion, a different
+semantics, and the agreement would prove nothing. Skipped rules and facts are
+counted in the `Grounding`, and the differential asserts zero skips.

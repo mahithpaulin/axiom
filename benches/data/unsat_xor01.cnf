@@ -1,0 +1,7 @@
+c unsatisfiable: x1 == x2 and x1 != x2
+c (¬x1∨x2) ∧ (x1∨¬x2) ∧ (x1∨x2) ∧ (¬x1∨¬x2)
+p cnf 2 4
+-1 2 0
+1 -2 0
+1 2 0
+-1 -2 0

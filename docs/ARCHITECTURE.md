@@ -221,8 +221,10 @@ Stated so they are not mistaken for gaps:
 * **Not a complete theorem prover.** Full first-order refutation is out of scope
   for Stage 1 and would require a saturation-based engine with its own
   trade-offs.
-* **Not a SAT/SMT solver.** No CDCL, no theory combination. Planned, not built.
-  `z3rs` and `vampire-prover` were surveyed as prior art; both are dependencies
+* **Not an SMT solver.** No theory combination yet (ROADMAP II2 is next).
+  The CDCL core itself is built (`src/sat.rs`): two-watched propagation,
+  first-UIP learning, VSIDS, RUP-checked certificates. `z3rs` and
+  `vampire-prover` were surveyed as prior art; both are dependencies
   this project declines, for the reason in `DESIGN_DECISIONS.md` (DD-0007).
 * **No neural components.** §6 permits them under 1 M parameters. None are
   present, and none are justified yet: see DD-0013.

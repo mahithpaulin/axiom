@@ -388,15 +388,15 @@ outside the engine entirely.
 evaluation, plus proof recording for the negated goal. Substantially more than a
 flag flip, and it is not on the Stage-2 roadmap for that reason.
 
-### B7. No SAT, SMT, constraints, arithmetic, search, strategy selection, or neural components
+### B7. No SMT, constraints, arithmetic, search, strategy selection, or neural components
 
 Absent, in full, and named here so their absence is unambiguous
-(`docs/ALGORITHMS.md` §8):
+(`docs/ALGORITHMS.md` §8). The SAT row flipped to yes with ROADMAP II1:
 
 | Capability | Present? | Note |
 |---|---|---|
-| CDCL / SAT / clause learning / watched literals / VSIDS | no | planned first in `docs/ROADMAP.md` |
-| Theory combination, CDCL(T), linear arithmetic, congruence closure | no | depends on the SAT core |
+| CDCL / SAT / clause learning / watched literals / VSIDS | **yes** (`src/sat.rs`, RUP-checked) | frozen corpus + cross-engine differential in `tests/sat.rs` |
+| Theory combination, CDCL(T), linear arithmetic, congruence closure | no | depends on the SAT core (now present; next) |
 | Constraint propagators, domains, MAC search | no | and must record explanations — a propagator that removes a value without recording why cannot support a proof |
 | Symbolic arithmetic: polynomials, intervals, identities | no | |
 | Search: IDA*, A*, alpha-beta, transposition tables | no | |

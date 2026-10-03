@@ -35,9 +35,14 @@ assert!(solver.verify(&proof).is_ok());   // re-derived from the rules alone
 
 ## Status — read this before trusting anything
 
-This is **Stage 1**. It implements **stratified Datalog**: facts, rules with
-positive and stratified-negated bodies, function symbols in rule heads handled by
-resolution rather than saturation, and complete least-model computation.
+This is **Stage 1 plus a CDCL SAT core** (`ROADMAP II1`). The Datalog engine:
+facts, rules with positive and stratified-negated bodies, function symbols in
+rule heads handled by resolution rather than saturation, and complete
+least-model computation. The SAT core: two-watched propagation, first-UIP
+learning, VSIDS, phase saving, Luby restarts, over ground clauses — with
+machine-checked certificates both ways (models by satisfaction, unsatisfiability
+by reverse unit propagation) and a cross-engine differential against the least
+model on positive programs.
 
 **The test suite is green with no exclusions.** Two completeness defects that
 used to be `#[ignore]`d (ROADMAP I5, I6) were fixed in `src/solver_fwd.rs`:
@@ -48,7 +53,7 @@ Undoing to the join's resume point instead keeps the seed. The differential
 test and the `non_ground_heads` canary that caught it stay in the suite as
 regression coverage.
 
-No CDCL/SAT, no SMT, no constraint propagators, no symbolic arithmetic, no
+No SMT, no constraint propagators, no symbolic arithmetic, no
 search, no strategy selection, no neural components, no IR serialisation. See
 `docs/KNOWN_LIMITATIONS.md`, which is itemised and deliberately unflattering.
 
