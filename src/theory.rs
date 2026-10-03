@@ -21,7 +21,7 @@ use crate::sat::{
 use crate::status::Exhausted;
 use crate::symbol::SymbolTable;
 use crate::term::{TermId, TermStore, T_ATOM, T_CONST, T_FUN, T_VAR};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// A theory variable is just a term id: constants and variables are leaves in
 /// both theories, so one namespace serves the combination.
