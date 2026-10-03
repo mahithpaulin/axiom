@@ -62,13 +62,12 @@ jobs:
   known-defects:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: run the 2 ignored I5/I6 tests (expected to fail until fixed)
-        run: cargo test --test soundness -- --ignored --nocapture
+      - name: confirm no ignored tests remain (I5/I6 un-ignored after fix)
+        run: cargo test -- --ignored
 
   bench-ci:
     runs-on: ubuntu-latest

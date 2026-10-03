@@ -503,15 +503,14 @@ Stated so they are not mistaken for gaps someone forgot to schedule.
 | `docs/KNOWN_LIMITATIONS.md` | itemised limitations, with correctness risks at the top |
 | `docs/LANGUAGE_SPEC.md` | the exterior's surface syntax, tokeniser, limits, every error message |
 | `docs/PERFORMANCE.md` | **missing.** Referenced from `src/solver.rs:42`, `src/term.rs:247`, `src/subst.rs:68`, `src/budget.rs:11`, `docs/ARCHITECTURE.md:210` and `docs/ALGORITHMS.md:157`, and it does not exist. Every measurement cited in this roadmap should land there, including the I1 counters. |
-| `README.md` | **missing.** Declared in `Cargo.toml:9`. |
+| `README.md` | crate status, the honesty contract, verification. |
 ---
 
 ## Open defects, numbered as referenced by the test suite
 
-These are `#[ignore]`d or failing tests, not hypotheticals. Each is a defect
-found by a parallel audit or by the differential test, with the test that
-detects it named. The suite is green **with these two exclusions**, which is
-stated plainly rather than implied.
+These were `#[ignore]`d or failing tests, not hypotheticals. I5 and I6 are
+fixed (root cause and fix recorded below); the suite is green with no
+exclusions. I1–I4, I7, I8 remain open.
 
 ### I1 — Unbound scans dominate the join (highest priority)
 
@@ -547,21 +546,30 @@ harness reads RSS, so those figures **understate** peak memory. Read RSS inside
 the closure. (The scaling table reads it while the solver is alive, so those
 figures are valid — which is why the same suite reports both 3.1 GB and 6 MB.)
 
-### I5 — The engine omits derivations the reference derives
+### I5 — The engine omits derivations the reference derives — FIXED
 
-Detected by `tests/soundness.rs::agrees_with_naive_reference_on_random_programs`
-(`#[ignore]`d). On the generated family the engine misses facts such as
+Was detected by `tests/soundness.rs::agrees_with_naive_reference_on_random_programs`
+(`#[ignore]`d). On the generated family the engine missed facts such as
 `q(4,4)` from `q(X,Y) :- p(X), e(_,Y).` when both `p(4)` and `e(4,4)` are present.
 This is **incompleteness of saturation**, and it is the most serious open item:
 it is the same class of bug as the four P0 defects already fixed, and it is
 caught only because `tests/reference.rs` is a genuinely independent
 implementation.
 
-### I6 — `non_ground_heads` is 3 on the transitive-closure fixture
+**Root cause (same for I6).** `eval_rule_inner` undid the substitution to the
+rule-entry mark after every derived solution (`src/solver_fwd.rs`). That
+discarded the seed bindings, and the join's resume logic (`undo_to(jm[0])` in
+`next_solution`) became a no-op against the already-truncated trail — so the
+first solution per seed was correct and every later one ran with unbound
+variables. **Fix:** undo to the join's resume point (`jm[0]`, taken after the
+seed matched) instead of the entry mark. Both `#[ignore]`s removed; the tests
+stay as regression coverage.
 
-Detected by `tests/soundness.rs::no_bindings_survive_saturation` (`#[ignore]`d).
-The canary is meant to be 0. Either the canary is miscounting or a head really
-is being stored unresolved; both are defects.
+### I6 — `non_ground_heads` is 3 on the transitive-closure fixture — FIXED
+
+Was detected by `tests/soundness.rs::no_bindings_survive_saturation`
+(`#[ignore]`d). A head really was coming out unresolved: the second and later
+solutions per seed above. Same fix as I5; the canary reads 0 now.
 
 ### I7 — `proof.root` and `proof.steps` are never validated
 

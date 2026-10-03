@@ -349,7 +349,15 @@ impl Solver {
                             }
                         }
                     }
-                    self.subst.undo_to(mark);
+                    // Resume, don't restart: undo to the join's resume point,
+                    // which was taken after the seed matched, so the seed
+                    // bindings survive. Undoing to `mark` here discarded them,
+                    // and every second and later solution per seed then ran
+                    // with unbound variables: heads came out non-ground and
+                    // were dropped while the derivations were lost
+                    // (ROADMAP I5, I6).
+                    let resume = if self.jm.is_empty() { mark } else { self.jm[0] };
+                    self.subst.undo_to(resume);
                 }
             }
         }

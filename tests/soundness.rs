@@ -172,9 +172,9 @@ fn an_exhausted_search_is_never_reported_as_refuted() {
 
 // ---- 3. no leaked state ---------------------------------------------------
 
-/// KNOWN FAILING -- tracked in docs/ROADMAP.md (item I6).
+/// Regression for ROADMAP I6: the resumable join used to discard the seed
+/// bindings after the first solution, so later solutions came out non-ground.
 #[test]
-#[ignore = "non_ground_heads is 3 on the transitive-closure fixture; ROADMAP I6"]
 fn no_bindings_survive_saturation() {
     let src = "\
 edge(a,b). edge(b,c).
@@ -228,17 +228,11 @@ fn proof_mode_off_downgrades_the_status_honestly() {
 
 // ---- 4. agreement with the naive reference -------------------------------
 
-/// KNOWN FAILING -- tracked in docs/ROADMAP.md (item I5).
-///
-/// The differential test works and it has earned its keep: it caught the
-/// stratification and `first_bound` defects, and it still finds one. The engine
-/// omits derivations the naive reference derives (e.g. `q(4,4)` from
-/// `q(X,Y) :- p(X), e(_,Y).` with `p(4)` and `e(4,4)` both present).
-///
-/// Kept as a failing-or-ignored test rather than deleted: an ignored test with
-/// a stated reason is visible in the output, whereas a deleted one is not.
+/// Regression for ROADMAP I5: the differential test caught the engine
+/// omitting derivations (e.g. `q(4,4)` from `q(X,Y) :- p(X), e(_,Y)`).
+/// Kept loud: a deleted differential test is invisible, an ignored one with
+/// a stated reason shows in the output.
 #[test]
-#[ignore = "engine omits derivations the reference finds; ROADMAP I5"]
 fn agrees_with_naive_reference_on_random_programs() {
     // Programs are Datalog over a small constant domain, so the closure is
     // finite and both implementations must produce the identical set.

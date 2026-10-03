@@ -39,16 +39,14 @@ This is **Stage 1**. It implements **stratified Datalog**: facts, rules with
 positive and stratified-negated bodies, function symbols in rule heads handled by
 resolution rather than saturation, and complete least-model computation.
 
-**The test suite is green with two exclusions, and those two are real
-completeness defects, not cosmetic:**
-
-| Item | Defect |
-|---|---|
-| `ROADMAP I5` | saturation **omits derivations** a naive reference implementation finds |
-| `ROADMAP I6` | `non_ground_heads` is 3 where it must be 0 |
-
-Both are detected by `tests/soundness.rs` and marked `#[ignore]` *with the reason
-attached*, so they appear in the output rather than being quietly deleted.
+**The test suite is green with no exclusions.** Two completeness defects that
+used to be `#[ignore]`d (ROADMAP I5, I6) were fixed in `src/solver_fwd.rs`:
+after each derived solution the join undid the substitution to the rule-entry
+mark, discarding the seed bindings, so every second and later solution per
+seed ran with unbound variables — heads came out non-ground and were dropped.
+Undoing to the join's resume point instead keeps the seed. The differential
+test and the `non_ground_heads` canary that caught it stay in the suite as
+regression coverage.
 
 No CDCL/SAT, no SMT, no constraint propagators, no symbolic arithmetic, no
 search, no strategy selection, no neural components, no IR serialisation. See
