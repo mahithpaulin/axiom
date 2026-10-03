@@ -52,7 +52,6 @@ type FloydTables = (Vec<Tvar>, Vec<Vec<i64>>, Vec<Vec<Option<usize>>>);
 pub struct DiffSet {
     edges: Vec<Diff>,
 }
-type FloydTables = (Vec<Tvar>, Vec<Vec<i64>>, Vec<Vec<Option<usize>>>);
 
 impl DiffSet {
     pub fn new() -> Self {
