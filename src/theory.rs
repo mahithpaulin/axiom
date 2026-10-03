@@ -487,10 +487,9 @@ impl Congruence {
                     }
                 }
                 None => {
-                    // A node with no witness is a root: the edge must be trivial.
-                    if x != y {
-                        return None;
-                    }
+                    // Unreachable: every non-root node carries the witness of
+                    // the union that attached it. Fail closed if it happens.
+                    return None;
                 }
             }
         }
