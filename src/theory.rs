@@ -1163,7 +1163,7 @@ pub fn verify_theory_unsat(
         }
         match lem.concl {
             None => {
-                let shared = all_leaves(lem, meaning)?;
+                let shared = all_leaves(lem, &meaning)?;
                 if comb.check(&rb.store, &shared).is_none() {
                     return Err(TheoryCheckErr::Lemma(i));
                 }
