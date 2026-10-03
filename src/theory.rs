@@ -670,6 +670,19 @@ impl core::fmt::Display for TheoryError {
 
 impl core::error::Error for TheoryError {}
 
+/// All subterms of `t` (including `t`), iteratively. Congruence only ever
+/// merges indexed terms: asserting `a ≈ b` cannot invent the sibling terms
+/// it must be compared against, so every formula term is indexed up front.
+fn index_subterms(store: &TermStore, t: TermId, set: &mut HashSet<TermId>) {
+    let mut stack = vec![t];
+    while let Some(u) = stack.pop() {
+        if !set.insert(u) {
+            continue;
+        }
+        stack.extend(store.args(u).iter().copied());
+    }
+}
+
 /// Leaves of a term: variables, constants, and nullary applications.
 fn term_leaves(store: &TermStore, t: TermId, out: &mut Vec<TermId>) {
     let mut stack = vec![t];
@@ -700,6 +713,10 @@ fn term_leaves(store: &TermStore, t: TermId, out: &mut Vec<TermId>) {
 struct Reasoner {
     comb: Combination,
     var_atom: Vec<Option<TheoryAtom>>,
+    /// Every formula term, indexed into each fresh combination: propagation
+    /// targets are often never asserted, and congruence cannot compare what
+    /// was never indexed.
+    terms: HashSet<TermId>,
     lemmas: Vec<TheoryLemma>,
     stats: TheoryStats,
 }
@@ -707,6 +724,9 @@ struct Reasoner {
 impl Reasoner {
     fn refresh(&mut self, store: &TermStore, assign: &[i8]) {
         self.comb = Combination::new();
+        for &t in &self.terms {
+            self.comb.cc.add_term(store, t);
+        }
         for (vi, opt) in self.var_atom.iter().enumerate() {
             let atom = match opt {
                 Some(a) => a,
@@ -939,6 +959,7 @@ pub struct TheoryDriver {
     sat: SatSolver,
     atom_of: FxHashMap<TheoryAtom, u32>,
     var_atom: Vec<Option<TheoryAtom>>,
+    terms: HashSet<TermId>,
     stats: TheoryStats,
 }
 
@@ -948,6 +969,7 @@ impl TheoryDriver {
             sat: SatSolver::new(),
             atom_of: FxHashMap::default(),
             var_atom: Vec::new(),
+            terms: HashSet::new(),
             stats: TheoryStats::default(),
         }
     }
@@ -980,6 +1002,15 @@ impl TheoryDriver {
         if let Some(&v) = self.atom_of.get(&atom) {
             return Ok(v);
         }
+        // Index every formula term for congruence: propagation targets are
+        // often never asserted, and unindexed terms never merge.
+        match &atom {
+            TheoryAtom::Eq(s, t) | TheoryAtom::Neq(s, t) => {
+                index_subterms(store, *s, &mut self.terms);
+                index_subterms(store, *t, &mut self.terms);
+            }
+            TheoryAtom::Rdl(_) => {}
+        }
         let v = self.sat.new_var();
         self.atom_of.insert(atom.clone(), v);
         if self.var_atom.len() <= v as usize {
@@ -1002,6 +1033,7 @@ impl TheoryDriver {
         let reasoner = Reasoner {
             comb: Combination::new(),
             var_atom: self.var_atom.clone(),
+            terms: self.terms.clone(),
             lemmas: Vec::new(),
             stats: TheoryStats::default(),
         };
@@ -1159,8 +1191,7 @@ fn assert_hyp(
     comb: &mut Combination,
     desc: &AtomDesc,
     positive: bool,
-) -> Result<(), TheoryCheckErr> {
-    match desc {
+) -> Result<(), TheoryCheckErr> {    match desc {
         AtomDesc::Rdl { x, y, c } => {
             let (rx, ry) = (rb.build(x)?, rb.build(y)?);
             let d = Diff {
@@ -1214,6 +1245,10 @@ fn concl_holds(rb: &mut Rebuilt, comb: &mut Combination, desc: &AtomDesc, positi
             let (Ok(rs), Ok(rt)) = (rb.build(s), rb.build(t)) else {
                 return false;
             };
+            // Index the conclusion terms: they were never asserted, and
+            // unindexed terms never merge.
+            comb.cc.add_term(&rb.store, rs);
+            comb.cc.add_term(&rb.store, rt);
             congruent(&comb.cc, rs, rt)
         }
         // Same: the driver never propagates disequalities.
