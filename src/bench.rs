@@ -148,6 +148,10 @@ pub struct Row {
     pub cpu_ms: u64,
     pub allocs: u64,
     pub alloc_bytes: u64,
+    /// Process high-water mark (VmHWM) at sample time. Monotonic within a
+    /// process, so later rows include earlier peaks — read it as "peak so
+    /// far", not "peak of this row". Sampled after the solver drops by design
+    /// (ROADMAP I3): residency then would understate, the high-water does not.
     pub rss_kb: u64,
     pub note: String,
 }
@@ -272,7 +276,7 @@ impl Bench {
                 cpu_ms: cpu_ms().saturating_sub(c0),
                 allocs: allocs().saturating_sub(a0),
                 alloc_bytes: allocated_bytes().saturating_sub(b0),
-                rss_kb: rss_kb(),
+                rss_kb: peak_rss_kb(),
                 note: String::new(),
             });
         }

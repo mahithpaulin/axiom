@@ -302,6 +302,31 @@ fn an_exhausted_search_is_never_reported_as_refuted() {
 
 // ---- 3. no leaked state ---------------------------------------------------
 
+/// ROADMAP I2: the naive baseline must compute the same least model as
+/// semi-naive — same fact count and same closure hash — asserted here, not
+/// just compared in a benchmark. Small graph: naive is O(rounds x work).
+#[test]
+fn naive_and_semi_naive_agree_on_transitive_closure() {
+    let mut src = String::new();
+    for i in 0..30 {
+        src.push_str(&format!("edge(n{i},n{}).\n", i + 1));
+    }
+    src.push_str("path(X,Y) :- edge(X,Y).\npath(X,Z) :- path(X,Y), edge(Y,Z).\n");
+    let parsed = exterior::parse(&src).unwrap();
+    let mut a = Solver::new(parsed.program.clone());
+    let mut buf = Budget::steps(50_000_000);
+    let sa = a.saturate(&mut buf).expect("semi-naive within budget");
+    let mut b = Solver::new(parsed.program);
+    let mut bb = Budget::steps(50_000_000);
+    let sb = b.saturate_naive(&mut bb).expect("naive within budget");
+    assert_eq!(sa.idb_facts, sb.idb_facts, "fact counts differ");
+    assert_eq!(
+        sa.closure_hash, sb.closure_hash,
+        "closure fingerprints differ"
+    );
+    assert_eq!(sa.idb_facts, 30 * 31 / 2 + 30);
+}
+
 /// Regression for ROADMAP I6: the resumable join used to discard the seed
 /// bindings after the first solution, so later solutions came out non-ground.
 #[test]

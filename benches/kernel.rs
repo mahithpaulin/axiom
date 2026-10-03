@@ -293,10 +293,15 @@ fn indexing(b: &mut Bench, _quick: bool) {
         index_total as f64 / keys.len().max(1) as f64
     );
 
+    // Both loops touch every returned tuple: calling `.len()` on the slice is
+    // O(1) and measures a pointer read, not a lookup (ROADMAP I3).
     b.run("db_index_lookup", 50_000, |_| {
         let mut n = 0u64;
-        for i in 0..keys.len() {
-            n += db.candidates(pred, Some(keys[i])).len() as u64;
+        for key in &keys {
+            for &t in db.candidates(pred, Some(*key)) {
+                std::hint::black_box(t);
+                n += 1;
+            }
         }
         n
     });
@@ -304,7 +309,10 @@ fn indexing(b: &mut Bench, _quick: bool) {
     b.run("db_scan_lookup", 50_000, |_| {
         let mut n = 0u64;
         for _ in 0..keys.len() {
-            n += db.candidates(pred, None).len() as u64;
+            for &t in db.candidates(pred, None) {
+                std::hint::black_box(t);
+                n += 1;
+            }
         }
         n
     });
