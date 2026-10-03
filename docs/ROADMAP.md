@@ -87,9 +87,11 @@ retained only as the baseline for `semi_naive_vs_fixpoint_n600`
    variant.
 
 **Done means.** `saturate_naive` and `saturate` return the same `idb_facts` and
-the same `closure_hash` on the same program, asserted in a test — not just
-compared in a benchmark. That single assertion would have caught this the first
-time it ran. Locked by
+the same rendered closure set on the same program, asserted in a test — not
+just compared in a benchmark. (Same `closure_hash` is unachievable by design:
+the hash sums arena node ids, and two engines intern derived facts in different
+orders. The hash is order-independent within one arena lineage only.) That
+single assertion would have caught this the first time it ran. Locked by
 `tests/soundness.rs::naive_and_semi_naive_agree_on_transitive_closure`.
 
 **Root cause.** The resumable join kept one cursor per depth across solutions,

@@ -320,10 +320,12 @@ fn naive_and_semi_naive_agree_on_transitive_closure() {
     let mut bb = Budget::steps(50_000_000);
     let sb = b.saturate_naive(&mut bb).expect("naive within budget");
     assert_eq!(sa.idb_facts, sb.idb_facts, "fact counts differ");
-    assert_eq!(
-        sa.closure_hash, sb.closure_hash,
-        "closure fingerprints differ"
-    );
+    // Compare the closures as rendered fact sets, not fingerprints: the hash
+    // sums arena node ids, which differ across separately-built (if
+    // structurally identical) arenas. Same extension, different ids.
+    let ta: std::collections::BTreeSet<String> = facts_as_text(&a).into_iter().collect();
+    let tb: std::collections::BTreeSet<String> = facts_as_text(&b).into_iter().collect();
+    assert_eq!(ta, tb, "closures differ");
     assert_eq!(sa.idb_facts, 30 * 31 / 2 + 30);
 }
 

@@ -295,7 +295,7 @@ impl Solver {
             .iter()
             .map(|(&(r, i), &(b, u))| (r, i, b, u))
             .collect();
-        v.sort_by(|a, b| b.3.cmp(&a.3));
+        v.sort_by_key(|x| std::cmp::Reverse(x.3));
         v
     }
 
