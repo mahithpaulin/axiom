@@ -538,6 +538,45 @@ impl SatSolver {
         }
     }
 
+    /// Handle a falsified clause (propagation conflict or theory conflict
+    /// lemma): analyze, learn, backjump. Returns `Some` outcome only for
+    /// unsatisfiability; `None` means search continues. Theory conflicts
+    /// MUST come here rather than restarting: at level 0 nothing unassigns,
+    /// so a restart loops forever re-deriving the same conflict.
+    fn on_conflict(
+        &mut self,
+        confl: usize,
+        budget: &mut Budget,
+    ) -> Result<Option<SatOutcome>, Exhausted> {
+        self.stats.conflicts += 1;
+        budget.charge(1)?;
+        self.conflicts += 1;
+        self.conflicts_since_restart += 1;
+        let (learnt, bt) = self.analyze(confl);
+        self.var_inc *= 1.0 / 0.95;
+        if learnt.is_empty() {
+            return Ok(Some(SatOutcome::Unsat {
+                proof: self.take_proof(),
+            }));
+        }
+        let cid = self.store_learnt(learnt);
+        self.stats.learned += 1;
+        self.backtrack(bt);
+        let asserting = self.clauses[cid].lits[0];
+        self.enqueue(asserting, Some(cid));
+        if self.conflicts % 2000 == 0 {
+            self.delete_learned();
+        }
+        let limit = Self::luby(self.luby_idx) * 100;
+        if self.conflicts_since_restart >= limit {
+            self.luby_idx += 1;
+            self.conflicts_since_restart = 0;
+            self.stats.restarts += 1;
+            self.backtrack(0);
+        }
+        Ok(None)
+    }
+
     /// VSIDS decision: highest-activity unassigned variable, saved phase.
     fn decide(&mut self) {
         let mut best: Option<usize> = None;
@@ -698,34 +737,10 @@ impl SatSolver {
         }
         loop {
             match self.propagate(budget)? {
-                Some(confl) => {
-                    self.stats.conflicts += 1;
-                    budget.charge(1)?;
-                    self.conflicts += 1;
-                    self.conflicts_since_restart += 1;
-                    let (learnt, bt) = self.analyze(confl);
-                    self.var_inc *= 1.0 / 0.95;
-                    if learnt.is_empty() {
-                        return Ok(SatOutcome::Unsat {
-                            proof: self.take_proof(),
-                        });
-                    }
-                    let cid = self.store_learnt(learnt);
-                    self.stats.learned += 1;
-                    self.backtrack(bt);
-                    let asserting = self.clauses[cid].lits[0];
-                    self.enqueue(asserting, Some(cid));
-                    if self.conflicts % 2000 == 0 {
-                        self.delete_learned();
-                    }
-                    let limit = Self::luby(self.luby_idx) * 100;
-                    if self.conflicts_since_restart >= limit {
-                        self.luby_idx += 1;
-                        self.conflicts_since_restart = 0;
-                        self.stats.restarts += 1;
-                        self.backtrack(0);
-                    }
-                }
+                Some(confl) => match self.on_conflict(confl, budget)? {
+                    None => continue,
+                    Some(outcome) => return Ok(outcome),
+                },
                 None => {
                     if self.assign.iter().all(|&a| a != 0) {
                         // Theory verdict on full models; plain SAT returns here.
@@ -734,8 +749,10 @@ impl SatSolver {
                             let resp = h.theory_step(store, &self.assign, true);
                             self.theory = Some(h);
                             if let TheoryResponse::Conflict(lemma) = resp {
-                                self.add_theory_lemma(lemma.clause.clone());
-                                self.backtrack(0);
+                                let cid = self.add_theory_lemma(lemma.clause.clone());
+                                if let Some(outcome) = self.on_conflict(cid, budget)? {
+                                    return Ok(outcome);
+                                }
                                 continue;
                             }
                         }
@@ -771,8 +788,10 @@ impl SatSolver {
                                 }
                             }
                             TheoryResponse::Conflict(lemma) => {
-                                self.add_theory_lemma(lemma.clause.clone());
-                                self.backtrack(0);
+                                let cid = self.add_theory_lemma(lemma.clause.clone());
+                                if let Some(outcome) = self.on_conflict(cid, budget)? {
+                                    return Ok(outcome);
+                                }
                                 continue;
                             }
                             TheoryResponse::Consistent => {}
