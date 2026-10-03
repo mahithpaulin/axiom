@@ -266,12 +266,15 @@ impl DiffSet {
 
 // ---- congruence closure with explanations -----------------------------------
 
-/// Witness for one union step: an asserted input equality, or a congruence
-/// over child pairs (explained recursively).
+/// Witness for one union step, with the term pair whose merge caused it.
+/// Stored per child-root: explanations walk edges child → parent but check
+/// and unfold the *causing* pair, which need not share the roots' shapes.
 #[derive(Clone, Debug)]
 enum Witness {
-    Asserted,
-    Congruence,
+    /// An asserted input equality over exactly this pair.
+    Asserted(TermId, TermId),
+    /// A congruence between same-shaped applications.
+    Congruence(TermId, TermId),
 }
 
 /// Union-find without path compression (proof forest, like `Subst`'s DD-0005
@@ -340,12 +343,12 @@ impl Congruence {
         }
     }
 
-    /// Assert `a ≈ b`. Returns the union work done (for tests); merging is
-    /// closed under congruence over the indexed terms.
+    /// Assert `a ≈ b`; merging is closed under congruence over the indexed
+    /// terms.
     pub fn assert_eq(&mut self, store: &TermStore, a: TermId, b: TermId) {
         self.add_term(store, a);
         self.add_term(store, b);
-        self.link(a, b, Witness::Asserted);
+        self.link(a, b, Witness::Asserted(a, b));
         self.close_congruence(store);
     }
 
@@ -379,7 +382,7 @@ impl Congruence {
                         .zip(ba.iter())
                         .all(|(&x, &y)| self.find(x) == self.find(y))
                     {
-                        self.link(a, b, Witness::Congruence);
+                        self.link(a, b, Witness::Congruence(a, b));
                         merged = true;
                     }
                 }
@@ -431,14 +434,18 @@ impl Congruence {
             work.push((w[0], w[1]));
         }
         let mut seen_pairs: HashSet<(TermId, TermId)> = HashSet::new();
-        while let Some((x, y)) = work.pop() {
-            let key = if x < y { (x, y) } else { (y, x) };
-            if !seen_pairs.insert(key) {
-                continue;
-            }
-            match self.witness.get(&x) {
-                // Edge x -> y was an asserted equality (in either direction).
-                Some(Witness::Asserted) => {
+        while let Some((x, _)) = work.pop() {
+            // Edges are walked child -> parent, but the witness belongs to
+            // the causing pair (which may differ from the edge endpoints
+            // after rank swaps and later unions).
+            let w = self.witness.get(&x).cloned();
+            match w {
+                // An asserted input equality over exactly this pair.
+                Some(Witness::Asserted(a, b)) => {
+                    let key = if a < b { (a, b) } else { (b, a) };
+                    if !seen_pairs.insert(key) {
+                        continue;
+                    }
                     let ls = assert_lits.get(&key)?;
                     for &l in ls {
                         if !out.contains(&l) {
@@ -446,12 +453,17 @@ impl Congruence {
                         }
                     }
                 }
-                // Congruence edge: unfold over the children.
-                Some(Witness::Congruence) => {
-                    if store.sym(x) != store.sym(y) {
+                // A congruence between same-shaped applications: unfold over
+                // the causing pair's children.
+                Some(Witness::Congruence(a, b)) => {
+                    let key = if a < b { (a, b) } else { (b, a) };
+                    if !seen_pairs.insert(key) {
+                        continue;
+                    }
+                    if store.sym(a) != store.sym(b) {
                         return None;
                     }
-                    let (xa, ya) = (store.args(x), store.args(y));
+                    let (xa, ya) = (store.args(a), store.args(b));
                     if xa.len() != ya.len() {
                         return None;
                     }
@@ -475,7 +487,7 @@ impl Congruence {
                     }
                 }
                 None => {
-                    // y is a root with no witness: x == y must be trivial.
+                    // A node with no witness is a root: the edge must be trivial.
                     if x != y {
                         return None;
                     }
@@ -1191,7 +1203,8 @@ fn assert_hyp(
     comb: &mut Combination,
     desc: &AtomDesc,
     positive: bool,
-) -> Result<(), TheoryCheckErr> {    match desc {
+) -> Result<(), TheoryCheckErr> {
+    match desc {
         AtomDesc::Rdl { x, y, c } => {
             let (rx, ry) = (rb.build(x)?, rb.build(y)?);
             let d = Diff {
