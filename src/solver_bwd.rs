@@ -172,10 +172,8 @@ impl Solver {
             // Resolve the body left to right. A negated body literal has no
             // backward semantics yet, so such a rule is skipped rather than
             // approximated.
-            let blen = rbody.len();
             let mut sub_trace: Vec<ResolutionStep> = Vec::new();
-            for i in 0..blen {
-                let lit = rbody[i];
+            for &lit in rbody.iter() {
                 if !lit.pos {
                     // No backward semantics for negation: record that this rule
                     // was not usable rather than treating it as a failure.
