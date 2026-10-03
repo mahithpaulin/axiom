@@ -119,40 +119,23 @@ there; the check is not wired up.
 present it recomputes the closure from scratch and compares fingerprints
 (`check::verify_saturation`). About fifteen lines, as predicted.
 
-### A4. `first_bound` can index on the wrong argument
+### A4. `first_bound` can index on the wrong argument — FIXED by construction
 
-`Solver::first_bound` (`src/solver_fwd.rs:121-131`) returns the value of the
-**first bound argument**, at whatever position it occurs:
+`Solver::first_bound` used to return the value of the **first bound argument**,
+at whatever position it occurred, while `Db::candidates` read that value as a
+**first-argument** key. Fixed twice: first by restricting the old function to
+argument 0, then properly by making the key position-tagged —
+`bound_key` returns `(pos, key)` for argument 0 else argument 1, and
+`Db::candidates` consults the matching level. The confusion is now
+unrepresentable, and both levels are covered by `db.rs` unit tests plus the
+`db_index_lookup[_arg1]` benchmark rows.
 
-```rust
-for i in 0..n {
-    let a = self.prog.store.child(atom, i);
-    let r = self.subst.find(a);
-    if self.prog.store.kind(r) != T_VAR {
-        return Some(self.subst.resolve(&self.prog.store, r));
-    }
-}
-```
-
-`Db::candidates` interprets that value as a **first-argument** key
-(`src/db.rs:109-127`), because `by_first` is keyed on `store.args(atom)[0]`
-(`src/db.rs:76-83`, `97-100`). When a literal's first argument is unbound but a
-later one is bound, the two disagree, and the join searches an unrelated bucket
-instead of the relation — silently losing derivations.
-
-Reachable shape: a body literal whose first argument is an anonymous variable
-while a later argument is bound by an earlier join level. `r(X,Y) :- s(Y,X),
-p(_, X).` seeded at `s(Y,X)` does it. The generated corpus in
-`tests/soundness.rs::generate_datalog` (`q(X,Y) :- p(X), e(_,Y).`) does not hit
-it, which is why nothing has caught it.
-
-Note the direction of the error: an empty bucket yields zero candidates, so this
-*under*-counts work. It cannot explain the excess scans in C1.
-
-**What removes it.** Either index lookup is guarded by
-`store.child(atom, 0)` being bound, or `Db` grows a per-position index. The
-one-line fix is to make `first_bound` only ever look at argument 0; the general
-fix is the same second index level discussed in DD-0006.
+The old shape, for the record: the function scanned *all* arguments
+(`src/solver_fwd.rs`), so on a literal like `p(_, X)` with `X` bound the join
+read an unrelated first-argument bucket and silently lost derivations (an
+empty bucket yields zero candidates, so it *under*-counted work and cannot
+explain the excess scans in C1). The differential corpus
+(`q(X,Y) :- p(X), e(_,Y).`) never hit it, which is why nothing caught it.
 
 ### A5. `Status::Unknown` is now constructed; `Status::Impossible` is reserved
 
@@ -480,34 +463,38 @@ checked-in document contains them, and `docs/PERFORMANCE.md` — referenced from
 `docs/ALGORITHMS.md:157` — does not exist. They must be re-derived and recorded
 before they are trusted.
 
-**The root cause is not established.** That is the honest statement. What can be
-ruled out from the code:
+**The root cause is established by attribution.** What can be ruled out from
+the code:
 
-* `Solver::first_bound` (`src/solver_fwd.rs:121-131`) does inspect *all* arguments
-  of the literal, not only the first, so "we only look at argument 0" is not the
-  explanation.
-* `Db::candidates` with `bound_first = Some(k)` returns an empty slice for an
-  unknown predicate or an absent key (`src/db.rs:109-127`), so a wrong key
-  *reduces* scans. A4 is a real bug but cannot be the cause of excess scans.
-* `by_first` is populated for every insert (`src/db.rs:97-100`) and
-  `first_bound` resolves through the substitution, so the key is a hash-consed
-  node id and cannot silently miss.
+* `Solver::bound_key` inspects arguments 0 and 1 for a ground value, so "the
+  index key is available but unused" is not the explanation — at the hot
+  literal no indexed position is bound at all.
+* `Db::candidates` with a bound key returns an empty slice for an unknown
+  predicate or an absent key, so a wrong key *reduces* scans. A4 is fixed and
+  cannot be the cause of excess scans.
+* Both levels are populated for every insert and `bound_key` resolves through
+  the substitution, so a key is a hash-consed node id and cannot silently miss.
 
-What remains is a path where `first_bound` returns `None` when it should return
-`Some`. The discriminator is one counter: increment a `unbound_scans` and a
-`bound_scans` counter in `next_solution` around the `db.candidates` call
-(`src/solver_fwd.rs:193`) and attribute them by `(rule id, body position)`. One
-diag run then names the rule shape responsible, instead of leaving it to
-inference.
+What remains was a path where the index is not consulted at all, and the
+`scan_attr` attribution (`Solver::scan_attribution`, printed by `diag`) named
+it: the recursive rule `path(X,Z) :- path(X,Y), edge(Y,Z)` fired at the edge
+position leaves `path(X,Y)` with nothing bound, so every edge-seeded firing
+scans all of `path`. At n=800: 51B tuples offered unbound at (rule, pos 0)
+against 639k bound at pos 1. The `bound_key` correctly returns `None` there —
+no usable bound argument exists at the indexed positions — so the fix is a
+second index level for the position that *is* bound (argument 1, `Y`), not a
+smarter `bound_key`.
 
 **Cost.** Transitive closure is O(n³) instead of O(n²) in examined tuples. That
 is a factor of *n*, so it is not a constant-factor problem and will not be
 absorbed by faster hardware.
 
-**What would remove it.** Finding the cause. The second index level (DD-0006)
-would not help if the problem is that the index is not being used; a
-selectivity-ordered or magic-set rule rewriting would help if it is that the
-wrong body position is seeded. Do not guess: instrument first.
+**What removes it.** The second index level (argument 1): an edge-seeded
+firing looks up `path(X, Y-bound)` in `by_second` instead of scanning. With
+in-degree-bounded buckets on the path graph the total becomes O(n²).
+Selectivity-ordered seeding or magic sets would address the same shape more
+generally and remain future work; dropping the edge-seeded firing outright
+would be unsound (new edge facts must propagate).
 
 ### C2. ~248 bytes per derived fact, of which ~19 is IR payload
 
@@ -560,13 +547,14 @@ C1 may be the same defect seen from the other side.
 scratch vectors and no cache. A `ResolveCache` type was written and deleted
 (DD-0012). Reintroduction requires a measurement that does not exist yet.
 
-### C5. One index level
+### C5. Two index levels (positions 0 and 1)
 
-`Db` ships a per-predicate vector plus a first-argument hash index
-(`src/db.rs:37-48`). DD-0006 records the measurement behind that decision
+`Db` ships a per-predicate vector plus first- and second-argument hash indexes
+(`src/db.rs`). DD-0006 records the measurement behind the first level
 (50 000 tuples over 500 distinct first arguments: 2.31 × 10⁹ tuples examined by
-scan against 4.67 × 10⁶ by index, 495.8× fewer) and the trigger that would
-reverse it. See `docs/ROADMAP.md`, "Triggers to revisit existing decisions".
+scan against 4.67 × 10⁶ by index, 495.8× fewer) and the I1 attribution behind
+the second (edge-seeded steps scanning `path` unbound). Positions 2+ stay
+unindexed; the trigger for a third level is in `docs/ROADMAP.md` with DD-0006.
 
 ---
 

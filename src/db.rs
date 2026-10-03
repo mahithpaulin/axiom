@@ -1,22 +1,16 @@
 //! The extensional database: stored facts plus the indexes that make joins
 //! cheap.
 //!
-//! ## Why the index is only one level deep
+//! ## Why the index is two levels deep (argument positions 0 and 1)
 //!
-//! The obvious instinct is a multi-key index. Stage 1 ships a single
-//! first-argument hash index plus a per-predicate vector, and that is a
-//! *deliberate* choice with a hypothesis attached, not an oversight:
-//!
-//! **Hypothesis.** For stratified Datalog over hash-consed ground atoms, join
-//! cost is dominated by the number of tuples actually examined, and a
-//! first-argument index removes most of that at a memory cost of one extra
-//! `TermId` per fact. A second index level should pay for itself only on
-//! workloads with highly selective non-leading arguments, which the Stage-1
-//! benchmark suite is not yet representative of.
-//!
-//! `benches/kernel.rs` measures index selectivity directly (`bench_index_selectivity`)
-//! so the decision is revisited against data rather than taste. The trigger for
-//! adding a second level is recorded in docs/ROADMAP.md.
+//! Stage 1 shipped a single first-argument index. ROADMAP I1 then measured the
+//! join spending ~everything in unbound scans of literals like `path(X, Y)`
+//! with only the *second* argument bound (edge-seeded transitive-closure
+//! steps: `edge(Y, Z)` binds `Y`, which sits at position 1 of `path`). A
+//! second level keyed on argument 1 removes those scans at one extra `TermId`
+//! per binary-and-wider fact plus bucket overhead. Positions 2+ stay
+//! unindexed: no workload here binds them selectively, and the trigger for
+//! adding more is recorded in docs/ROADMAP.md alongside DD-0006.
 //!
 //! Candidates come back as slices, not `Iterator`s: the join loop needs random
 //! access to resume where it left off after backtracking, and an iterator
@@ -45,6 +39,9 @@ pub struct Db {
     pub by_pred: Vec<Vec<TermId>>,
     /// Predicate -> first argument -> tuples.
     pub by_first: Vec<FxHashMap<TermId, Vec<TermId>>>,
+    /// Predicate -> second argument -> tuples. Only atoms of arity >= 2 are
+    /// entered; the map for other predicates stays empty.
+    pub by_second: Vec<FxHashMap<TermId, Vec<TermId>>>,
 }
 
 impl Default for Db {
@@ -60,6 +57,7 @@ impl Db {
             facts: FxHashSet::default(),
             by_pred: Vec::new(),
             by_first: Vec::new(),
+            by_second: Vec::new(),
         }
     }
 
@@ -69,6 +67,7 @@ impl Db {
         if self.by_pred.len() < n {
             self.by_pred.resize(n, Vec::new());
             self.by_first.resize(n, FxHashMap::default());
+            self.by_second.resize(n, FxHashMap::default());
         }
     }
 
@@ -79,6 +78,18 @@ impl Db {
             u32::MAX
         } else {
             a[0]
+        }
+    }
+
+    /// Second argument, if the atom has one. Only binary-and-wider atoms are
+    /// entered in the second-argument index.
+    #[inline]
+    fn second_arg(store: &TermStore, atom: TermId) -> Option<TermId> {
+        let a = store.args(atom);
+        if a.len() >= 2 {
+            Some(a[1])
+        } else {
+            None
         }
     }
 
@@ -99,20 +110,28 @@ impl Db {
             .entry(key)
             .or_default()
             .push(atom);
+        if let Some(key2) = Self::second_arg(store, atom) {
+            self.by_second[pred as usize]
+                .entry(key2)
+                .or_default()
+                .push(atom);
+        }
         true
     }
 
-    /// Candidate tuples for `pred`. If `bound_first` is `Some`, only tuples
-    /// whose first argument is that term are returned. A nullary predicate has
-    /// the sentinel first argument `u32::MAX`, which is unreachable for a real
-    /// term id, so nullary lookups never accidentally hit an index bucket.
-    pub fn candidates(&self, pred: SymId, bound_first: Option<TermId>) -> &[TermId] {
+    /// Candidate tuples for `pred`. If `bound` is `Some((pos, key))`, only
+    /// tuples whose argument at `pos` is that term are returned (positions 0
+    /// and 1 are indexed). A nullary predicate has the sentinel first argument
+    /// `u32::MAX`, which is unreachable for a real term id, so nullary lookups
+    /// never accidentally hit an index bucket. An unindexed position falls
+    /// back to the full scan: sound, just slow.
+    pub fn candidates(&self, pred: SymId, bound: Option<(usize, TermId)>) -> &[TermId] {
         let i = pred as usize;
         if i >= self.by_pred.len() {
             return &[];
         }
-        match bound_first {
-            Some(k) => {
+        match bound {
+            Some((0, k)) => {
                 if k == u32::MAX {
                     &self.by_pred[i]
                 } else {
@@ -122,6 +141,11 @@ impl Db {
                     }
                 }
             }
+            Some((1, k)) => match self.by_second.get(i).and_then(|m| m.get(&k)) {
+                Some(v) => v.as_slice(),
+                None => &[],
+            },
+            Some(_) => self.by_pred[i].as_slice(),
             None => self.by_pred[i].as_slice(),
         }
     }
@@ -144,24 +168,28 @@ impl Db {
 
     /// Payload bytes: one `TermId` per fact per index level, plus set overhead.
     pub fn index_bytes(&self) -> usize {
+        fn map_bytes(maps: &[FxHashMap<TermId, Vec<TermId>>]) -> usize {
+            maps.iter()
+                .map(|m| {
+                    // key/value table overhead at load factor, plus the per-bucket
+                    // vectors. An estimate, not an exact allocator figure.
+                    m.capacity() * (std::mem::size_of::<TermId>() * 2 + 16)
+                        + m.values()
+                            .map(|v: &Vec<TermId>| v.capacity() * 4)
+                            .sum::<usize>()
+                })
+                .sum()
+        }
         let vec_bytes: usize = self
             .by_pred
             .iter()
             .map(|v| v.capacity() * std::mem::size_of::<TermId>())
             .sum();
-        let map_bytes: usize = self
-            .by_first
-            .iter()
-            .map(|m| {
-                // key/value table overhead at load factor, plus the per-bucket
-                // vectors. An estimate, not an exact allocator figure.
-                m.capacity() * (std::mem::size_of::<TermId>() * 2 + 16)
-                    + m.values()
-                        .map(|v: &Vec<TermId>| v.capacity() * 4)
-                        .sum::<usize>()
-            })
-            .sum();
-        vec_bytes + map_bytes + self.facts.capacity() * 8 + self.seed.capacity() * 8
+        vec_bytes
+            + map_bytes(&self.by_first)
+            + map_bytes(&self.by_second)
+            + self.facts.capacity() * 8
+            + self.seed.capacity() * 8
     }
 }
 
@@ -200,10 +228,28 @@ mod tests {
         db.insert(&st, e1, false);
         db.insert(&st, e2, false);
         db.insert(&st, e3, false);
-        assert_eq!(db.candidates(p, Some(a)).len(), 2);
-        assert_eq!(db.candidates(p, Some(b)).len(), 1);
-        assert_eq!(db.candidates(p, Some(c)).len(), 0);
+        assert_eq!(db.candidates(p, Some((0, a))).len(), 2);
+        assert_eq!(db.candidates(p, Some((0, b))).len(), 1);
+        assert_eq!(db.candidates(p, Some((0, c))).len(), 0);
         assert_eq!(db.candidates(p, None).len(), 3);
+    }
+
+    #[test]
+    fn second_arg_index_selects() {
+        let (_s, mut st, mut db, p, a, b) = setup();
+        let mut cs = _s;
+        let c = st.constant(cs.constant("c"));
+        let e1 = st.atom(p, &[a, b]);
+        let e2 = st.atom(p, &[a, c]);
+        let e3 = st.atom(p, &[b, a]);
+        db.insert(&st, e1, false);
+        db.insert(&st, e2, false);
+        db.insert(&st, e3, false);
+        // Second arguments: b once (e1), c once (e2), a once (e3).
+        assert_eq!(db.candidates(p, Some((1, a))).len(), 1);
+        assert_eq!(db.candidates(p, Some((1, b))).len(), 1);
+        assert_eq!(db.candidates(p, Some((1, c))).len(), 1);
+        assert_eq!(db.candidates(p, Some((1, 9999))).len(), 0);
     }
 
     #[test]
@@ -218,7 +264,8 @@ mod tests {
     #[test]
     fn unknown_predicate_yields_no_candidates() {
         let (_s, _st, db, p, a, _b) = setup();
-        assert!(db.candidates(p + 99, Some(a)).is_empty());
+        assert!(db.candidates(p + 99, Some((0, a))).is_empty());
+        assert!(db.candidates(p + 99, Some((1, a))).is_empty());
         assert!(db.candidates(p, None).is_empty());
     }
 
@@ -231,7 +278,7 @@ mod tests {
         let a = st.atom(p, &[]);
         db.insert(&st, a, false);
         // A query for the sentinel must not match, but an unbound first arg must.
-        assert!(db.candidates(p, Some(u32::MAX)).len() == 1);
+        assert!(db.candidates(p, Some((0, u32::MAX))).len() == 1);
         assert!(db.candidates(p, None).len() == 1);
     }
 }

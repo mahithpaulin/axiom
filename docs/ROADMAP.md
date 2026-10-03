@@ -45,15 +45,13 @@ obvious candidates were already checked and are *not* it: `first_bound` looks
 only at argument 0 and only at ground values (fixed), and a wrong index key
 reduces scans rather than inflating them (`src/db.rs:109-127`).
 
-**Step 2 — fix.** Depending on what step 1 shows. Two distinct defects are
-already known and are separate work:
-
-* *Wrong argument indexed* — `first_bound` returns the first **bound** argument
-  while `Db::candidates` expects the value of argument **0**. On a literal like
-  `p(_, X)` with `X` bound, the join reads an unrelated bucket and loses
-  derivations (`docs/KNOWN_LIMITATIONS.md` §A4). Small fix; do it regardless.
-* *Index not consulted* — `first_bound` returns `None` on a literal that has a
-  usable bound argument. Larger, and unknown in shape until step 1.
+**Step 2 — fix.** Step 1 showed it: the recursive rule fired at the edge
+position leaves `path(X, Y)` with nothing bound, so every edge-seeded firing
+scans all of `path` (51B tuples offered unbound at n=800 against 639k bound).
+The position that *is* bound there is argument 1 (`Y`), which no level
+indexed — hence the second index level (`by_second`, position-tagged
+`(pos, key)` lookups). Dropping the edge-seeded firing instead would be
+unsound: new edge facts must propagate through it.
 
 **Done means.** `candidates` for path-graph transitive closure fits
 `0.5·n²` (slope ≈ 2 on a `log`/`log` fit across n ∈ {200 … 5000}), confirmed on
@@ -432,10 +430,13 @@ shared literals. Revise if `find` exceeds ~10% of run time *and* trailing the
 rewrites costs less than the chains it removes. Until then: leave it off. The
 type parameter that keeps the experiment honest already exists.
 
-### DD-0006 — index depth: currently **one level**
+### DD-0006 — index depth: currently **two levels (positions 0 and 1)**
 
-**Decision.** One first-argument level. A second should pay for itself only on
-workloads with selective non-leading arguments, and the Stage-1 suite has none.
+**Decision.** A per-predicate vector plus first- and second-argument hash
+indexes. The second level fired its own trigger: I1's attribution showed
+edge-seeded transitive-closure steps scanning `path(X, Y)` with only argument
+1 bound, so the one-level index was provably unused there — not "the same bug
+twice" (the caveat below is discharged).
 
 **Measured so far.** 50 000 tuples over 500 distinct first arguments: a scan
 examines 2.31 × 10⁹ tuples, the index 4.67 × 10⁶ — 495.8× fewer, or 92.4 tuples
@@ -443,14 +444,12 @@ per lookup instead of 50 000. Note these are *tuple counts*, computed via
 `.len()`; the timing rows that were supposed to accompany them measure nothing
 (`docs/KNOWN_LIMITATIONS.md` §A7, fixed by I3).
 
-**Trigger.** Any benchmark family in which the leading argument has low
-selectivity and a later argument is highly selective. Two candidates already on
-the horizon: II2's congruence closure, where the bound argument is rarely
-argument 0, and I4's `p(_, X)` shapes from `docs/KNOWN_LIMITATIONS.md` §A4,
-which need an index keyed on a non-leading position to be correct and fast at
-once. **Caveat:** the trigger is only meaningful once I1 is understood — if the
-existing single level is not being *used*, adding a second one measures the same
-bug twice.
+**Trigger.** Any benchmark family in which arguments 0 *and* 1 both have low
+selectivity while a later argument (position 2+) is highly selective. The old
+trigger — a selective non-leading argument with only a first-argument index —
+fired for I1 and is discharged. The caveat stands in its new form: if neither
+indexed level is being *used* on some future workload, adding a third measures
+the same bug twice.
 
 ### Also open
 

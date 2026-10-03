@@ -273,12 +273,20 @@ fn indexing(b: &mut Bench, _quick: bool) {
         .iter()
         .map(|r| prog.store.child(r.head, 0))
         .collect();
+    let keys1: Vec<TermId> = prog
+        .rules
+        .iter()
+        .map(|r| prog.store.child(r.head, 1))
+        .collect();
 
     let scan_total: usize = (0..keys.len())
         .map(|_| db.candidates(pred, None).len())
         .sum();
     let index_total: usize = (0..keys.len())
-        .map(|i| db.candidates(pred, Some(keys[i])).len())
+        .map(|i| db.candidates(pred, Some((0, keys[i]))).len())
+        .sum();
+    let index1_total: usize = (0..keys1.len())
+        .map(|i| db.candidates(pred, Some((1, keys1[i]))).len())
         .sum();
 
     println!("\n  index_selectivity: {N} tuples, {DISTINCT} distinct first arguments");
@@ -288,6 +296,7 @@ fn indexing(b: &mut Bench, _quick: bool) {
         "    ratio  {:.2}x fewer tuples examined",
         scan_total as f64 / index_total.max(1) as f64
     );
+    println!("    index-arg1 examines {index1_total} tuples total");
     println!(
         "    average tuples per distinct first argument: {:.1}",
         index_total as f64 / keys.len().max(1) as f64
@@ -298,7 +307,18 @@ fn indexing(b: &mut Bench, _quick: bool) {
     b.run("db_index_lookup", 50_000, |_| {
         let mut n = 0u64;
         for key in &keys {
-            for &t in db.candidates(pred, Some(*key)) {
+            for &t in db.candidates(pred, Some((0, *key))) {
+                std::hint::black_box(t);
+                n += 1;
+            }
+        }
+        n
+    });
+
+    b.run("db_index_lookup_arg1", 50_000, |_| {
+        let mut n = 0u64;
+        for key in &keys1 {
+            for &t in db.candidates(pred, Some((1, *key))) {
                 std::hint::black_box(t);
                 n += 1;
             }

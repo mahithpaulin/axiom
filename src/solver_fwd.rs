@@ -116,33 +116,45 @@ impl Solver {
         true
     }
 
-    /// Is argument 0 of `atom` determined *and ground*?
+    /// A determined, ground index key for `atom`, if any: argument 0 first,
+    /// else argument 1 (both levels are indexed). Carries its position so the
+    /// database cannot mistake one level's key for the other's.
     ///
     /// Two conditions, both necessary and both learned the hard way:
     ///
-    /// * Only argument 0. The database is indexed on the first argument only,
-    ///   so binding a later argument buys nothing and reporting it as
-    ///   "determined" invites the join to use an index position it does not
-    ///   have.
     /// * Ground, not merely non-variable. `f(gX)` with `gX` free is a function
     ///   node, so a `kind != T_VAR` test accepts it, and it is then used as an
     ///   index key that is in no bucket -- silently losing every derivation
     ///   that should have matched. `contains_var` is allocation-free here.
+    /// * Position-tagged. The pre-I1 code returned the value of the first
+    ///   bound argument at whatever position while `Db` read it as a
+    ///   first-argument key, searching an unrelated bucket (KNOWN_LIMITATIONS
+    ///   A4). The `(pos, key)` pair makes that confusion unrepresentable.
     #[inline]
-    fn first_bound(&mut self, atom: TermId) -> Option<TermId> {
-        if self.prog.store.arity(atom) == 0 {
+    fn bound_key(&mut self, atom: TermId) -> Option<(usize, TermId)> {
+        let arity = self.prog.store.arity(atom);
+        if arity == 0 {
             return None;
         }
-        let a = self.prog.store.child(atom, 0);
-        let r = self.subst.find(a);
-        if self.prog.store.kind(r) == T_VAR {
-            return None;
+        let a0 = self.prog.store.child(atom, 0);
+        let r0 = self.subst.find(a0);
+        if self.prog.store.kind(r0) != T_VAR {
+            let resolved = self.subst.resolve(&mut self.prog.store, r0);
+            if self.prog.store.is_ground(resolved) {
+                return Some((0, resolved));
+            }
         }
-        let resolved = self.subst.resolve(&mut self.prog.store, r);
-        if !self.prog.store.is_ground(resolved) {
-            return None;
+        if arity >= 2 {
+            let a1 = self.prog.store.child(atom, 1);
+            let r1 = self.subst.find(a1);
+            if self.prog.store.kind(r1) != T_VAR {
+                let resolved = self.subst.resolve(&mut self.prog.store, r1);
+                if self.prog.store.is_ground(resolved) {
+                    return Some((1, resolved));
+                }
+            }
         }
-        Some(resolved)
+        None
     }
 
     /// The `k`-th positive body position that is not `skip`.
@@ -236,7 +248,7 @@ impl Solver {
                 };
                 let lit = self.ren_lit(rule, i);
                 let pred = self.prog.store.sym(lit.atom);
-                let bound = self.first_bound(lit.atom);
+                let bound = self.bound_key(lit.atom);
                 if depth == self.jc.len() {
                     self.jc.push(0);
                     self.jm.push(self.subst.mark());
@@ -303,7 +315,7 @@ impl Solver {
         self.ensure_renamed(rule);
         // The union-find table is indexed by node id, so it must cover the
         // whole arena before any `find`. A static (all-extensional) rule reaches
-        // `first_bound` -> `find` without ever calling `match_into`, which is
+        // `bound_key` -> `find` without ever calling `match_into`, which is
         // where the `ensure` used to live. Found by the benchmark suite.
         self.subst.ensure(self.prog.store.node_count());
         let mark = self.subst.mark();
