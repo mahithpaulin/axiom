@@ -139,18 +139,15 @@ fn solve_body(
             path = next;
         } else {
             // A negated literal filters the environments accumulated so far.
-            path = path
-                .into_iter()
-                .filter(|env| {
-                    let inst = apply(atom, env);
-                    let (n2, a2) = parse_term(&inst);
-                    let k2 = format!("{n2}/{}", a2.len());
-                    match pred_facts.get(&k2) {
-                        Some(v) => !v.contains(&inst),
-                        None => true,
-                    }
-                })
-                .collect();
+            path.retain(|env| {
+                let inst = apply(atom, env);
+                let (n2, a2) = parse_term(&inst);
+                let k2 = format!("{n2}/{}", a2.len());
+                match pred_facts.get(&k2) {
+                    Some(v) => !v.contains(&inst),
+                    None => true,
+                }
+            });
         }
         if path.is_empty() {
             return Vec::new();

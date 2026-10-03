@@ -276,7 +276,7 @@ fn generate_datalog(rng: &mut Rng, trial: u64) -> String {
     }
     // Two rules, each a two-literal join or a projection.
     src.push_str("p(X) :- e(X,_).\n");
-    src.push_str(&format!("q(X,Y) :- p(X), e(_,Y).\n"));
+    src.push_str("q(X,Y) :- p(X), e(_,Y).\n");
     // Trial-varying tail rule so different trials exercise different joins.
     match trial % 3 {
         0 => src.push_str("r(X,Y) :- q(X,Y), e(X,Y).\n"),
