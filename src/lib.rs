@@ -94,6 +94,7 @@ pub mod status;
 pub mod subst;
 pub mod symbol;
 pub mod term;
+pub mod theory;
 
 pub use budget::Budget;
 pub use db::Db;
