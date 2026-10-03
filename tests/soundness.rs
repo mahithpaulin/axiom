@@ -220,9 +220,41 @@ fn deep_backward_proof_with_fresh_variables_per_step() {
         "a 10-deep chain is provable, got {:?}",
         out.status
     );
-    // No `verify`: backward proofs carry a resolution trace that the checker
-    // does not yet validate (ROADMAP I7). Status only.
-    assert!(out.proof.is_some());
+    // Backward proofs now carry a checkable resolution trace (ROADMAP I7):
+    // the proof must verify independently, like a forward one.
+    let proof = out.proof.expect("a definite status carries a proof");
+    assert!(
+        s.verify(&proof).is_ok(),
+        "backward proof must verify: {:?}",
+        s.verify(&proof)
+    );
+}
+
+/// Negative control for the resolution checker: a backward proof transplanted
+/// onto an underivable goal must be rejected, not waved through.
+#[test]
+fn a_tampered_backward_proof_is_rejected() {
+    let mut chain10 = String::from("f(w)");
+    for _ in 0..9 {
+        chain10 = format!("f({chain10})");
+    }
+    let src = format!(
+        "link(z, w).\nlink(X, f(Y)) :- link(X, Y).\n?- link(z, {chain10}).\n?- link(z, zzz).\n"
+    );
+    let parsed = exterior::parse(&src).unwrap();
+    let (goal, bad_goal) = (parsed.queries[0], parsed.queries[1]);
+    let mut s = Solver::new(parsed.program);
+    let mut b = Budget::unlimited();
+    let out = s.prove(goal, &mut b);
+    assert_eq!(out.status, Status::Proved);
+    let mut proof = out.proof.expect("proved carries a proof");
+    assert!(s.verify(&proof).is_ok());
+    assert!(!s.db.contains(bad_goal));
+    proof.goal = bad_goal;
+    assert!(
+        s.verify(&proof).is_err(),
+        "a backward proof for an underivable goal was accepted"
+    );
 }
 
 /// KNOWN_LIMITATIONS A1(iii): a `backward_only` chain longer than the depth

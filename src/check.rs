@@ -41,7 +41,7 @@
 //! the safe direction to fail.
 
 use crate::db::Db;
-use crate::hash::FxHashMap;
+use crate::hash::{FxHashMap, FxHashSet};
 use crate::program::Program;
 use crate::proof::{CheckErr, DerivId, Derivation, Proof, Saturation};
 use crate::term::{TermId, TermStore, T_VAR};
@@ -177,6 +177,12 @@ impl<'a> Checker<'a> {
 }
 
 /// Strong check: re-derive the goal from program facts and rules alone.
+///
+/// Dispatches on what the proof carries: a saturation certificate (negative
+/// answer) is confirmed by recomputation; a resolution trace (backward answer)
+/// is replayed step by step; otherwise the goal must re-derive through the
+/// recorded forward derivations, and a present `root` must conclude exactly
+/// the goal (ROADMAP I7).
 pub fn verify(
     prog: &Program,
     db: &Db,
@@ -184,6 +190,17 @@ pub fn verify(
     deriv_of: &FxHashMap<TermId, DerivId>,
     proof: &Proof,
 ) -> Result<(), CheckErr> {
+    if !proof.steps.is_empty() {
+        return verify_steps(prog, db, proof);
+    }
+    if let Some(d) = proof.root {
+        let dv = derivs
+            .get(d as usize)
+            .ok_or(CheckErr::NoSuchRule { deriv: d })?;
+        if dv.concl != proof.goal {
+            return Err(CheckErr::GoalMismatch);
+        }
+    }
     let mut c = Checker {
         prog,
         db,
@@ -192,6 +209,128 @@ pub fn verify(
         state: FxHashMap::default(),
     };
     c.atom_ok(proof.goal)
+}
+
+/// Replay a backward-resolution trace. Each step must be a sound rule
+/// application, and every positive premise must already hold: either in the
+/// saturated database or as the conclusion of an earlier step (steps are
+/// recorded children-first). Steps carry no `Subst`; instantiation is checked
+/// structurally against the recorded atoms, same discipline as `Checker`.
+fn verify_steps(prog: &Program, db: &Db, proof: &Proof) -> Result<(), CheckErr> {
+    let store = &prog.store;
+    // Conclusions established so far. Hash-consing makes structural equality a
+    // node-id comparison: no interning is needed to recognise a replay.
+    let mut established: FxHashSet<TermId> = FxHashSet::default();
+    for (idx, s) in proof.steps.iter().enumerate() {
+        let d = idx as u32;
+        let rule = prog
+            .rules
+            .get(s.rule as usize)
+            .ok_or(CheckErr::NoSuchRule { deriv: d })?;
+        // 1. The instantiation binds every rule variable exactly once, ground.
+        if s.inst.len() != rule.local_vars.len() {
+            return Err(CheckErr::BadInstantiation { deriv: d });
+        }
+        let mut env: FxHashMap<u32, TermId> =
+            FxHashMap::with_capacity_and_hasher(s.inst.len(), Default::default());
+        for (v, t) in &s.inst {
+            if env.insert(*v, *t).is_some() || !rule.local_vars.contains(v) {
+                return Err(CheckErr::BadInstantiation { deriv: d });
+            }
+            if !ground(store, *t) {
+                return Err(CheckErr::BadInstantiation { deriv: d });
+            }
+        }
+        // 2. Head under the instantiation reproduces both recorded atoms, and
+        // the step concludes exactly the subgoal it claims to prove.
+        if !matches(store, rule.head, &env, s.concl.atom) {
+            return Err(CheckErr::ConclusionMismatch { deriv: d });
+        }
+        if !matches(store, rule.head, &env, s.goal.atom) {
+            return Err(CheckErr::ConclusionMismatch { deriv: d });
+        }
+        if s.concl.atom != s.goal.atom {
+            return Err(CheckErr::GoalMismatch);
+        }
+        // 3. Every premise holds: positive ones by an established conclusion
+        // or a database fact, negated ones by absence in both. Backward search
+        // never uses a negated body literal, so one recorded here is rejected.
+        for (bi, l) in rule.body.iter().enumerate() {
+            if premise_holds(prog, db, &established, l.atom, &env) {
+                if !l.pos {
+                    return Err(CheckErr::NegativeHolds {
+                        deriv: d,
+                        index: bi,
+                    });
+                }
+            } else if l.pos {
+                return Err(CheckErr::PremiseMismatch {
+                    deriv: d,
+                    index: bi,
+                });
+            }
+        }
+        established.insert(s.concl.atom);
+    }
+    match proof.steps.last() {
+        Some(s) if s.concl.atom == proof.goal => Ok(()),
+        _ => Err(CheckErr::GoalMismatch),
+    }
+}
+
+/// Does the instantiated body atom hold? Positive: some database tuple or
+/// established conclusion matches it. Uses the same two index levels as the
+/// solver when the bound argument is directly available, else scans.
+fn premise_holds(
+    prog: &Program,
+    db: &Db,
+    established: &FxHashSet<TermId>,
+    atom: TermId,
+    env: &FxHashMap<u32, TermId>,
+) -> bool {
+    let store = &prog.store;
+    let pred = store.sym(atom);
+    let args = store.args(atom);
+    // An index key needs no interning: a bound variable's value already is a
+    // node id, and a ground subterm already is one too.
+    fn key_of(store: &TermStore, env: &FxHashMap<u32, TermId>, a: TermId) -> Option<TermId> {
+        match store.var_id(a) {
+            // A bound variable's value already is a node id; a ground
+            // subterm already is one too. Anything else has no key.
+            Some(v) => env.get(&v).copied(),
+            None => {
+                if ground(store, a) {
+                    Some(a)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+    let mut keyed: Option<&[TermId]> = None;
+    if !args.is_empty() {
+        if let Some(k) = key_of(store, env, args[0]) {
+            if k != u32::MAX {
+                keyed = Some(db.candidates(pred, Some((0, k))));
+            }
+        }
+    }
+    if keyed.is_none() && args.len() >= 2 {
+        if let Some(k) = key_of(store, env, args[1]) {
+            keyed = Some(db.candidates(pred, Some((1, k))));
+        }
+    }
+    let check = |n: TermId| matches(store, atom, env, n);
+    if let Some(list) = keyed {
+        if list.iter().copied().any(check) {
+            return true;
+        }
+    } else if let Some(v) = db.by_pred.get(pred as usize) {
+        if v.iter().copied().any(check) {
+            return true;
+        }
+    }
+    established.iter().copied().any(check)
 }
 
 /// Cheap check: the goal is in the fact database. Trusts the forward chainer.
