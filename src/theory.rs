@@ -125,9 +125,8 @@ impl DiffSet {
     /// A negative cycle (= an unsatisfiable core), if any, as edge constraints.
     pub fn conflict(&self) -> Option<Vec<Diff>> {
         let (nodes, dist, next) = self.floyd();
-        let n = nodes.len();
-        for i in 0..n {
-            if dist[i][i] < 0 {
+        for (i, row) in dist.iter().enumerate() {
+            if row[i] < 0 {
                 return Some(self.cycle_through(&nodes, &next, i));
             }
         }
@@ -774,12 +773,7 @@ mod tests {
 
     fn naive_sat(constraints: &[(i64, i64, i64)], nvars: usize) -> bool {
         // Constraints as (x, y, c) index triples meaning v[x] - v[y] <= c.
-        fn rec(
-            cs: &[(i64, i64, i64)],
-            nvars: usize,
-            assign: &mut Vec<i64>,
-            r: i64,
-        ) -> bool {
+        fn rec(cs: &[(i64, i64, i64)], nvars: usize, assign: &mut Vec<i64>, r: i64) -> bool {
             if assign.len() == nvars {
                 return cs
                     .iter()
@@ -880,6 +874,13 @@ mod tests {
         }
 
         fn intern(&mut self, t: NT) -> usize {
+            // Register children first: the term DAG stays complete, so the
+            // congruence fixpoint never meets a term it hasn't compared.
+            if let NT::F(_, kids) = &t {
+                for k in kids.clone() {
+                    self.intern(k);
+                }
+            }
             if let Some(i) = self.terms.iter().position(|u| u == &t) {
                 return i;
             }
