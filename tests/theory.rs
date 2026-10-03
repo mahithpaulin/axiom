@@ -47,7 +47,7 @@ fn rdl_conflict_is_unsat_with_proof() {
     let mut budget = Budget::unlimited();
     match d.solve(&b.store, &b.symbols, &mut budget) {
         Ok(TheoryOutcome::Unsat { sat, theory }) => {
-            check_unsat(&[[v1 as i32 + 1], [v2 as i32 + 1]], &sat, &theory)
+            check_unsat(&[&[v1 as i32 + 1], &[v2 as i32 + 1]], &sat, &theory)
         }
         Ok(TheoryOutcome::Sat { .. }) => panic!("must be unsat"),
         Err(_) => panic!("within budget"),
@@ -134,7 +134,7 @@ fn disequality_against_merge_is_unsat() {
     let mut budget = Budget::unlimited();
     match d.solve(&b.store, &b.symbols, &mut budget) {
         Ok(TheoryOutcome::Unsat { sat, theory }) => {
-            check_unsat(&[[v1 as i32 + 1], [v2 as i32 + 1]], &sat, &theory)
+            check_unsat(&[&[v1 as i32 + 1], &[v2 as i32 + 1]], &sat, &theory)
         }
         Ok(_) => panic!("must be unsat"),
         Err(_) => panic!("within budget"),
@@ -166,7 +166,7 @@ fn nelson_oppen_exchange_fires() {
     let mut budget = Budget::unlimited();
     match d.solve(&b.store, &b.symbols, &mut budget) {
         Ok(TheoryOutcome::Unsat { sat, theory }) => check_unsat(
-            &[[v1 as i32 + 1], [v2 as i32 + 1], [v3 as i32 + 1]],
+            &[&[v1 as i32 + 1], &[v2 as i32 + 1], &[v3 as i32 + 1]],
             &sat,
             &theory,
         ),
@@ -198,7 +198,7 @@ fn inconsistent_model_does_not_verify() {
     d.add_clause(&[v2 as i32 + 1]);
     match d.solve(&b.store, &b.symbols, &mut budget) {
         Ok(TheoryOutcome::Unsat { sat, theory }) => {
-            check_unsat(&[[v1 as i32 + 1], [v2 as i32 + 1]], &sat, &theory);
+            check_unsat(&[&[v1 as i32 + 1], &[v2 as i32 + 1]], &sat, &theory);
             // And a forged all-true model over the same atoms fails:
             let n = (v2 as usize + 1).max(2);
             let mut forged = vec![0i8; n];

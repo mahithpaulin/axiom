@@ -1112,19 +1112,6 @@ impl Rebuilt {
             }
         }
     }
-
-    fn build_diff(
-        &mut self,
-        x: &STerm,
-        y: &STerm,
-        c: i64,
-    ) -> Result<Diff, TheoryCheckErr> {
-        Ok(Diff {
-            x: self.build(x)?,
-            y: self.build(y)?,
-            c,
-        })
-    }
 }
 
 /// Verify a theory-unsat certificate: RUP over everything propositional,
