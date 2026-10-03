@@ -400,11 +400,26 @@ impl Solver {
                 return QueryOutcome::inconclusive(Status::Exhausted, e, self.stats.delta(&before));
             }
         }
+        // An empty answer set is a proof of absence only when saturation saw
+        // every rule that could derive the predicate. `backward_only` rules
+        // are skipped bottom-up, so with any present the honest answer is
+        // `Unknown`, with the completed forward closure still attached
+        // (KNOWN_LIMITATIONS A2).
+        let skipped = self
+            .rules_by_pred
+            .get(pred as usize)
+            .map(|rs| {
+                rs.iter()
+                    .any(|&r| self.prog.rules[r as usize].backward_only)
+            })
+            .unwrap_or(false);
         QueryOutcome {
-            status: if answers.is_empty() {
-                Status::Refuted
-            } else {
+            status: if !answers.is_empty() {
                 Status::Found
+            } else if skipped {
+                Status::Unknown
+            } else {
+                Status::Refuted
             },
             answers,
             stats: self.stats.delta(&before),

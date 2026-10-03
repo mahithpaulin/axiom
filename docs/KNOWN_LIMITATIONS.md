@@ -18,9 +18,9 @@ not implemented. Section C is *performance and memory*.
 
 ## A. Correctness risks
 
-### A1. `prove` can return an unsound `Refuted`
+### A1. `prove` can return an unsound `Refuted` — FIXED via decline/`Unknown`
 
-**Severity: high. This is a wrong answer, not a missing feature.**
+**Severity when open: high. This was a wrong answer, not a missing feature.**
 
 `Solver::prove` decides a goal in this order (`src/solver_bwd.rs:156-235`):
 
@@ -76,14 +76,13 @@ absent from the least model"*.
 backward_only` saturation. Both hashes agree, so the refutation verifies. The
 certificate attests to determinism, not to completeness.
 
-**What removes it.** Track, per goal, whether every rule that could derive it was
-examined by *some* engine. Concretely: `prove` should return `Refuted` only when
-`!prog.forward_rules_skipped_for(pred_of(goal))` and SLD did not bail on the
-depth bound or on a skipped rule; otherwise `Status::Unknown`. `Status::Unknown`
-already exists for exactly this (`src/status.rs:39`) and is never constructed
-today — see A5. As a stopgap that costs nothing: if
-`prog.rules_by_pred[pred].iter().any(|r| prog.rules[r].backward_only)`, refuse to
-return `Refuted`.
+**What removed it.** The backward engine is tri-state (`SldOutcome::Proved /
+NotProvable / Declined`, `src/solver_bwd.rs`): "no rule derives this goal" and
+"I did not look" (depth bound, negated body literal, non-ground subgoal) are
+different return values, and only `NotProvable` licenses `Refuted` — a decline
+yields `Status::Unknown`. Locked by three regression tests in
+`tests/soundness.rs` (`refutation_is_never_unearned_*`) built from the programs
+(i)–(iii) below, each asserting `Unknown`, not `Refuted`.
 
 ### A2. `query` never uses the backward engine
 
@@ -95,10 +94,12 @@ defect as A1, with no depth or negation subtlety: `?- num(X).` over
 `base(a). num(succ(X)) :- base(X).` returns "no answers" rather than "no
 answers, or answers I did not look for".
 
-**What removes it.** For a goal whose predicate has `backward_only` rules, drive
-SLD over the finite candidate bindings of the non-`backward_only` arguments and
-collect solutions; return `Unknown` rather than `Refuted` if the goal is not
-ground.
+**What removed the unsound half.** An empty answer set is `Refuted` only when
+no `backward_only` rule exists for the goal's predicate; otherwise the answer
+is `Unknown` with the completed forward closure still attached
+(`src/solver_bwd.rs`, `tests/soundness.rs::query_with_backward_rules_and_no_answers_is_unknown`).
+Driving SLD over candidate bindings to *collect* backward answers (rather than
+merely refusing `Refuted`) is still future work.
 
 ### A3. `Solver::verify` ignores the saturation certificate
 
@@ -114,9 +115,9 @@ The claim "every definite answer carries a machine-checkable proof" is therefore
 true for `Proved` and false, as written, for `Refuted`. The proof object is
 there; the check is not wired up.
 
-**What removes it.** A branch in `Solver::verify` that dispatches on
-`proof.saturation`: when it is `Some`, recompute and compare instead of calling
-`atom_ok`. About fifteen lines.
+**What removed it.** `Solver::verify` dispatches on `proof.saturation`: when
+present it recomputes the closure from scratch and compares fingerprints
+(`check::verify_saturation`). About fifteen lines, as predicted.
 
 ### A4. `first_bound` can index on the wrong argument
 
@@ -153,30 +154,17 @@ Note the direction of the error: an empty bucket yields zero candidates, so this
 one-line fix is to make `first_bound` only ever look at argument 0; the general
 fix is the same second index level discussed in DD-0006.
 
-### A5. `Status::Unknown` and `Status::Impossible` are never constructed
+### A5. `Status::Unknown` is now constructed; `Status::Impossible` is reserved
 
-Both variants exist and are documented (`src/status.rs:32-40`), and
-`is_inconclusive` / `requires_proof` are tested against them
-(`src/check.rs:337-343`). Grepping every construction site in `src/` and
-`tests/`: the only statuses any solver path produces are `Proved`, `Refuted`,
-``Found`, and `Exhausted`.
-
-This contradicts three written claims:
-
-* `src/lib.rs:41-44` — "outside it, it returns `Unknown` or `Exhausted` rather
-  than guessing". It never returns `Unknown`.
-* `docs/ARCHITECTURE.md:159-162` — same claim.
-* `src/solver_bwd.rs:22-24` — "`prove` therefore returns `Unknown` rather than
-  pretending, when only backward search could apply and the ground restriction
-  bites". It returns `Refuted`; see A1.
-
-Either the claims are wrong or the engine is. **A1 is the fix that makes the
-claims true.** Until then, treat the prose as aspirational.
-
-Related: `Exhausted::Depth` (`src/status.rs:88`) is also never constructed. The
-SLD depth bound returns `Ok(false)` (`src/solver_bwd.rs:57-59`), which is what
-feeds the unsound `Refuted` in A1(iii) — the engine has a status for exactly
-this situation and does not use it.
+`Status::Unknown` is returned whenever backward resolution declines
+(`SldOutcome::Declined`), for foreign-store goals (`Exhausted::Malformed`),
+and for queries whose predicate has unexamined `backward_only` rules — so the
+prose in `src/lib.rs:41-44`, `docs/ARCHITECTURE.md:159-162` and
+`src/solver_bwd.rs:22-24` is true, not aspirational. `Exhausted::Depth` is
+constructed for depth declines. `Status::Impossible` remains unconstructed by
+design: it becomes reachable with constraint propagators (ROADMAP II3), where
+a pruned-everything domain carries the same certificate discipline as
+`Refuted`.
 
 ### A6. `saturate_naive` returns a wrong least model
 

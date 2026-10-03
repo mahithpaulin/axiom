@@ -143,6 +143,110 @@ fn refutation_requires_a_closure_certificate() {
         .expect("a negative answer needs a closure certificate");
     assert!(sat.idb_facts > 0);
     assert!(!s.db.contains(goal), "refuted atom must be absent");
+    // The negative certificate must check out by recomputation (A3): a
+    // `Refuted` whose proof does not verify is an unbacked claim.
+    assert!(
+        s.verify(&proof).is_ok(),
+        "refutation certificate must verify"
+    );
+}
+
+/// KNOWN_LIMITATIONS A1(i): negation inside a `backward_only` rule body.
+/// Saturation skips the rule; backward resolution declines the negated
+/// literal. The goal is in the model, and the engine must answer `Unknown`,
+/// never `Refuted`.
+#[test]
+fn refutation_is_never_unearned_negation_in_backward_rule() {
+    let src = "base(a).\np(f(X)) :- base(X), not q(X).\n?- p(f(a)).\n";
+    let parsed = exterior::parse(src).unwrap();
+    assert!(
+        parsed.program.rules.iter().any(|r| r.backward_only),
+        "fixture must exercise the backward-only path"
+    );
+    let goal = parsed.queries[0];
+    let mut s = Solver::new(parsed.program);
+    let mut b = Budget::unlimited();
+    let out = s.prove(goal, &mut b);
+    assert_eq!(
+        out.status,
+        Status::Unknown,
+        "an unexamined rule must not yield Refuted, got {:?}",
+        out.status
+    );
+    assert!(out.proof.is_none());
+}
+
+/// KNOWN_LIMITATIONS A1(ii): a non-ground subgoal inside a `backward_only`
+/// rule body. Same contract as (i).
+#[test]
+fn refutation_is_never_unearned_nonground_subgoal() {
+    let src = "base(a).\nholds(a, b).\np(f(X)) :- base(X), holds(X, _).\n?- p(f(a)).\n";
+    let parsed = exterior::parse(src).unwrap();
+    assert!(
+        parsed.program.rules.iter().any(|r| r.backward_only),
+        "fixture must exercise the backward-only path"
+    );
+    let goal = parsed.queries[0];
+    let mut s = Solver::new(parsed.program);
+    let mut b = Budget::unlimited();
+    let out = s.prove(goal, &mut b);
+    assert_eq!(
+        out.status,
+        Status::Unknown,
+        "an unexamined rule must not yield Refuted, got {:?}",
+        out.status
+    );
+    assert!(out.proof.is_none());
+}
+
+/// KNOWN_LIMITATIONS A1(iii): a `backward_only` chain longer than the depth
+/// bound (64). Resolution declines at the bound; the answer is `Unknown`.
+#[test]
+fn refutation_is_never_unearned_beyond_depth_bound() {
+    let mut chain = String::from("f(w)");
+    for _ in 0..69 {
+        chain = format!("f({chain})");
+    }
+    let src = format!("link(z, w).\nlink(X, f(Y)) :- link(X, Y).\n?- link(z, {chain}).\n");
+    let parsed = exterior::parse(&src).unwrap();
+    let goal = parsed.queries[0];
+    let mut s = Solver::new(parsed.program);
+    let mut b = Budget::unlimited();
+    let out = s.prove(goal, &mut b);
+    assert_eq!(
+        out.status,
+        Status::Unknown,
+        "a depth-declined search must not yield Refuted, got {:?}",
+        out.status
+    );
+    assert!(out.proof.is_none());
+}
+
+/// KNOWN_LIMITATIONS A2: a query over a predicate with `backward_only` rules
+/// and no answers is `Unknown`, not `Refuted` — saturation never looked.
+#[test]
+fn query_with_backward_rules_and_no_answers_is_unknown() {
+    let src = "base(a).\nnum(succ(X)) :- base(X).\n?- num(Y).\n";
+    let parsed = exterior::parse(src).unwrap();
+    assert!(
+        parsed.program.rules.iter().any(|r| r.backward_only),
+        "fixture must exercise the backward-only path"
+    );
+    let goal = parsed.queries[0];
+    let mut s = Solver::new(parsed.program);
+    let mut b = Budget::unlimited();
+    let out = s.query(goal, &mut b);
+    assert_eq!(
+        out.status,
+        Status::Unknown,
+        "unexamined rules must not yield Refuted, got {:?}",
+        out.status
+    );
+    assert!(out.answers.is_empty());
+    assert!(
+        out.saturation.is_some(),
+        "the completed forward closure still travels with the answer"
+    );
 }
 
 #[test]

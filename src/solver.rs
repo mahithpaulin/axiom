@@ -254,7 +254,17 @@ impl Solver {
     // ---- checking ---------------------------------------------------------
 
     /// Strong check: re-derive the goal from program facts and rules alone.
+    ///
+    /// A proof carrying a saturation certificate (a `Refuted` outcome) is
+    /// checked by recomputing the closure from scratch and comparing
+    /// fingerprints (KNOWN_LIMITATIONS A3). Recomputation is a full re-solve,
+    /// so verification costs a bounded multiple of solve time, not a constant.
     pub fn verify(&self, proof: &Proof) -> Result<(), CheckErr> {
+        if let Some(recorded) = &proof.saturation {
+            let recomputed = recompute_saturation(&self.prog)
+                .map_err(|_| CheckErr::Unsupported { atom: proof.goal })?;
+            return check::verify_saturation(recorded, &recomputed);
+        }
         check::verify(&self.prog, &self.db, &self.derivs, &self.deriv_of, proof)
     }
 
