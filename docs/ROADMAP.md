@@ -582,21 +582,24 @@ Was detected by `tests/soundness.rs::no_bindings_survive_saturation`
 (`#[ignore]`d). A head really was coming out unresolved: the second and later
 solutions per seed above. Same fix as I5; the canary reads 0 now.
 
-### I7 — `proof.root` and `proof.steps` are never validated
+### I7 — `proof.root` and `proof.steps` are never validated — FIXED
 
-`check::verify` inspects only `proof.goal`. A proof whose root points at an
-unrelated derivation, or whose SLD resolution trace is wrong, is currently
-accepted. `CheckErr::GoalMismatch` is dead code for this reason. Consequence:
-every `Proved` produced by the backward-resolution path carries a proof that
-verification rejects (`Unsupported`), because the goal is by construction absent
-from the fact database. Implement step checking and cross-check `root.concl ==
-goal`.
+`check::verify` used to inspect only `proof.goal`, so a proof whose root
+pointed at an unrelated derivation, or whose SLD trace was wrong, was
+accepted, and `CheckErr::GoalMismatch` was dead code. Now: a present `root`
+must conclude exactly the goal (`GoalMismatch` otherwise), and a resolution
+trace replays step by step — each step's instantiation must reproduce its
+conclusion and goal from the rule, and every positive premise must already
+hold in the database or an earlier step (children-first order), with indexed
+lookup where possible. Locked by `deep_backward_proof_with_fresh_variables_per_step`
+(backward proofs verify) and `a_tampered_backward_proof_is_rejected`.
 
-### I8 — The parser is recursive and the depth cap is a magic number
+### I8 — The parser is recursive and the depth cap is a magic number — FIXED
 
-`Parser::term` recurses. At depth 3000 it overflowed the 2 MiB stack libtest
-gives each thread. `Limits::clamped` caps depth at 4096 because
-`TermStore::rename` truncates beyond that; the cap should instead be derived
-from available stack. `tests/robustness.rs::deep_terms_are_bounded_by_the_parser_not_the_stack`
-runs on a 32 MiB thread and passes, so the *core* traversals are iterative — it
-is the parser that is bounded, not the engine.
+`Parser::term` recursed. Now `Parser::atom` parses over an explicit frame
+stack: depth costs heap frames, not native stack, so a 3000-deep term parses
+on any thread size (the depth test keeps its 32 MiB thread and passes with
+headroom to spare). Limits, positions and every error message are unchanged —
+the rewrite parses left-to-right exactly like the recursion it replaced. The
+4096 clamp stays, still owned by `TermStore::rename`'s truncation, not by the
+stack.

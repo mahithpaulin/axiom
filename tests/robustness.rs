@@ -207,18 +207,13 @@ fn very_wide_atoms_do_not_exhaust_memory_or_stack() {
 
 #[test]
 fn deep_terms_are_bounded_by_the_parser_not_the_stack() {
-    // Findings, recorded rather than papered over:
+    // The parser is iterative over an explicit frame stack (ROADMAP I8), so
+    // depth costs heap, not native stack: this passes on any thread size.
+    // `Limits::clamped` still caps depth at 4096, because `TermStore::rename`
+    // truncates beyond that.
     //
-    //  * `Limits::clamped` caps depth at 4096, because `TermStore::rename`
-    //    truncates beyond that.
-    //  * The PARSER is recursive (`Parser::term`). At depth 3000 it overflowed
-    //    the 2 MiB stack that libtest gives each test thread. The main thread
-    //    has 8 MiB, so this is partly a harness artifact -- but it is a real
-    //    limit and the parser's depth cap should be derived from stack size
-    //    rather than fixed. Tracked in docs/ROADMAP.md.
-    //
-    // Run on an explicitly enlarged thread so the test measures the engine's
-    // traversal rather than libtest's default stack.
+    // Run on an explicitly enlarged thread anyway, so the test also measures
+    // the engine's traversal rather than libtest's default stack.
     let h = std::thread::Builder::new()
         .stack_size(32 << 20)
         .spawn(|| {

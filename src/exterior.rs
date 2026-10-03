@@ -279,59 +279,16 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// A term: an identifier, an integer, or a compound `f(args)`.
-    fn term(&mut self, depth: usize) -> Result<TermId, ParseError> {
-        if depth > self.limits.max_depth {
-            return self.err("nesting depth limit exceeded");
-        }
-        match self.toks.get(self.pos).map(|s| s.tok.clone()) {
-            Some(Tok::Number(n)) => {
-                self.pos += 1;
-                let s = self
-                    .b
-                    .symbols
-                    .intern(&n.to_string(), 0, crate::symbol::SK_CONST);
-                Ok(self.b.store.constant(s))
-            }
-            Some(Tok::Ident(name)) => {
-                self.pos += 1;
-                if self.peek() == Some(&Tok::LParen) {
-                    self.pos += 1;
-                    let mut args = Vec::new();
-                    if self.peek() != Some(&Tok::RParen) {
-                        loop {
-                            args.push(self.term(depth + 1)?);
-                            if args.len() > self.limits.max_arity {
-                                return self.err("arity limit exceeded");
-                            }
-                            if !self.eat(&Tok::Comma) {
-                                break;
-                            }
-                        }
-                    }
-                    self.expect(&Tok::RParen, "')'")?;
-                    if args.is_empty() {
-                        return self.err("a compound term needs at least one argument");
-                    }
-                    let sym = self.b.symbols.func(&name, args.len() as u16);
-                    Ok(self.b.store.func(sym, &args))
-                } else if is_variable(&name) {
-                    Ok(self.b.var(&name))
-                } else {
-                    let sym = self.b.symbols.constant(&name);
-                    Ok(self.b.store.constant(sym))
-                }
-            }
-            _ => self.err("expected a term"),
-        }
-    }
-
     /// A predicate atom: `p` or `p(a, b)`. Variables are permitted only where a
     /// term would be, and the parser does not distinguish them here.
-    fn atom(&mut self, depth: usize) -> Result<TermId, ParseError> {
-        if depth > self.limits.max_depth {
-            return self.err("nesting depth limit exceeded");
-        }
+    ///
+    /// Iterative over an explicit frame stack: term depth is input-controlled
+    /// (up to `max_depth`, clamped at 4096), and a recursive descent would put
+    /// every nesting level on the native stack — at ~700 B a frame, 4096 levels
+    /// overflow even the 8 MiB main thread, let alone libtest's 2 MiB workers.
+    /// The loop below parses left-to-right exactly like the recursion it
+    /// replaced, with identical limits and identical error messages.
+    fn atom(&mut self, _depth: usize) -> Result<TermId, ParseError> {
         let name = self.ident()?;
         // Delegating to `Builder::atom` matters: it is what sizes the
         // per-predicate stratum vectors. Building the atom inline here skipped
@@ -339,21 +296,95 @@ impl<'a> Parser<'a> {
         if !self.eat(&Tok::LParen) {
             return Ok(self.b.nullary(&name));
         }
-        let mut args = Vec::new();
-        if self.peek() != Some(&Tok::RParen) {
-            loop {
-                args.push(self.term(depth + 1)?);
-                if args.len() > self.limits.max_arity {
-                    return self.err("arity limit exceeded");
-                }
-                if !self.eat(&Tok::Comma) {
-                    break;
-                }
-            }
+        struct Frame {
+            name: String,
+            args: Vec<TermId>,
+            is_atom: bool,
         }
-        self.expect(&Tok::RParen, "')'")?;
-        let arity = args.len() as u16;
-        Ok(self.b.atom(&name, arity, &args))
+        let mut stack = vec![Frame {
+            name,
+            args: Vec::new(),
+            is_atom: true,
+        }];
+        // `p()` is a nullary-arity atom; a nested `f()` is an error, exactly
+        // as the old `term()` reported it.
+        if self.peek() == Some(&Tok::RParen) {
+            self.pos += 1;
+            let f = stack.pop().expect("just pushed");
+            let arity = f.args.len() as u16;
+            return Ok(self.b.atom(&f.name, arity, &f.args));
+        }
+        // `pending` holds a completed value awaiting placement in the top
+        // frame; `expect_value` mirrors the old per-level loop (after a comma
+        // a `)` is "expected a term", not an empty list).
+        let mut pending: Option<TermId> = None;
+        let mut expect_value = true;
+        loop {
+            if pending.is_none() && expect_value {
+                if stack.len() > self.limits.max_depth {
+                    return self.err("nesting depth limit exceeded");
+                }
+                match self.toks.get(self.pos).map(|s| s.tok.clone()) {
+                    Some(Tok::Number(n)) => {
+                        self.pos += 1;
+                        let s = self
+                            .b
+                            .symbols
+                            .intern(&n.to_string(), 0, crate::symbol::SK_CONST);
+                        pending = Some(self.b.store.constant(s));
+                    }
+                    Some(Tok::Ident(nm)) => {
+                        self.pos += 1;
+                        if self.peek() == Some(&Tok::LParen) {
+                            self.pos += 1;
+                            stack.push(Frame {
+                                name: nm,
+                                args: Vec::new(),
+                                is_atom: false,
+                            });
+                            continue;
+                        } else if is_variable(&nm) {
+                            pending = Some(self.b.var(&nm));
+                        } else {
+                            let sym = self.b.symbols.constant(&nm);
+                            pending = Some(self.b.store.constant(sym));
+                        }
+                    }
+                    _ => return self.err("expected a term"),
+                }
+                expect_value = false;
+            }
+            let v = pending.take().expect("parser holds a value here");
+            stack
+                .last_mut()
+                .expect("a frame is open while placing")
+                .args
+                .push(v);
+            if stack.last().expect("just pushed").args.len() > self.limits.max_arity {
+                return self.err("arity limit exceeded");
+            }
+            if self.eat(&Tok::Comma) {
+                expect_value = true;
+                continue;
+            }
+            self.expect(&Tok::RParen, "')'")?;
+            let f = stack.pop().expect("a frame is open while closing");
+            let node = if f.is_atom {
+                let arity = f.args.len() as u16;
+                self.b.atom(&f.name, arity, &f.args)
+            } else {
+                if f.args.is_empty() {
+                    return self.err("a compound term needs at least one argument");
+                }
+                let sym = self.b.symbols.func(&f.name, f.args.len() as u16);
+                self.b.store.func(sym, &f.args)
+            };
+            if stack.is_empty() {
+                return Ok(node);
+            }
+            pending = Some(node);
+            expect_value = false;
+        }
     }
 
     fn body(&mut self) -> Result<Vec<Literal>, ParseError> {
