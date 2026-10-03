@@ -100,11 +100,15 @@ cargo bench --bench kernel -- diag      # scaling probe with work counters
 
 CPU-first, single-threaded, no GPU path. 16 bytes per term node; a term is a
 `u32`; duplicate interning allocates nothing (asserted, not claimed). Measured:
-a first-argument index examines **495.8× fewer tuples** than a scan.
+a first-argument index examines **495.8× fewer tuples** than a scan (the second
+level measures the same on argument 1); transitive-closure join cost fits slope
+**2.00** over n ∈ {100, 200, 400, 800} with zero unbound scans (was 3.0 with
+256M unbound at n=800), 0.41 s for 321,200 facts.
 
-Known-bad: `candidates ≈ 0.5·n³` where `0.5·n²` is correct (`ROADMAP I1`), and
-~248 bytes of memory per derived fact against ~19 B of IR payload — which is why
-`ProofMode` exists and defaults to recording everything.
+Memory is the price: ~324 bytes of RSS per derived fact against ~20 B of IR
+payload with proofs on — the second index level cost ~76 B/fact for a 95×
+speedup — and ~197 B/fact with `ProofMode::Off`, which reports `Found` rather
+than `Proved` because it records nothing to check.
 
 ## Licence
 

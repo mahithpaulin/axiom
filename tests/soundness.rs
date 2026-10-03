@@ -300,6 +300,44 @@ fn an_exhausted_search_is_never_reported_as_refuted() {
     );
 }
 
+/// ROADMAP I1 regression: transitive-closure join cost must scale ~n², not
+/// n³. Fits log(candidates) against log(n) over three sizes; the slope is the
+/// scaling law itself and, being a ratio of deterministic counters, does not
+/// depend on machine speed. The second index level moved it 3.0 → 2.0.
+#[test]
+fn transitive_closure_scales_quadratically_not_cubically() {
+    fn candidates_for(n: usize) -> f64 {
+        let mut src = String::new();
+        for i in 0..n {
+            src.push_str(&format!("edge(n{i},n{}).\n", i + 1));
+        }
+        src.push_str("path(X,Y) :- edge(X,Y).\npath(X,Z) :- path(X,Y), edge(Y,Z).\n");
+        let parsed = exterior::parse(&src).unwrap();
+        let mut s = Solver::new(parsed.program);
+        let mut b = Budget::steps(500_000_000);
+        let sat = s.saturate(&mut b).expect("within budget");
+        assert_eq!(sat.idb_facts, (n * (n + 1) / 2 + n) as u64);
+        s.stats.candidates as f64
+    }
+    let ns = [100usize, 200, 400];
+    let cs: Vec<f64> = ns.iter().map(|&n| candidates_for(n)).collect();
+    let (lx, lc): (Vec<f64>, Vec<f64>) = (
+        ns.iter().map(|&n| (n as f64).ln()).collect(),
+        cs.iter().map(|&c| c.ln()).collect(),
+    );
+    let (mx, mc) = (lx.iter().sum::<f64>() / 3.0, lc.iter().sum::<f64>() / 3.0);
+    let slope: f64 = lx
+        .iter()
+        .zip(lc.iter())
+        .map(|(x, y)| (x - mx) * (y - mc))
+        .sum::<f64>()
+        / lx.iter().map(|x| (x - mx) * (x - mx)).sum::<f64>();
+    assert!(
+        (1.5..2.5).contains(&slope),
+        "join scaling slope = {slope:.2}, expected ~2.0 (ROADMAP I1)"
+    );
+}
+
 // ---- 3. no leaked state ---------------------------------------------------
 
 /// ROADMAP I2: the naive baseline must compute the same least model as

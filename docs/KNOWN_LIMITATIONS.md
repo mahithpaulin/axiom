@@ -440,15 +440,16 @@ through it.
 
 ## C. Performance and memory
 
-### C1. Transitive closure examines `≈ 0.5·n³` candidates where `0.5·n²` is correct
+### C1. Transitive closure examined `≈ 0.5·n³` candidates — FIXED, now `0.5·n²`
 
-**The measurement.** On a path graph with `n` nodes, `candidates` grows as
-approximately **`0.5 · n³`**. The correct figure is **`0.5 · n²`** — the number
-of `path` tuples the closure contains. (`idb_facts` additionally counts the `n`
-`edge` facts, because a fact-only predicate is IDB; DD-0017. The expected total
-is `n(n+1)/2 + n`.) At **n = 800**, instrumentation counted approximately
-**292 million UNBOUND (non-indexed) scans**, while bound index lookups were a
-healthy **427 thousand**. Reproduce with:
+**The measurement.** Post-fix `diag`: candidates 9,900 / 39,800 / 159,600 /
+639,200 for n ∈ {100, 200, 400, 800} (slope 2.00), zero unbound scans, exact
+closures in 2 rounds, 0.41 s at n=800 (was 38.7 s). The pre-fix figures below
+are kept as the record of what was wrong. (`idb_facts` additionally counts the
+`n` `edge` facts, because a fact-only predicate is IDB; DD-0017. The expected
+total is `n(n+1)/2 + n`.) Pre-fix at **n = 800**: approximately **292 million
+UNBOUND (non-indexed) scans** against **427 thousand** bound lookups.
+Reproduce either era with:
 
 ```sh
 cargo bench --bench kernel -- diag
@@ -496,15 +497,15 @@ Selectivity-ordered seeding or magic sets would address the same shape more
 generally and remain future work; dropping the edge-seeded firing outright
 would be unsound (new edge facts must propagate).
 
-### C2. ~248 bytes per derived fact, of which ~19 is IR payload
+### C2. ~324 bytes per derived fact, of which ~20 is IR payload
 
-**The measurement.** A closure of 12.5 M facts cost 3.1 GB RSS — about **248 B
-per fact** against roughly **19 B of IR payload** (DD-0014; the harness comment
-at `benches/kernel.rs:422` records the same figure). The attribution benchmark
-prints `rss`, `store`, `db_indexes`, `deriv_records` and the per-fact ratios for
-`ProofMode::Full` and `ProofMode::Off` (`benches/kernel.rs:427-476`) — but note
-A7: its RSS column is read after the solver is dropped, so only the `store` and
-`db_indexes` columns are trustworthy as written.
+**The measurement.** Post-second-index CI bench (`memory`, n=1000 path graph,
+501,500 facts): **324 B/fact** RSS with proofs on (store 20 + db+deriv 89 +
+allocator overhead/residency), **197 B/fact** with `ProofMode::Off`. Pre-index
+the figures were 248 / ~19 (DD-0014): the second level cost ~76 B/fact for a
+95× speedup. The attribution benchmark prints `rss`, `store`, `db_indexes`,
+`deriv_records` and the per-fact ratios for both modes; its RSS column now
+reads the process high-water mark (I3), so it no longer understates.
 
 **Why.** Every derived fact records a `Derivation` holding two `Vec`s, each a
 separate heap block (`src/proof.rs:17-29`). Proof logging is not a tax on the
@@ -562,13 +563,13 @@ unindexed; the trigger for a third level is in `docs/ROADMAP.md` with DD-0006.
 
 | # | Item | Class | Wrong answers possible? | Fix cost |
 |---|---|---|---|---|
-| A1 | `prove` returns unsound `Refuted` | correctness | **yes** | small (stopgap) / medium (real fix) |
-| A2 | `query` ignores the backward engine | correctness | **yes** | medium |
-| A3 | `verify` ignores the saturation certificate | correctness | no, but weakens a stated guarantee | very small |
-| A4 | `first_bound` can index on the wrong argument | correctness | **yes** (lost derivations) | very small |
-| A5 | `Unknown` / `Impossible` never constructed | correctness | contradicts three written claims | small |
-| A6 | `saturate_naive` derives 1 200 of 180 900 facts | correctness | **yes**, for benchmark figures only | small |
-| A7 | two benchmarks measure nothing; RSS understated | measurement | no | small |
+| A1 | unsound `Refuted` (FIXED via decline/`Unknown`) | correctness | **was yes** | done |
+| A2 | `query` ignores the backward engine (FIXED stopgap: `Unknown`) | correctness | **was yes** | done (collection future) |
+| A3 | `verify` ignores the saturation certificate (FIXED) | correctness | weakened a guarantee | done |
+| A4 | wrong-argument index key (FIXED by position-tagged keys) | correctness | **was yes** | done |
+| A5 | `Unknown` never constructed (now constructed; `Impossible` reserved) | correctness | claims now true | done |
+| A6 | `saturate_naive` wrong model (FIXED: stale cursors) | correctness | **was yes**, benchmarks only | done |
+| A7 | benchmarks measure nothing (FIXED) | measurement | no | done |
 | A8 | raised `Limits` corrupt terms silently | correctness | yes, if limits are raised | small |
 | A9 | SLD reused cached renamings across recursion (FIXED) | correctness | **yes**, both directions | small |
 | B1 | stratified Datalog only | scope | no | large |
@@ -579,8 +580,8 @@ unindexed; the trigger for a third level is in `docs/ROADMAP.md` with DD-0006.
 | B6 | no negation in backward mode | scope | contributes to A1 | large |
 | B7 | no SAT/SMT/CP/search/portfolio/neural | scope | no | large |
 | B8 | no IR serialisation | scope | no | medium |
-| C1 | `candidates ≈ 0.5·n³` vs `0.5·n²` | performance | no | unknown — cause unestablished |
-| C2 | 248 B/fact vs 19 B payload | memory | no | medium, or use `ProofMode::Off` |
+| C1 | join scaled n³ (FIXED: second index, slope 2.00, 0 unbound) | performance | no | done |
+| C2 | 324 B/fact vs 20 B payload (was 248; +76 for the 95× speedup) | memory | no | medium, or use `ProofMode::Off` (197) |
 | C3 | least selective seed dominates | performance | no | large |
 | C4 | no `resolve` memoisation | performance | no | small, needs a measurement |
-| C5 | one index level | performance | no | small, trigger recorded |
+| C5 | two index levels (positions 0 and 1) | performance | no | done; trigger for 3rd recorded |

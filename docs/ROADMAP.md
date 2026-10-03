@@ -17,7 +17,15 @@ would produce numbers nobody could interpret.
 
 ## IMMEDIATE
 
-### I1. Find and fix the unbound-scan root cause — top engineering priority
+### I1. Find and fix the unbound-scan root cause — FIXED (second index level)
+
+**Verified.** `diag` post-fix: candidates 9,900 / 39,800 / 159,600 / 639,200
+for n ∈ {100, 200, 400, 800} — ratios 4.02× per doubling, slope 2.00 — with
+unbound scans at **zero** at every size (was 51B offered unbound at n=800).
+`derivations` and `rounds` unchanged (2 rounds, exact closures). Random graph
+(`tc_random_n1500`) completes in ~15 s in the CI bench. Locked by
+`tests/soundness.rs::transitive_closure_scales_quadratically_not_cubically`,
+which fits the slope over three sizes and asserts 1.5 < slope < 2.5.
 
 **The problem.** On a path graph, `candidates` grows as `≈ 0.5·n³` where
 `0.5·n²` is correct. At n = 800, instrumentation counted ≈ 2.92 × 10⁸ UNBOUND
@@ -511,9 +519,9 @@ Stated so they are not mistaken for gaps someone forgot to schedule.
 
 ## Open defects, numbered as referenced by the test suite
 
-These were `#[ignore]`d or failing tests, not hypotheticals. I2, I5 and I6
+These were `#[ignore]`d or failing tests, not hypotheticals. I1, I2, I5 and I6
 are fixed (root cause and fix recorded below); the suite is green with no
-exclusions. I1, I7, I8 remain open. I3's measurement defects are fixed; I4
+exclusions. I7, I8 remain open. I3's measurement defects are fixed; I4
 (compiling the suites + CI) is done.
 
 ### I1 — Unbound scans dominate the join (highest priority)
