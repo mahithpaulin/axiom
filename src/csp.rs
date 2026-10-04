@@ -175,9 +175,8 @@ impl Trail {
         while self.entries.len() > mark {
             let (v, val) = self.entries.pop().expect("mark is within the trail");
             let d = &mut domains[v as usize];
-            match d.binary_search(&val) {
-                Err(pos) => d.insert(pos, val),
-                Ok(_) => {}
+            if let Err(pos) = d.binary_search(&val) {
+                d.insert(pos, val);
             }
         }
     }
