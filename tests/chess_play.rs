@@ -41,7 +41,7 @@ fn stalemate_and_material_draws_detected() {
 
 #[test]
 fn fifty_and_ply_cap_end_games_honestly() {
-    let old = Position::from_fen("8/8/8/4k3/8/4K3/8/8 w - - 100 90").unwrap();
+    let old = Position::from_fen("8/8/8/4k3/8/4KR2/8/8 w - - 100 90").unwrap();
     let mut budget = Budget::steps(1_000_000);
     let game = play_game(&old, 1, 1, 200, &mut budget).expect("within budget");
     assert_eq!(game.end, axiom::chess_play::GameEnd::DrawFifty);
@@ -53,9 +53,11 @@ fn fifty_and_ply_cap_end_games_honestly() {
 
 #[test]
 fn threefold_counter_counts_occurrences() {
+    // History holds past hashes; reaching `hash` again when it is already
+    // there twice is the third occurrence.
     assert!(!threefold_reached(&[7, 9], 7));
-    assert!(!threefold_reached(&[7, 9, 7], 7));
     assert!(!threefold_reached(&[7, 9, 7], 9));
+    assert!(threefold_reached(&[7, 9, 7], 7));
     assert!(threefold_reached(&[7, 9, 7, 9, 7], 7));
 }
 
