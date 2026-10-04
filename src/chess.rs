@@ -555,16 +555,17 @@ pub fn move_to_string(m: Move) -> String {
     ) + promo
 }
 
-/// Perft: leaf nodes at `depth` (depth 0 counts 1). Bulk counting is omitted
-/// deliberately — clarity first, per V2's capability-before-speed rule.
+/// Perft: leaf nodes at `depth` (depth 0 counts 1). Bulk counting at the
+/// fringe (depth 1 counts moves, not positions) halves the make/unmake work.
 pub fn perft(pos: &Position, depth: u32) -> u64 {
     if depth == 0 {
         return 1;
     }
-    pos.legal_moves()
-        .iter()
-        .map(|m| perft(&pos.make(*m), depth - 1))
-        .sum()
+    let moves = pos.legal_moves();
+    if depth == 1 {
+        return moves.len() as u64;
+    }
+    moves.iter().map(|m| perft(&pos.make(*m), depth - 1)).sum()
 }
 
 /// Mate in one, if any legal move checkmates.
