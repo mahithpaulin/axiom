@@ -332,3 +332,38 @@ fn word_model_rejects_bad_input() {
     assert!(m.quantity("empty", 5, 4).is_err());
     assert!(m.sum_le(&[("ghost", 1)], 3).is_err());
 }
+
+#[test]
+fn chess_perft_startpos() {
+    use axiom::{perft, Position};
+    let start = Position::startpos();
+    assert_eq!(perft(&start, 1), 20);
+    assert_eq!(perft(&start, 2), 400);
+    assert_eq!(perft(&start, 3), 8902);
+}
+
+#[test]
+fn chess_back_rank_mate_in_one() {
+    use axiom::{find_mate_in_one, move_to_string, Position};
+    let pos = Position::from_fen("6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1").unwrap();
+    assert!(!pos.is_checkmate());
+    let m = find_mate_in_one(&pos).expect("Re8 is mate");
+    assert_eq!(move_to_string(m), "e1e8");
+    assert!(pos.make(m).is_checkmate());
+    assert!(Position::startpos().legal_moves().len() == 20);
+    assert!(find_mate_in_one(&Position::startpos()).is_none());
+    assert!(Position::from_fen("nonsense").is_err());
+}
+
+#[test]
+fn chess_endgame_tree_plays_mate() {
+    use axiom::{alpha_beta, chess::MATE_SCORE, endgame_tree, Position};
+    let pos = Position::from_fen("6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1").unwrap();
+    let mut budget = Budget::steps(1_000_000);
+    let tree = endgame_tree(&pos, 2, &mut budget).expect("within budget");
+    let mut budget = Budget::steps(1_000_000);
+    let out = alpha_beta(&tree, 0, &mut budget).expect("within budget");
+    assert_eq!(out.status, Status::Found);
+    assert_eq!(out.value, MATE_SCORE);
+    assert!(axiom::verify_line(&tree, &out.line, out.value));
+}

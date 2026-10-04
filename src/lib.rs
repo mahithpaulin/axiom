@@ -18,6 +18,7 @@
 //! | Module | Role |
 //! |---|---|
 //! | [`bench`] | measurement harness: timing, allocation counting, seeded RNG |
+//! | [`chess`] | chess: legal movegen, FEN, perft, mate search, tree export |
 //! | [`csp`] | finite-domain puzzles: propagation with explanations |
 //! | [`state`] | state-transition systems: plans, BMC lowering |
 //! | [`search`] | explicit graphs and game trees: A*, IDA*, alpha-beta |
@@ -87,6 +88,7 @@
 pub mod bench;
 pub mod budget;
 pub mod check;
+pub mod chess;
 pub mod csp;
 pub mod db;
 pub mod exterior;
@@ -109,6 +111,7 @@ pub mod theory;
 pub mod word;
 
 pub use budget::Budget;
+pub use chess::{endgame_tree, find_mate_in_one, move_to_string, perft, Move, Position};
 pub use csp::{solve_csp, verify_csp, Constraint, CspOutcome, CspProblem, CspStats};
 pub use db::Db;
 pub use exterior::{Limits, ParseError};
