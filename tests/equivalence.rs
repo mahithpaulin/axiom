@@ -11,9 +11,9 @@ use axiom::csp::{solve_csp, verify_csp};
 use axiom::puzzle::nqueens;
 use axiom::sat::{verify_sat, SatOutcome, SatSolver};
 use axiom::search::{astar, verify_path, SearchGraph, SearchOutcome};
-use axiom::state::{bmc_clauses, stacking_3, StateGraph};
+use axiom::state::{bmc_clauses, StateGraph};
 use axiom::status::Exhausted;
-use axiom::{Budget, Status};
+use axiom::{stacking_3, Budget, Status};
 
 // ---- 1. Scan-reference A* vs the heap A* ----------------------------------
 
