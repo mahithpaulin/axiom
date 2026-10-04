@@ -24,10 +24,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: bench the branch
         run: |
+          set -o pipefail
           cd new
           cargo bench --bench v2perf 2>&1 | tee "$GITHUB_WORKSPACE/perf-new.txt"
       - name: bench the main baseline (same bench file, main code)
         run: |
+          set -o pipefail
           cd base
           cp ../new/benches/v2perf.rs benches/v2perf.rs
           printf '\n[[bench]]\nname = "v2perf"\nharness = false\n' >> Cargo.toml

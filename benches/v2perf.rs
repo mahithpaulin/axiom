@@ -52,7 +52,8 @@ fn main() {
     // 2b. Hard sudoku (AI Escargot): exercises propagation strength.
     b.run_once("csp_sudoku_hard", |_| {
         let t0 = std::time::Instant::now();
-        let src = "1....7.9..3..2...8..96..5....53..9...1..8...26....1...2..9..4....5....7..7...43";
+        let src =
+            "1....7.9..3..2...8..96..5....53..9...1..8...26....1...2..9..4....5....7..7...43..";
         let p = sudoku9(src).expect("81-cell puzzle");
         let mut budget = Budget::steps(5_000_000_000);
         let out = axiom::solve_csp(&p, &mut budget).expect("within budget");
