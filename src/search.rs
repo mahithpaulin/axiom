@@ -19,6 +19,8 @@
 use crate::budget::Budget;
 use crate::hash::FxHashMap;
 use crate::status::{Exhausted, Status};
+use std::cmp::Reverse;
+use std::collections::BinaryHeap;
 
 /// Explicit directed graph with non-negative edge costs and a heuristic
 /// estimate of the remaining cost to `goal` (use zeros for Dijkstra).
@@ -88,6 +90,11 @@ fn reconstruct(prev: &[Option<u32>], mut at: u32) -> Vec<u32> {
 /// A\* over an explicit graph. Optimal when the heuristic never overestimates
 /// and edge costs are non-negative. `Impossible` only when the open list is
 /// exhausted (the whole reachable set was expanded).
+///
+/// The open list is a binary heap keyed by `(f, node)` with lazy deletion:
+/// improved entries are pushed again and stale pops are skipped against
+/// `gscore`. Pop order — and therefore the expansion sequence, the counters,
+/// and the path — matches the naive scan exactly, deterministically.
 pub fn astar(
     g: &SearchGraph,
     start: u32,
@@ -102,13 +109,12 @@ pub fn astar(
     let mut prev: Vec<Option<u32>> = vec![None; n];
     let mut closed = vec![false; n];
     gscore[start as usize] = 0;
+    let mut open: BinaryHeap<Reverse<(i64, u32)>> = BinaryHeap::new();
+    open.push(Reverse((g.heuristic[start as usize], start)));
     let mut expanded = 0u64;
     loop {
         budget.charge(1)?;
-        let next = (0..n)
-            .filter(|s| !closed[*s] && gscore[*s] != i64::MAX)
-            .min_by_key(|s| (gscore[*s].saturating_add(g.heuristic[*s]), *s));
-        let Some(u) = next else {
+        let Some(Reverse((f, node))) = open.pop() else {
             return Ok(SearchOutcome {
                 status: Status::Impossible,
                 path: Vec::new(),
@@ -116,7 +122,11 @@ pub fn astar(
                 expanded,
             });
         };
-        if u as u32 == goal {
+        let u = node as usize;
+        if closed[u] || gscore[u].saturating_add(g.heuristic[u]) != f {
+            continue;
+        }
+        if node == goal {
             let path = reconstruct(&prev, goal);
             let outcome = SearchOutcome {
                 status: Status::Found,
@@ -136,7 +146,8 @@ pub fn astar(
             let nd = gscore[u].saturating_add(*cost);
             if nd < gscore[*to as usize] {
                 gscore[*to as usize] = nd;
-                prev[*to as usize] = Some(u as u32);
+                prev[*to as usize] = Some(node);
+                open.push(Reverse((nd.saturating_add(g.heuristic[*to as usize]), *to)));
             }
         }
     }
@@ -158,6 +169,17 @@ pub fn ida_star(
     let mut bound = g.heuristic[start as usize];
     let mut expanded = 0u64;
     let mut iterations = 0u64;
+    // Neighbor order is part of the deterministic expansion sequence; sort
+    // once here instead of cloning and sorting per visited node.
+    let sorted: Vec<Vec<(u32, i64)>> = g
+        .adj
+        .iter()
+        .map(|v| {
+            let mut w = v.clone();
+            w.sort_by_key(|(t, _)| *t);
+            w
+        })
+        .collect();
     loop {
         budget.charge(1)?;
         iterations += 1;
@@ -168,6 +190,7 @@ pub fn ida_star(
         visited[start as usize] = true;
         let found = dfs_bound(
             g,
+            &sorted,
             goal,
             bound,
             &mut path,
@@ -203,6 +226,7 @@ pub fn ida_star(
 #[allow(clippy::too_many_arguments)]
 fn dfs_bound(
     g: &SearchGraph,
+    sorted: &[Vec<(u32, i64)>],
     goal: u32,
     bound: i64,
     path: &mut Vec<u32>,
@@ -229,26 +253,24 @@ fn dfs_bound(
         return Ok(Some(costs.last().copied().unwrap_or(0)));
     }
     *expanded += 1;
-    let mut ordered = g.adj[at as usize].clone();
-    ordered.sort_by_key(|(t, _)| *t);
-    for (to, cost) in ordered {
-        if cost < 0 {
+    for (to, cost) in &sorted[at as usize] {
+        if *cost < 0 {
             return Err(Exhausted::Malformed);
         }
-        if visited[to as usize] {
+        if visited[*to as usize] {
             continue;
         }
-        visited[to as usize] = true;
-        path.push(to);
-        costs.push(costs.last().copied().unwrap_or(0).saturating_add(cost));
+        visited[*to as usize] = true;
+        path.push(*to);
+        costs.push(costs.last().copied().unwrap_or(0).saturating_add(*cost));
         if let Some(found) = dfs_bound(
-            g, goal, bound, path, costs, visited, next_bound, expanded, budget,
+            g, sorted, goal, bound, path, costs, visited, next_bound, expanded, budget,
         )? {
             return Ok(Some(found));
         }
         path.pop();
         costs.pop();
-        visited[to as usize] = false;
+        visited[*to as usize] = false;
     }
     Ok(None)
 }
@@ -316,8 +338,15 @@ pub fn alpha_beta(t: &GameTree, root: u32, budget: &mut Budget) -> Result<GameOu
     let mut table: FxHashMap<u32, (i64, Vec<u32>)> = FxHashMap::default();
     let mut stats = SearchStats::default();
     let mut line: Vec<u32> = Vec::new();
+    // Move order is part of the deterministic search; sort once here instead
+    // of cloning and sorting per visited node.
+    let mut order = t.children.clone();
+    for v in &mut order {
+        v.sort_unstable();
+    }
     let value = search_node(
         t,
+        &order,
         root,
         i64::MIN,
         i64::MAX,
@@ -351,6 +380,7 @@ struct SearchStats {
 #[allow(clippy::too_many_arguments)]
 fn search_node(
     t: &GameTree,
+    order: &[Vec<u32>],
     node: u32,
     mut alpha: i64,
     mut beta: i64,
@@ -369,19 +399,27 @@ fn search_node(
         pv.extend(line.iter().copied());
         return Ok(*v);
     }
-    if t.children[node as usize].is_empty() {
+    if order[node as usize].is_empty() {
         pv.push(node);
         return Ok(t.eval[node as usize]);
     }
-    let mut ordered = t.children[node as usize].clone();
-    ordered.sort_unstable();
     let mut best_line: Vec<u32> = Vec::new();
     if t.maximizing[node as usize] {
         let mut value = i64::MIN;
         let mut exact = true;
-        for child in ordered {
+        for child in &order[node as usize] {
             let mut child_line = Vec::new();
-            let got = search_node(t, child, alpha, beta, table, stats, &mut child_line, budget)?;
+            let got = search_node(
+                t,
+                order,
+                *child,
+                alpha,
+                beta,
+                table,
+                stats,
+                &mut child_line,
+                budget,
+            )?;
             if got > value {
                 value = got;
                 best_line.clear();
@@ -404,9 +442,19 @@ fn search_node(
     } else {
         let mut value = i64::MAX;
         let mut exact = true;
-        for child in ordered {
+        for child in &order[node as usize] {
             let mut child_line = Vec::new();
-            let got = search_node(t, child, alpha, beta, table, stats, &mut child_line, budget)?;
+            let got = search_node(
+                t,
+                order,
+                *child,
+                alpha,
+                beta,
+                table,
+                stats,
+                &mut child_line,
+                budget,
+            )?;
             if got < value {
                 value = got;
                 best_line.clear();

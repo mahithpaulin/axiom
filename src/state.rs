@@ -15,6 +15,8 @@
 
 use crate::budget::Budget;
 use crate::status::{Exhausted, Status};
+use std::cmp::Reverse;
+use std::collections::BinaryHeap;
 
 /// One directed, named, costed transition.
 #[derive(Clone, Debug)]
@@ -131,13 +133,14 @@ pub fn shortest_plan(g: &StateGraph, budget: &mut Budget) -> Result<PlanOutcome,
     let mut prev: Vec<Option<(u32, usize)>> = vec![None; n];
     let mut done = vec![false; n];
     dist[g.initial as usize] = 0;
+    // Binary heap with lazy deletion, same pop order as the naive scan:
+    // lowest (dist, state) first, stale entries skipped against `dist`.
+    let mut open: BinaryHeap<Reverse<(i64, u32)>> = BinaryHeap::new();
+    open.push(Reverse((0, g.initial)));
     let mut explored = 0u64;
     loop {
         budget.charge(1)?;
-        let next = (0..n)
-            .filter(|s| !done[*s] && dist[*s] != i64::MAX)
-            .min_by_key(|s| (dist[*s], *s));
-        let Some(u) = next else {
+        let Some(Reverse((d, u))) = open.pop() else {
             return Ok(PlanOutcome {
                 status: Status::Impossible,
                 plan: Vec::new(),
@@ -145,11 +148,15 @@ pub fn shortest_plan(g: &StateGraph, budget: &mut Budget) -> Result<PlanOutcome,
                 explored,
             });
         };
-        done[u] = true;
+        let ui = u as usize;
+        if done[ui] || dist[ui] != d {
+            continue;
+        }
+        done[ui] = true;
         explored += 1;
-        if g.goals.contains(&(u as u32)) {
+        if g.goals.contains(&u) {
             let mut steps: Vec<String> = Vec::new();
-            let mut at = u;
+            let mut at = ui;
             while let Some((from, ai)) = prev[at] {
                 steps.push(g.actions[ai].name.clone());
                 at = from as usize;
@@ -158,19 +165,20 @@ pub fn shortest_plan(g: &StateGraph, budget: &mut Budget) -> Result<PlanOutcome,
             let outcome = PlanOutcome {
                 status: Status::Found,
                 plan: steps,
-                cost: dist[u],
+                cost: dist[ui],
                 explored,
             };
             debug_assert!(verify_plan(g, &outcome.plan, outcome.cost));
             return Ok(outcome);
         }
-        for ai in &adj[u] {
+        for ai in &adj[ui] {
             let a = &g.actions[*ai];
             let v = a.to as usize;
-            let nd = dist[u].saturating_add(a.cost);
+            let nd = dist[ui].saturating_add(a.cost);
             if nd < dist[v] {
                 dist[v] = nd;
-                prev[v] = Some((u as u32, *ai));
+                prev[v] = Some((u, *ai));
+                open.push(Reverse((nd, a.to)));
             }
         }
     }
@@ -178,9 +186,10 @@ pub fn shortest_plan(g: &StateGraph, budget: &mut Budget) -> Result<PlanOutcome,
 
 /// Ground CNF for "a goal is reachable in exactly `bound` steps".
 /// Variable `x[s][t]` (1-based DIMACS) is true iff the system is in state `s`
-/// at time `t`. Clauses: initial unit, exactly-one state per time step, goal
-/// disjunction at time `bound`, and both directions of the transition
-/// relation between consecutive steps.
+/// at time `t`. Clauses: initial unit, exactly-one state per time step (the
+/// at-most-one half via Sinz's sequential counter — linear instead of the
+/// old pairwise quadratic), goal disjunction at time `bound`, and both
+/// directions of the transition relation between consecutive steps.
 #[derive(Clone, Debug)]
 pub struct BmcCnf {
     pub num_vars: u32,
@@ -191,13 +200,23 @@ fn bmc_var(num_states: u32, state: u32, step: u32) -> i32 {
     (step * num_states + state + 1) as i32
 }
 
+/// Auxiliary variable `i` (1-based, `1..nstates`) of step `t` for the
+/// sequential counter. Laid out after all state variables.
+fn bmc_aux(num_states: u32, bound: u32, step: u32, i: u32) -> i32 {
+    (num_states * (bound + 1) + step * (num_states - 1) + (i - 1) + 1) as i32
+}
+
 pub fn bmc_clauses(g: &StateGraph, bound: u32) -> Result<BmcCnf, String> {
     g.validate()?;
     if g.goals.is_empty() {
         return Err("no goal states".to_string());
     }
     let n = g.num_states;
-    let num_vars = n * (bound + 1);
+    let num_vars = if n <= 1 {
+        n * (bound + 1)
+    } else {
+        n * (bound + 1) + (bound + 1) * (n - 1)
+    };
     let mut clauses: Vec<Vec<i32>> = Vec::new();
     clauses.push(vec![bmc_var(n, g.initial, 0)]);
     let mut succ: Vec<Vec<u32>> = vec![Vec::new(); n as usize];
@@ -213,11 +232,19 @@ pub fn bmc_clauses(g: &StateGraph, bound: u32) -> Result<BmcCnf, String> {
     for t in 0..=bound {
         // At least one state per step.
         clauses.push((0..n).map(|s| bmc_var(n, s, t)).collect());
-        // At most one state per step (pairwise; small graphs only).
-        for a in 0..n {
-            for b in (a + 1)..n {
-                clauses.push(vec![-bmc_var(n, a, t), -bmc_var(n, b, t)]);
+        // At most one state per step: Sinz sequential counter (linear).
+        if n == 2 {
+            clauses.push(vec![-bmc_var(n, 0, t), -bmc_var(n, 1, t)]);
+        } else if n > 2 {
+            let x = |s: u32| bmc_var(n, s, t);
+            let s = |i: u32| bmc_aux(n, bound, t, i);
+            clauses.push(vec![-x(0), s(1)]);
+            for i in 2..n {
+                clauses.push(vec![-x(i - 1), s(i)]);
+                clauses.push(vec![-s(i - 1), s(i)]);
+                clauses.push(vec![-x(i - 1), -s(i - 1)]);
             }
+            clauses.push(vec![-x(n - 1), -s(n - 1)]);
         }
     }
     // Goal at the final step.

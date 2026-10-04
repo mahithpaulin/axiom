@@ -59,43 +59,51 @@ impl Goban {
         }
     }
 
-    fn neighbors(&self, idx: usize) -> Vec<usize> {
+    /// Bitmask of neighbors (boards are at most 9x9 = 81 points).
+    fn neighbor_mask(&self, idx: usize) -> u128 {
         let (f, r) = (idx % self.n, idx / self.n);
-        let mut out = Vec::new();
+        let mut m = 0u128;
         if f > 0 {
-            out.push(idx - 1);
+            m |= 1u128 << (idx - 1);
         }
         if f + 1 < self.n {
-            out.push(idx + 1);
+            m |= 1u128 << (idx + 1);
         }
         if r > 0 {
-            out.push(idx - self.n);
+            m |= 1u128 << (idx - self.n);
         }
         if r + 1 < self.n {
-            out.push(idx + self.n);
+            m |= 1u128 << (idx + self.n);
         }
-        out
+        m
     }
 
-    fn group_and_liberties(&self, start: usize) -> (Vec<usize>, usize) {
+    /// Flood fill over bitmasks: no allocation in the hot path. Returns the
+    /// group mask and the liberty count.
+    fn group_and_liberties(&self, start: usize) -> (u128, u32) {
         let color = self.cells[start];
-        let mut group = Vec::new();
-        let mut seen = vec![false; self.cells.len()];
-        let mut libs = vec![false; self.cells.len()];
-        let mut stack = vec![start];
-        seen[start] = true;
-        while let Some(i) = stack.pop() {
-            group.push(i);
-            for nb in self.neighbors(i) {
-                if self.cells[nb] == EMPTY {
-                    libs[nb] = true;
-                } else if self.cells[nb] == color && !seen[nb] {
-                    seen[nb] = true;
-                    stack.push(nb);
+        let mut group = 0u128;
+        let mut libs = 0u128;
+        let mut frontier = 1u128 << start;
+        while frontier != 0 {
+            let i = frontier.trailing_zeros() as usize;
+            frontier &= frontier - 1;
+            if group >> i & 1 == 1 {
+                continue;
+            }
+            group |= 1u128 << i;
+            let mut nb = self.neighbor_mask(i);
+            while nb != 0 {
+                let j = nb.trailing_zeros() as usize;
+                nb &= nb - 1;
+                if self.cells[j] == EMPTY {
+                    libs |= 1u128 << j;
+                } else if self.cells[j] == color && (group >> j & 1 == 0) {
+                    frontier |= 1u128 << j;
                 }
             }
         }
-        (group, libs.iter().filter(|x| **x).count())
+        (group, libs.count_ones())
     }
 
     fn hash(&self) -> u64 {
@@ -134,13 +142,18 @@ impl Goban {
         let theirs = if mine == BLACK { WHITE } else { BLACK };
         self.cells[idx] = mine;
         let mut captured = 0usize;
-        let adj = self.neighbors(idx);
-        for nb in adj {
+        let mut adj = self.neighbor_mask(idx);
+        while adj != 0 {
+            let nb = adj.trailing_zeros() as usize;
+            adj &= adj - 1;
             if self.cells[nb] == theirs {
                 let (group, libs) = self.group_and_liberties(nb);
                 if libs == 0 {
-                    for g in group {
-                        self.cells[g] = EMPTY;
+                    let mut g = group;
+                    while g != 0 {
+                        let b = g.trailing_zeros() as usize;
+                        g &= g - 1;
+                        self.cells[b] = EMPTY;
                     }
                     captured += 1;
                 }
