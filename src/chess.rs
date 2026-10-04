@@ -709,7 +709,7 @@ impl Position {
             return None;
         }
         let sq = |f: u8, r: u8| {
-            if f < b'a' || f > b'h' || r < b'1' || r > b'8' {
+            if !(b'a'..=b'h').contains(&f) || !(b'1'..=b'8').contains(&r) {
                 None
             } else {
                 sq_of((f - b'a') as i8, (r - b'1') as i8)
