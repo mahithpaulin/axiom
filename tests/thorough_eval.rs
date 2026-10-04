@@ -202,11 +202,19 @@ fn known_back_rank_mate_in_one() {
 
 #[test]
 fn known_go_capture_puzzle() {
+    use axiom::{BLACK, EMPTY, WHITE};
+    // White c3 ringed on three sides; the only liberty is c4.
     let mut g = Goban::new(5).unwrap();
+    g.set(12, WHITE);
+    for s in [11, 13, 7] {
+        g.set(s, BLACK);
+    }
+    assert_eq!(g.side_to_move(), BLACK);
     let mut b = Budget::steps(100_000);
     assert_eq!(g.capture_in_one(&mut b).unwrap(), vec![17]);
-    let out = g.play(17).expect("capture works");
-    assert!(out.captured > 0);
+    let out = g.play(17).expect("c4 captures");
+    assert_eq!(out.captured, 1);
+    assert_eq!(g.at(12), EMPTY);
 }
 
 // ---------- E. UNKNOWN deduction / honesty ----------
@@ -423,10 +431,17 @@ fn unknown_chess_short_self_play_ends_legally() {
 
 #[test]
 fn unknown_go_boards_reject_garbage() {
+    use axiom::WHITE;
     assert!(Goban::new(0).is_err());
     assert!(Goban::new(10).is_err());
+    // Suicide is refused ...
     let mut g = Goban::new(5).unwrap();
+    g.set(1, WHITE);
+    g.set(5, WHITE);
     assert!(g.play(0).is_err());
+    // ... but an open point on a fresh board is legal (no false refusal).
+    let mut fresh = Goban::new(5).unwrap();
+    assert!(fresh.play(12).is_ok());
 }
 
 // ---------- I. determinism / small bench ----------
