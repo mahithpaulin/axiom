@@ -415,9 +415,9 @@ fn unknown_chess_short_self_play_ends_legally() {
     assert_eq!(game.moves.len(), 6);
     // Replay every move for legality.
     let mut pos = Position::startpos();
-    for m in &game.moves {
-        assert!(pos.legal_moves().contains(m));
-        pos = pos.make(*m);
+    for text in &game.moves {
+        let m = pos.parse_uci(text).expect("every played move is legal");
+        pos = pos.make(m);
     }
 }
 
