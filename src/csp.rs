@@ -236,16 +236,17 @@ fn propagate_once(
                 }
             }
             Constraint::NotEqual(a, b) => {
-                if domains[*a as usize].len() == 1 && domains[*b as usize].len() == 1 {
-                    if domains[*a as usize][0] == domains[*b as usize][0] {
-                        return Err(format!(
-                            "{}: {} and {} both forced to {}",
-                            tag("not-equal"),
-                            var_name(prob, *a),
-                            var_name(prob, *b),
-                            domains[*a as usize][0]
-                        ));
-                    }
+                if domains[*a as usize].len() == 1
+                    && domains[*b as usize].len() == 1
+                    && domains[*a as usize][0] == domains[*b as usize][0]
+                {
+                    return Err(format!(
+                        "{}: {} and {} both forced to {}",
+                        tag("not-equal"),
+                        var_name(prob, *a),
+                        var_name(prob, *b),
+                        domains[*a as usize][0]
+                    ));
                 }
                 if domains[*a as usize].len() == 1 {
                     let x = domains[*a as usize][0];
@@ -372,7 +373,7 @@ fn propagate_once(
 /// Propagate to a fixpoint. Charges one step per round.
 fn propagate(
     prob: &CspProblem,
-    domains: &mut Vec<Vec<i32>>,
+    domains: &mut [Vec<i32>],
     trace: &mut Vec<String>,
     stats: &mut CspStats,
     budget: &mut Budget,
