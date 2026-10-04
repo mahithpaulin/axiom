@@ -19,6 +19,7 @@
 //! |---|---|
 //! | [`bench`] | measurement harness: timing, allocation counting, seeded RNG |
 //! | [`chess`] | chess: legal movegen, FEN, perft, mate search, tree export |
+//! | [`chess_play`] | chess: fixed-depth play, game loop, draw rules |
 //! | [`choose`] | deterministic strategy selection over representations |
 //! | [`csp`] | finite-domain puzzles: propagation with explanations |
 //! | [`state`] | state-transition systems: plans, BMC lowering |
@@ -92,6 +93,7 @@ pub mod bench;
 pub mod budget;
 pub mod check;
 pub mod chess;
+pub mod chess_play;
 pub mod choose;
 pub mod csp;
 pub mod db;
@@ -118,6 +120,7 @@ pub mod word;
 
 pub use budget::Budget;
 pub use chess::{endgame_tree, find_mate_in_one, move_to_string, perft, Move, Position};
+pub use chess_play::{best_move, play_game, GameEnd, PlayedGame};
 pub use choose::{choose, features, Choice, Features};
 pub use csp::{solve_csp, verify_csp, Constraint, CspOutcome, CspProblem, CspStats};
 pub use db::Db;
