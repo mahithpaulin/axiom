@@ -297,3 +297,38 @@ fn tiny_logic_grid_deduces() {
     assert_eq!(out.status, Status::Found);
     assert_eq!(out.assignment, vec![1, 2]);
 }
+
+#[test]
+fn word_coins_problem() {
+    use axiom::WordModel;
+    // 30 coins, nickels(5) + dimes(10) + quarters(25) = 500 cents.
+    let mut m = WordModel::new();
+    m.quantity("nickels", 0, 30).unwrap();
+    m.quantity("dimes", 0, 30).unwrap();
+    m.quantity("quarters", 0, 30).unwrap();
+    m.sum_eq(&[("nickels", 1), ("dimes", 1), ("quarters", 1)], 30)
+        .unwrap();
+    m.sum_eq(&[("nickels", 5), ("dimes", 10), ("quarters", 25)], 500)
+        .unwrap();
+    let mut budget = Budget::steps(1_000_000);
+    let out = m.solve(&mut budget).expect("within budget");
+    assert_eq!(out.status, Status::Found);
+    assert!(axiom::verify_csp(m.problem(), &out.assignment));
+    let total: i32 = ["nickels", "dimes", "quarters"]
+        .iter()
+        .map(|q| m.value_of(&out, q).unwrap())
+        .sum();
+    assert_eq!(total, 30);
+    assert!(m.value_of(&out, "pennies").is_none());
+}
+
+#[test]
+fn word_model_rejects_bad_input() {
+    use axiom::WordModel;
+    let mut m = WordModel::new();
+    m.quantity("x", 1, 6).unwrap();
+    assert!(m.quantity("x", 1, 6).is_err());
+    assert!(m.quantity("wide", 0, 100_001).is_err());
+    assert!(m.quantity("empty", 5, 4).is_err());
+    assert!(m.sum_le(&[("ghost", 1)], 3).is_err());
+}

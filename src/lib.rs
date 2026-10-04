@@ -35,6 +35,7 @@
 //! | [`solver_fwd`] | semi-naive bottom-up evaluation |
 //! | [`solver_bwd`] | depth-bounded SLD, `prove`, `query` |
 //! | [`exterior`] | text surface syntax and parsers |
+//! | [`word`] | word problems: named quantities, linear relations |
 //! | [`status`] | the honesty contract: `Status` and `Exhausted` |
 //! | [`budget`] | resource limits |
 //!
@@ -105,6 +106,7 @@ pub mod subst;
 pub mod symbol;
 pub mod term;
 pub mod theory;
+pub mod word;
 
 pub use budget::Budget;
 pub use csp::{solve_csp, verify_csp, Constraint, CspOutcome, CspProblem, CspStats};
@@ -133,6 +135,7 @@ pub use theory::{
     Combination, Congruence, Diff, DiffSet, TheoryAtom, TheoryDriver, TheoryError, TheoryOutcome,
     TheoryProof,
 };
+pub use word::WordModel;
 
 /// Compile-time check that the two promises in the charter which can be checked
 /// mechanically are actually true. Each is a real test in `tests/`, and this
