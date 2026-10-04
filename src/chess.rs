@@ -6,10 +6,11 @@
 //! and a bounded explicit-tree export into [`crate::search::GameTree`] so
 //! `Play` (alpha-beta) runs on real positions.
 //!
-//! Deliberately absent (stated, not hidden): fifty-move and threefold draws,
-//! underpromotion below queen in search (generation supports all four),
-//! and any notion of a "best" full-board move — the exported trees are
-//! depth-bounded, so anything past the bound is `Exhausted`.
+//! Deliberately absent (stated, not hidden): underpromotion below queen in
+//! search (generation supports all four). Full-board optimal play is not
+//! claimed either: [`crate::chess_play`] searches to a fixed depth with a
+//! static evaluation, so anything past the horizon is `Exhausted` or a
+//! heuristic value, never a proof.
 
 use crate::budget::Budget;
 use crate::search::GameTree;
@@ -55,6 +56,8 @@ pub struct Position {
     pub white_to_move: bool,
     castle: u8,
     ep: i8,
+    halfmove: u32,
+    fullmove: u32,
 }
 
 impl Default for Position {
@@ -64,6 +67,8 @@ impl Default for Position {
             white_to_move: true,
             castle: 0,
             ep: -1,
+            halfmove: 0,
+            fullmove: 1,
         }
     }
 }
@@ -416,6 +421,20 @@ impl Position {
                 n.ep = (m.from as i8 + m.to as i8) / 2;
             }
         }
+        // Clocks: reset on any pawn move or capture (including en passant),
+        // otherwise tick. Fullmove ticks after Black's move.
+        let captured = self.sq[m.to as usize] != EMPTY
+            || (p.abs() == PAWN && self.ep >= 0 && m.to as i8 == self.ep);
+        if p.abs() == PAWN || captured {
+            n.halfmove = 0;
+        } else {
+            n.halfmove = self.halfmove + 1;
+        }
+        if !white {
+            n.fullmove = self.fullmove + 1;
+        } else {
+            n.fullmove = self.fullmove;
+        }
         n.white_to_move = !white;
         n
     }
@@ -466,8 +485,8 @@ impl Position {
             .sum()
     }
 
-    /// Parse a FEN string (placement, side, castling, en passant; the
-    /// halfmove clock and fullmove number are accepted and ignored).
+    /// Parse a FEN string (placement, side, castling, en passant, clocks).
+    /// Clocks default to `0 1` when absent.
     pub fn from_fen(fen: &str) -> Result<Position, String> {
         let parts: Vec<&str> = fen.split_whitespace().collect();
         if parts.len() < 4 {
@@ -519,12 +538,201 @@ impl Position {
         } else {
             algebraic(parts[3]).ok_or_else(|| format!("bad fen ep '{}'", parts[3]))? as i8
         };
+        if parts.len() > 4 {
+            pos.halfmove = parts[4]
+                .parse()
+                .map_err(|_| format!("bad fen halfmove '{}'", parts[4]))?;
+        }
+        if parts.len() > 5 {
+            pos.fullmove = parts[5]
+                .parse()
+                .map_err(|_| format!("bad fen fullmove '{}'", parts[5]))?;
+            if pos.fullmove == 0 {
+                return Err("fen fullmove counts from 1".to_string());
+            }
+        }
         Ok(pos)
     }
 
     pub fn startpos() -> Position {
         Position::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
             .expect("startpos fen is valid")
+    }
+
+    pub fn halfmove(&self) -> u32 {
+        self.halfmove
+    }
+    pub fn fullmove(&self) -> u32 {
+        self.fullmove
+    }
+
+    /// En passant target square, if the last move was a double pawn push.
+    pub fn ep_square(&self) -> Option<u8> {
+        if self.ep < 0 {
+            None
+        } else {
+            Some(self.ep as u8)
+        }
+    }
+
+    /// Serialize back to FEN (placement, side, castling, en passant, clocks).
+    pub fn to_fen(&self) -> String {
+        let mut out = String::new();
+        for r in (0..8).rev() {
+            let mut empty = 0;
+            for f in 0..8 {
+                let p = self.sq[(r * 8 + f) as usize];
+                if p == EMPTY {
+                    empty += 1;
+                } else {
+                    if empty > 0 {
+                        out.push((b'0' + empty) as char);
+                        empty = 0;
+                    }
+                    let kind = match p.abs() {
+                        PAWN => 'p',
+                        KNIGHT => 'n',
+                        BISHOP => 'b',
+                        ROOK => 'r',
+                        QUEEN => 'q',
+                        _ => 'k',
+                    };
+                    out.push(if p > 0 {
+                        kind.to_ascii_uppercase()
+                    } else {
+                        kind
+                    });
+                }
+            }
+            if empty > 0 {
+                out.push((b'0' + empty) as char);
+            }
+            if r > 0 {
+                out.push('/');
+            }
+        }
+        out.push(' ');
+        out.push(if self.white_to_move { 'w' } else { 'b' });
+        out.push(' ');
+        if self.castle == 0 {
+            out.push('-');
+        } else {
+            if self.castle & WK != 0 {
+                out.push('K');
+            }
+            if self.castle & WQ != 0 {
+                out.push('Q');
+            }
+            if self.castle & BK != 0 {
+                out.push('k');
+            }
+            if self.castle & BQ != 0 {
+                out.push('q');
+            }
+        }
+        out.push(' ');
+        if self.ep < 0 {
+            out.push('-');
+        } else {
+            out.push_str(&square_name(self.ep as u8));
+        }
+        out.push_str(&format!(" {} {}", self.halfmove, self.fullmove));
+        out
+    }
+
+    /// Zobrist-style hash over squares, side, castling, and en passant
+    /// (clocks excluded: repetition ignores them). Deterministic: the mixer
+    /// is splitmix64 over a fixed per-(piece, square) index, no tables.
+    pub fn repetition_hash(&self) -> u64 {
+        fn mix(mut z: u64) -> u64 {
+            z = z.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            z ^ (z >> 31)
+        }
+        let mut h = 0u64;
+        for (i, p) in self.sq.iter().enumerate() {
+            if *p != EMPTY {
+                // Piece codes 0..11 (white 0-5, black 6-11), square 0..63.
+                let code = if *p > 0 {
+                    (*p - 1) as u64
+                } else {
+                    (*p).unsigned_abs() as u64 + 5
+                };
+                h ^= mix(code * 64 + i as u64);
+            }
+        }
+        if self.white_to_move {
+            h ^= mix(768);
+        }
+        h ^= mix(769 + self.castle as u64);
+        if self.ep >= 0 {
+            h ^= mix(774 + self.ep as u64);
+        }
+        h
+    }
+
+    /// Static evaluation from White's perspective (centipawns): material
+    /// plus simple midgame piece-square tables.
+    pub fn evaluate(&self) -> i64 {
+        let mut total = 0i64;
+        for (i, p) in self.sq.iter().enumerate() {
+            if *p == EMPTY {
+                continue;
+            }
+            let (f, r) = (file(i as i8), rank(i as i8));
+            // White reads the table rank-up; Black mirrors it.
+            let t = if *p > 0 {
+                ((7 - r) * 8 + f) as usize
+            } else {
+                (r * 8 + f) as usize
+            };
+            let (base, table): (i64, &[i16; 64]) = match p.abs() {
+                PAWN => (100, &PST_PAWN),
+                KNIGHT => (320, &PST_KNIGHT),
+                BISHOP => (330, &PST_BISHOP),
+                ROOK => (500, &PST_ROOK),
+                QUEEN => (900, &PST_QUEEN),
+                _ => (0, &PST_KING),
+            };
+            let v = base + table[t] as i64;
+            total += if *p > 0 { v } else { -v };
+        }
+        total
+    }
+
+    /// Parse a UCI-coordinate move (`e2e4`, `e7e8q`) against this position.
+    /// Returns `None` when the move is not legal here.
+    pub fn parse_uci(&self, text: &str) -> Option<Move> {
+        let b = text.as_bytes();
+        if b.len() != 4 && b.len() != 5 {
+            return None;
+        }
+        let sq = |f: u8, r: u8| {
+            if !(b'a'..=b'h').contains(&f) || !(b'1'..=b'8').contains(&r) {
+                None
+            } else {
+                sq_of((f - b'a') as i8, (r - b'1') as i8)
+            }
+        };
+        let (from, to) = (sq(b[0], b[1])?, sq(b[2], b[3])?);
+        let promo = if b.len() == 5 {
+            match b[4] {
+                b'n' => KNIGHT,
+                b'b' => BISHOP,
+                b'r' => ROOK,
+                b'q' => QUEEN,
+                _ => return None,
+            }
+        } else {
+            EMPTY
+        };
+        let m = Move { from, to, promo };
+        if self.legal_moves().contains(&m) {
+            Some(m)
+        } else {
+            None
+        }
     }
 }
 
@@ -536,6 +744,49 @@ fn algebraic(s: &str) -> Option<u8> {
     let (f, r) = (b[0].wrapping_sub(b'a') as i8, b[1].wrapping_sub(b'1') as i8);
     sq_of(f, r)
 }
+
+fn square_name(s: u8) -> String {
+    const FILES: &[u8] = b"abcdefgh";
+    format!(
+        "{}{}",
+        FILES[file(s as i8) as usize] as char,
+        rank(s as i8) + 1
+    )
+}
+
+// Midgame piece-square tables, rank 8 first (White mirrors by rank).
+// Plain, well-known values: centralisation and king safety over subtlety.
+const PST_PAWN: [i16; 64] = [
+    0, 0, 0, 0, 0, 0, 0, 0, 50, 50, 50, 50, 50, 50, 50, 50, 10, 10, 20, 30, 30, 20, 10, 10, 5, 5,
+    10, 25, 25, 10, 5, 5, 0, 0, 0, 20, 20, 0, 0, 0, 5, -5, -10, 0, 0, -10, -5, 5, 5, 10, 10, -20,
+    -20, 10, 10, 5, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+const PST_KNIGHT: [i16; 64] = [
+    -50, -40, -30, -30, -30, -30, -40, -50, -40, -20, 0, 0, 0, 0, -20, -40, -30, 0, 10, 15, 15, 10,
+    0, -30, -30, 5, 15, 20, 20, 15, 5, -30, -30, 0, 15, 20, 20, 15, 0, -30, -30, 5, 10, 15, 15, 10,
+    5, -30, -40, -20, 0, 5, 5, 0, -20, -40, -50, -40, -30, -30, -30, -30, -40, -50,
+];
+const PST_BISHOP: [i16; 64] = [
+    -20, -10, -10, -10, -10, -10, -10, -20, -10, 0, 0, 0, 0, 0, 0, -10, -10, 0, 5, 10, 10, 5, 0,
+    -10, -10, 5, 5, 10, 10, 5, 5, -10, -10, 0, 10, 10, 10, 10, 0, -10, -10, 10, 10, 10, 10, 10, 10,
+    -10, -10, 5, 0, 0, 0, 0, 5, -10, -20, -10, -10, -10, -10, -10, -10, -20,
+];
+const PST_ROOK: [i16; 64] = [
+    0, 0, 0, 0, 0, 0, 0, 0, 5, 10, 10, 10, 10, 10, 10, 5, -5, 0, 0, 0, 0, 0, 0, -5, -5, 0, 0, 0, 0,
+    0, 0, -5, -5, 0, 0, 0, 0, 0, 0, -5, -5, 0, 0, 0, 0, 0, 0, -5, -5, 0, 0, 0, 0, 0, 0, -5, 0, 0,
+    0, 5, 5, 0, 0, 0,
+];
+const PST_QUEEN: [i16; 64] = [
+    -20, -10, -10, -5, -5, -10, -10, -20, -10, 0, 0, 0, 0, 0, 0, -10, -10, 0, 5, 5, 5, 5, 0, -10,
+    -5, 0, 5, 5, 5, 5, 0, -5, 0, 0, 5, 5, 5, 5, 0, -5, -10, 5, 5, 5, 5, 5, 0, -10, -10, 0, 5, 0, 0,
+    0, 0, -10, -20, -10, -10, -5, -5, -10, -10, -20,
+];
+const PST_KING: [i16; 64] = [
+    -30, -40, -40, -50, -50, -40, -40, -30, -30, -40, -40, -50, -50, -40, -40, -30, -30, -40, -40,
+    -50, -50, -40, -40, -30, -30, -40, -40, -50, -50, -40, -40, -30, -20, -30, -30, -40, -40, -30,
+    -30, -20, -10, -20, -20, -20, -20, -20, -20, -10, 20, 20, 0, 0, 0, 0, 20, 20, 20, 30, 10, 0, 0,
+    10, 30, 20,
+];
 
 pub fn move_to_string(m: Move) -> String {
     const FILES: &[u8] = b"abcdefgh";
