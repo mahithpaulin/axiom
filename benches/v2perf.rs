@@ -12,7 +12,7 @@ use axiom::puzzle::{nqueens, sudoku9};
 use axiom::sat::{SatOutcome, SatSolver};
 use axiom::search::{alpha_beta, astar, ida_star};
 use axiom::state::{bmc_clauses, shortest_plan};
-use axiom::{Budget, Goban, Position, StateGraph, Status, WordModel, BLACK, WHITE};
+use axiom::{Budget, Goban, Position, StateGraph, Status, WordModel};
 
 fn main() {
     let mut b = Bench::new("axiom -- V2 capability costs (branch vs main)");
@@ -49,6 +49,20 @@ fn main() {
         ops
     });
 
+    // 2b. Hard sudoku (AI Escargot): exercises propagation strength.
+    b.run_once("csp_sudoku_hard", |_| {
+        let t0 = std::time::Instant::now();
+        let src = "1....7.9..3..2...8..96..5....53..9...1..8...26....1...2..9..4....5....7..7...43";
+        let p = sudoku9(src).expect("81-cell puzzle");
+        let mut budget = Budget::steps(5_000_000_000);
+        let out = axiom::solve_csp(&p, &mut budget).expect("within budget");
+        assert_eq!(out.status, Status::Found);
+        assert!(axiom::verify_csp(&p, &out.assignment));
+        let ops = out.stats.nodes + out.stats.pruned;
+        perf("csp_sudoku_hard", t0.elapsed().as_secs_f64() * 1000.0, ops);
+        ops
+    });
+
     // 3. Word coins problem.
     b.run_once("word_coins", |_| {
         let t0 = std::time::Instant::now();
@@ -68,10 +82,15 @@ fn main() {
         ops
     });
 
-    // 4. BMC lowering solved by the SAT core.
-    b.run_once("sat_bmc_stacking", |_| {
+    // 4. BMC lowering solved by the SAT core: 60-state chain, bound 60.
+    b.run_once("sat_bmc_chain60", |_| {
         let t0 = std::time::Instant::now();
-        let cnf = bmc_clauses(&axiom::stacking_3(), 3).expect("valid graph");
+        let mut graph = StateGraph::new(60, 0);
+        for s in 0..59 {
+            graph.action("step", s, s + 1, 1);
+        }
+        graph.goal(59);
+        let cnf = bmc_clauses(&graph, 60 - 1).expect("valid graph");
         let mut s = SatSolver::new();
         for _ in 0..cnf.num_vars {
             s.new_var();
@@ -79,19 +98,19 @@ fn main() {
         for c in &cnf.clauses {
             s.add_clause(c);
         }
-        let mut budget = Budget::steps(100_000_000);
+        let mut budget = Budget::steps(2_000_000_000);
         let ops = match s.solve(&mut budget).expect("within budget") {
             SatOutcome::Sat { .. } => s.stats.propagations + s.stats.conflicts + s.stats.decisions,
-            SatOutcome::Unsat { .. } => panic!("bound 3 reaches the goal"),
+            SatOutcome::Unsat { .. } => panic!("bound 59 reaches state 59"),
         };
-        perf("sat_bmc_stacking", t0.elapsed().as_secs_f64() * 1000.0, ops);
+        perf("sat_bmc_chain60", t0.elapsed().as_secs_f64() * 1000.0, ops);
         ops
     });
 
-    // 5. A* + IDA* on a 45x45 open grid (2025 nodes).
-    b.run_once("search_grid2025", |_| {
+    // 5. A* + IDA* on a 150x150 open grid (22500 nodes).
+    b.run_once("search_grid22500", |_| {
         let t0 = std::time::Instant::now();
-        let n = 45usize;
+        let n = 150usize;
         let mut g = axiom::SearchGraph::new(n * n);
         for r in 0..n {
             for c in 0..n {
@@ -107,23 +126,23 @@ fn main() {
                 g.set_heuristic(id, ((n - 1 - r) + (n - 1 - c)) as i64);
             }
         }
-        let mut budget = Budget::steps(500_000_000);
+        let mut budget = Budget::steps(5_000_000_000);
         let a = astar(&g, 0, (n * n - 1) as u32, &mut budget).expect("within budget");
         assert_eq!(a.status, Status::Found);
-        let mut budget = Budget::steps(500_000_000);
+        let mut budget = Budget::steps(5_000_000_000);
         let d = ida_star(&g, 0, (n * n - 1) as u32, &mut budget).expect("within budget");
         assert_eq!((d.status, d.cost), (Status::Found, a.cost));
         let ops = a.expanded + d.expanded;
-        perf("search_grid2025", t0.elapsed().as_secs_f64() * 1000.0, ops);
+        perf("search_grid22500", t0.elapsed().as_secs_f64() * 1000.0, ops);
         ops
     });
 
-    // 6. Chess perft(3) from startpos.
-    b.run_once("chess_perft3", |_| {
+    // 6. Chess perft(4) from startpos.
+    b.run_once("chess_perft4", |_| {
         let t0 = std::time::Instant::now();
-        let nodes = axiom::perft(&Position::startpos(), 3);
-        assert_eq!(nodes, 8902);
-        perf("chess_perft3", t0.elapsed().as_secs_f64() * 1000.0, nodes);
+        let nodes = axiom::perft(&Position::startpos(), 4);
+        assert_eq!(nodes, 197_281);
+        perf("chess_perft4", t0.elapsed().as_secs_f64() * 1000.0, nodes);
         nodes
     });
 
@@ -142,37 +161,39 @@ fn main() {
         ops
     });
 
-    // 8. Go capture scan on a busy 9x9 board.
-    b.run_once("go_capture_scan", |_| {
+    // 8. Scripted 9x9 game: row-major alternating stones (81 attempts,
+    //    illegal ones skipped). Stresses liberty computation.
+    b.run_once("go_scripted_game", |_| {
         let t0 = std::time::Instant::now();
         let mut g = Goban::new(9).unwrap();
-        for i in (0..81).step_by(3) {
-            g.set(i, BLACK);
+        let mut placed = 0u64;
+        for i in 0..81 {
+            if g.play(i).is_ok() {
+                placed += 1;
+            }
         }
-        for i in (1..81).step_by(7) {
-            g.set(i, WHITE);
-        }
-        let mut budget = Budget::steps(10_000_000);
-        let found = g.capture_in_one(&mut budget).expect("within budget");
-        let _ = found;
-        let ops = 81u64;
-        perf("go_capture_scan", t0.elapsed().as_secs_f64() * 1000.0, ops);
-        ops
+        assert!(placed > 60, "most opening points are legal");
+        perf(
+            "go_scripted_game",
+            t0.elapsed().as_secs_f64() * 1000.0,
+            placed,
+        );
+        placed
     });
 
-    // 9. Dijkstra over a 2000-node chain.
-    b.run_once("plan_chain2000", |_| {
+    // 9. Dijkstra over a 20000-node chain.
+    b.run_once("plan_chain20000", |_| {
         let t0 = std::time::Instant::now();
-        let mut graph = StateGraph::new(2000, 0);
-        for s in 0..1999 {
+        let mut graph = StateGraph::new(20000, 0);
+        for s in 0..19999 {
             graph.action("step", s, s + 1, 1);
         }
-        graph.goal(1999);
-        let mut budget = Budget::steps(100_000_000);
+        graph.goal(19999);
+        let mut budget = Budget::steps(5_000_000_000);
         let out = shortest_plan(&graph, &mut budget).expect("within budget");
         assert_eq!(out.status, Status::Found);
         let ops = out.explored;
-        perf("plan_chain2000", t0.elapsed().as_secs_f64() * 1000.0, ops);
+        perf("plan_chain20000", t0.elapsed().as_secs_f64() * 1000.0, ops);
         ops
     });
 
