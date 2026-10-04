@@ -422,16 +422,19 @@ impl Position {
 
     /// All legal moves (pseudo-legal filtered by king safety).
     pub fn legal_moves(&self) -> Vec<Move> {
+        let mut moves = Vec::new();
+        self.legal_moves_into(&mut moves);
+        moves
+    }
+
+    /// Same, reusing the caller's buffer (cleared first). The perft core
+    /// threads one buffer per depth through the recursion, so the hot loop
+    /// allocates nothing.
+    pub fn legal_moves_into(&self, moves: &mut Vec<Move>) {
         let white = self.white_to_move;
-        let mut pseudo = Vec::new();
-        self.pseudo(&mut pseudo);
-        pseudo
-            .into_iter()
-            .filter(|m| {
-                let n = self.make(*m);
-                !n.in_check(white)
-            })
-            .collect()
+        moves.clear();
+        self.pseudo(moves);
+        moves.retain(|m| !self.make(*m).in_check(white));
     }
 
     pub fn is_checkmate(&self) -> bool {
@@ -556,16 +559,28 @@ pub fn move_to_string(m: Move) -> String {
 }
 
 /// Perft: leaf nodes at `depth` (depth 0 counts 1). Bulk counting at the
-/// fringe (depth 1 counts moves, not positions) halves the make/unmake work.
+/// fringe (depth 1 counts moves, not positions) plus one reused move buffer
+/// per depth, so the recursion allocates nothing.
 pub fn perft(pos: &Position, depth: u32) -> u64 {
+    let mut bufs: Vec<Vec<Move>> = vec![Vec::new(); depth as usize + 1];
+    perft_buf(pos, depth, &mut bufs)
+}
+
+fn perft_buf(pos: &Position, depth: u32, bufs: &mut [Vec<Move>]) -> u64 {
     if depth == 0 {
         return 1;
     }
-    let moves = pos.legal_moves();
+    let buf = &mut bufs[depth as usize];
+    pos.legal_moves_into(buf);
     if depth == 1 {
-        return moves.len() as u64;
+        return buf.len() as u64;
     }
-    moves.iter().map(|m| perft(&pos.make(*m), depth - 1)).sum()
+    let mut total = 0u64;
+    for i in 0..buf.len() {
+        let m = bufs[depth as usize][i];
+        total += perft_buf(&pos.make(m), depth - 1, bufs);
+    }
+    total
 }
 
 /// Mate in one, if any legal move checkmates.
