@@ -3,6 +3,7 @@
 //! agreements (A\* vs IDA\*, plan vs BMC-vs-SAT) are the regression net.
 
 use axiom::csp::{solve_csp, verify_csp, Constraint, CspProblem};
+use axiom::puzzle::{logic_grid, map_color, nqueens, sudoku9};
 use axiom::repr::{run, Operation, Representation};
 use axiom::search::{alpha_beta, astar, ida_star, verify_line, verify_path, GameTree, SearchGraph};
 use axiom::state::{bmc_clauses, shortest_plan, verify_plan, StateGraph};
@@ -35,10 +36,10 @@ fn sudoku4() -> CspProblem {
     }
     // One valid grid with four blanks removed (0,0) (1,1) (2,2) (3,3).
     let grid = [[1, 2, 3, 4], [3, 4, 1, 2], [2, 1, 4, 3], [4, 3, 2, 1]];
-    for r in 0..4 {
-        for c in 0..4 {
+    for (r, row) in grid.iter().enumerate() {
+        for (c, val) in row.iter().enumerate() {
             if (r, c) != (0, 0) && (r, c) != (1, 1) && (r, c) != (2, 2) && (r, c) != (3, 3) {
-                p.constrain(Constraint::ValueEq(cell(r, c), grid[r][c]));
+                p.constrain(Constraint::ValueEq(cell(r, c), *val));
             }
         }
     }
@@ -237,4 +238,62 @@ fn repr_dispatch_covers_every_pair() {
     // A mismatched pair is Unknown, never a wrong definite answer.
     let v = run(&graph, Operation::Play, &mut budget).expect("within budget");
     assert_eq!(v.status, Status::Unknown);
+}
+
+#[test]
+fn queens_scales_and_small_boards_refuse() {
+    for impossible in [2, 3] {
+        let p = nqueens(impossible).expect("valid board");
+        let mut budget = Budget::steps(1_000_000);
+        let out = solve_csp(&p, &mut budget).expect("within budget");
+        assert_eq!(out.status, Status::Impossible, "n={impossible}");
+    }
+    for solvable in [4, 8] {
+        let p = nqueens(solvable).expect("valid board");
+        let mut budget = Budget::steps(50_000_000);
+        let out = solve_csp(&p, &mut budget).expect("within budget");
+        assert_eq!(out.status, Status::Found, "n={solvable}");
+        assert!(verify_csp(&p, &out.assignment));
+    }
+}
+
+#[test]
+fn classic_sudoku_solves() {
+    let src = "53..7....6..195....98....6.8...6...34..8.3..17...2...6.6....28....419..5....8..79";
+    let p = sudoku9(src).expect("valid puzzle");
+    let mut budget = Budget::steps(50_000_000);
+    let out = solve_csp(&p, &mut budget).expect("within budget");
+    assert_eq!(out.status, Status::Found);
+    assert!(verify_csp(&p, &out.assignment));
+    assert!(sudoku9(src).is_ok());
+    assert!(sudoku9("too short").is_err());
+}
+
+#[test]
+fn map_coloring_counts_colors_honestly() {
+    // Triangle: impossible in 2 colors, trivial in 3.
+    let borders = [(0, 1), (1, 2), (0, 2)];
+    let p2 = map_color(3, &borders, 2);
+    let mut budget = Budget::steps(10_000);
+    let out = solve_csp(&p2, &mut budget).expect("within budget");
+    assert_eq!(out.status, Status::Impossible);
+    let p3 = map_color(3, &borders, 3);
+    let mut budget = Budget::steps(10_000);
+    let out = solve_csp(&p3, &mut budget).expect("within budget");
+    assert_eq!(out.status, Status::Found);
+    assert!(verify_csp(&p3, &out.assignment));
+}
+
+#[test]
+fn tiny_logic_grid_deduces() {
+    let p = logic_grid(
+        &["alice", "bob"],
+        &[vec![1, 2], vec![1, 2]],
+        &[vec![0, 1]],
+        &[(0, 1)],
+    );
+    let mut budget = Budget::steps(10_000);
+    let out = solve_csp(&p, &mut budget).expect("within budget");
+    assert_eq!(out.status, Status::Found);
+    assert_eq!(out.assignment, vec![1, 2]);
 }

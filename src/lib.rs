@@ -29,6 +29,7 @@
 //! | [`db`] | extensional database and indexes |
 //! | [`program`] | rules, literals, stratification, the exterior-side builder |
 //! | [`proof`] | derivation records and check errors |
+//! | [`puzzle`] | puzzle adapters: sudoku, queens, coloring, logic grids |
 //! | [`check`] | independent proof checking |
 //! | [`solver`] | the solver object; public API surface |
 //! | [`solver_fwd`] | semi-naive bottom-up evaluation |
@@ -91,6 +92,7 @@ pub mod exterior;
 pub mod hash;
 pub mod program;
 pub mod proof;
+pub mod puzzle;
 pub mod repr;
 pub mod sat;
 pub mod search;
@@ -110,6 +112,7 @@ pub use db::Db;
 pub use exterior::{Limits, ParseError};
 pub use program::{Builder, Literal, Program, ProgramError, Rule, RuleId};
 pub use proof::{CheckErr, DerivId, Derivation, Proof, Saturation};
+pub use puzzle::{logic_grid, map_color, nqueens, sudoku9};
 pub use repr::{run, Operation, Representation, Verdict};
 pub use sat::{
     AtomDesc, Grounding, Lit, STerm, SatCheckErr, SatOutcome, SatSolver, SatStats, TheoryHandler,

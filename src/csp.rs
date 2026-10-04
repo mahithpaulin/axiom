@@ -51,6 +51,9 @@ pub enum Constraint {
         coeffs: Vec<(VarId, i64)>,
         bound: i64,
     },
+    /// `|a - b| != k`. The queens diagonal (`k` = column distance) and any
+    /// separation requirement. Prunes a value with no surviving partner.
+    AbsDiffNe(VarId, VarId, i32),
 }
 
 /// A puzzle: variables plus constraints.
@@ -149,6 +152,7 @@ pub fn verify_csp(prob: &CspProblem, assignment: &[i32]) -> bool {
         Constraint::LinearLe { coeffs, bound } => {
             coeffs.iter().map(|(v, k)| *k * at(*v) as i64).sum::<i64>() <= *bound
         }
+        Constraint::AbsDiffNe(a, b, k) => (at(*a) as i64 - at(*b) as i64).abs() != *k as i64,
     })
 }
 
@@ -354,6 +358,28 @@ fn propagate_once(
                     for x in bad {
                         changed |= remove(domains, trace, prob, *v, x, &tag("linear-le"), pruned);
                     }
+                }
+            }
+            Constraint::AbsDiffNe(a, b, k) => {
+                let sep = *k as i64;
+                let close = |x: i32, y: i32| (x as i64 - y as i64).abs() == sep;
+                let (da, db) = (domains[*a as usize].clone(), domains[*b as usize].clone());
+                let bad_a: Vec<i32> = da
+                    .iter()
+                    .copied()
+                    .filter(|x| db.iter().all(|y| close(*x, *y)))
+                    .collect();
+                for x in bad_a {
+                    changed |= remove(domains, trace, prob, *a, x, &tag("absdiff-ne"), pruned);
+                }
+                let (da, db) = (domains[*a as usize].clone(), domains[*b as usize].clone());
+                let bad_b: Vec<i32> = db
+                    .iter()
+                    .copied()
+                    .filter(|y| da.iter().all(|x| close(*x, *y)))
+                    .collect();
+                for y in bad_b {
+                    changed |= remove(domains, trace, prob, *b, y, &tag("absdiff-ne"), pruned);
                 }
             }
         }
