@@ -57,6 +57,33 @@ No SMT, no constraint propagators, no symbolic arithmetic, no
 search, no strategy selection, no neural components, no IR serialisation. See
 `docs/KNOWN_LIMITATIONS.md`, which is itemised and deliberately unflattering.
 
+## Version 2 — the representation set (branch `v2`)
+
+V1's engine is untouched. V2 adds new representations with new operations
+under one spine (`src/repr.rs`), all verified by the same Actions matrix:
+
+- **Puzzles** (`src/csp.rs`, `src/puzzle.rs`): 9x9 sudoku, N-queens,
+  map coloring, logic grids — propagation with explanations.
+- **Word problems** (`src/word.rs`): named quantities, linear relations.
+- **Planning** (`src/state.rs`, `src/domains.rs`): shortest plans plus a
+  BMC lowering onto the SAT core, with plan-vs-SAT agreement tests.
+- **Games** (`src/chess.rs`, `src/go.rs`, `src/search.rs`): legal chess
+  movegen (perft 20/400/8902), mate search, 5x5 go captures with ko,
+  A\*/IDA\*/alpha-beta — and a deterministic chooser (`src/choose.rs`).
+
+```sh
+cargo run --example sudoku      # classic puzzle, verified assignment
+cargo run --example queens      # 8-queens
+cargo run --example chess_mate  # back-rank mate in one + alpha-beta line
+cargo run --example go_capture  # 5x5 capture puzzle
+cargo run --example plan        # chooser -> plan verdict
+```
+
+Scope is stated in `docs/V2.md` §8: full-board chess/go play, unbounded
+integer arithmetic, and a text language for the new representations are
+explicitly future work — anything past the budget is `Exhausted`, never
+a guessed answer.
+
 ## The honesty contract
 
 > A status that claims knowledge carries a proof object. A status that does not

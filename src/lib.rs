@@ -18,18 +18,28 @@
 //! | Module | Role |
 //! |---|---|
 //! | [`bench`] | measurement harness: timing, allocation counting, seeded RNG |
+//! | [`chess`] | chess: legal movegen, FEN, perft, mate search, tree export |
+//! | [`choose`] | deterministic strategy selection over representations |
+//! | [`csp`] | finite-domain puzzles: propagation with explanations |
+//! | [`state`] | state-transition systems: plans, BMC lowering |
+//! | [`search`] | explicit graphs and game trees: A*, IDA*, alpha-beta |
+//! | [`repr`] | the V2 representation set: one request, one operation |
 //! | [`hash`] | fast hasher used by every internal table |
 //! | [`symbol`] | name interning; `u32` everywhere after load |
 //! | [`term`] | hash-consed term/atom arena, 16 B per node |
 //! | [`subst`] | union-find unification, trail, term resolution |
 //! | [`db`] | extensional database and indexes |
+//! | [`domains`] | planning instances: stacking, gripper |
+//! | [`go`] | go: liberties, captures, ko, capture puzzles |
 //! | [`program`] | rules, literals, stratification, the exterior-side builder |
 //! | [`proof`] | derivation records and check errors |
+//! | [`puzzle`] | puzzle adapters: sudoku, queens, coloring, logic grids |
 //! | [`check`] | independent proof checking |
 //! | [`solver`] | the solver object; public API surface |
 //! | [`solver_fwd`] | semi-naive bottom-up evaluation |
 //! | [`solver_bwd`] | depth-bounded SLD, `prove`, `query` |
 //! | [`exterior`] | text surface syntax and parsers |
+//! | [`word`] | word problems: named quantities, linear relations |
 //! | [`status`] | the honesty contract: `Status` and `Exhausted` |
 //! | [`budget`] | resource limits |
 //!
@@ -81,31 +91,53 @@
 pub mod bench;
 pub mod budget;
 pub mod check;
+pub mod chess;
+pub mod choose;
+pub mod csp;
 pub mod db;
+pub mod domains;
 pub mod exterior;
+pub mod go;
 pub mod hash;
 pub mod program;
 pub mod proof;
+pub mod puzzle;
+pub mod repr;
 pub mod sat;
+pub mod search;
 pub mod solver;
 pub mod solver_bwd;
 pub mod solver_fwd;
+pub mod state;
 pub mod status;
 pub mod subst;
 pub mod symbol;
 pub mod term;
 pub mod theory;
+pub mod word;
 
 pub use budget::Budget;
+pub use chess::{endgame_tree, find_mate_in_one, move_to_string, perft, Move, Position};
+pub use choose::{choose, features, Choice, Features};
+pub use csp::{solve_csp, verify_csp, Constraint, CspOutcome, CspProblem, CspStats};
 pub use db::Db;
+pub use domains::{gripper_1, stacking_3};
 pub use exterior::{Limits, ParseError};
+pub use go::{Goban, BLACK, EMPTY, WHITE};
 pub use program::{Builder, Literal, Program, ProgramError, Rule, RuleId};
 pub use proof::{CheckErr, DerivId, Derivation, Proof, Saturation};
+pub use puzzle::{logic_grid, map_color, nqueens, sudoku9};
+pub use repr::{run, Operation, Representation, Verdict};
 pub use sat::{
     AtomDesc, Grounding, Lit, STerm, SatCheckErr, SatOutcome, SatSolver, SatStats, TheoryHandler,
     TheoryLemma, TheoryResponse, TheoryStats, UnsatProof, Var,
 };
+pub use search::{
+    alpha_beta, astar, ida_star, verify_line, verify_path, GameOutcome, GameTree, SearchGraph,
+    SearchOutcome,
+};
 pub use solver::{Answer, Outcome, ProofMode, QueryOutcome, Solver, Stats};
+pub use state::{bmc_clauses, shortest_plan, verify_plan, Action, BmcCnf, PlanOutcome, StateGraph};
 pub use status::{Exhausted, Status};
 pub use subst::Subst;
 pub use symbol::SymbolTable;
@@ -115,6 +147,7 @@ pub use theory::{
     Combination, Congruence, Diff, DiffSet, TheoryAtom, TheoryDriver, TheoryError, TheoryOutcome,
     TheoryProof,
 };
+pub use word::WordModel;
 
 /// Compile-time check that the two promises in the charter which can be checked
 /// mechanically are actually true. Each is a real test in `tests/`, and this
