@@ -39,7 +39,7 @@ pub enum Representation {
 }
 
 /// What to do with the representation.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Operation {
     /// Solve the puzzle / satisfy the formula.
     Solve,

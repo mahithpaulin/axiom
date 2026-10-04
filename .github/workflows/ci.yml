@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: unit + integration (80 pass, 2 ignored)
+      - name: unit + integration (zero exclusions; use -- --ignored to list none)
         run: cargo test --lib --tests
 
   doc:
@@ -108,3 +108,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: I1 scaling probe (n=100..800, candidates slope must go 3 -> 2)
         run: cargo bench --bench kernel -- diag
+
+  examples:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: V2 examples still build (sudoku, queens, chess, go, plan)
+        run: cargo build --examples

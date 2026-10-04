@@ -437,3 +437,37 @@ fn planning_domains_plan_and_bmc_agree() {
     let plan = shortest_plan(&stacking, &mut budget).expect("within budget");
     assert_eq!(plan.plan, vec!["stack-a", "stack-b", "finish"]);
 }
+
+#[test]
+fn chooser_is_deterministic_and_honest() {
+    use axiom::{choose, features, stacking_3, Operation};
+    let rep = Representation::States(stacking_3());
+    assert_eq!(choose(&rep), choose(&rep));
+    let f = features(&rep);
+    assert_eq!((f.states, f.actions), (5, 5));
+    let choice = choose(&rep);
+    assert_eq!(choice.operation, Operation::Plan);
+    let mut budget = Budget::steps(choice.budget_hint);
+    let v = run(&rep, choice.operation, &mut budget).expect("within budget");
+    assert_eq!(v.status, Status::Found);
+}
+
+#[test]
+fn chooser_sends_large_graphs_to_bounded_sat() {
+    use axiom::{choose, Operation, StateGraph};
+    let mut g = StateGraph::new(100, 0);
+    for s in 0..99 {
+        g.action(&format!("step{s}"), s, s + 1, 1);
+    }
+    g.goal(99);
+    let rep = Representation::States(g);
+    let choice = choose(&rep);
+    assert_eq!(choice.operation, Operation::PlanBounded { bound: 64 });
+    let mut budget = Budget::steps(choice.budget_hint);
+    let v = run(&rep, choice.operation, &mut budget).expect("within budget");
+    assert_eq!(
+        v.status,
+        Status::Impossible,
+        "goal is 99 steps out, bound 64"
+    );
+}
