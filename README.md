@@ -67,14 +67,17 @@ under one spine (`src/repr.rs`), all verified by the same Actions matrix:
 - **Word problems** (`src/word.rs`): named quantities, linear relations.
 - **Planning** (`src/state.rs`, `src/domains.rs`): shortest plans plus a
   BMC lowering onto the SAT core, with plan-vs-SAT agreement tests.
-- **Games** (`src/chess.rs`, `src/go.rs`, `src/search.rs`): legal chess
-  movegen (perft 20/400/8902), mate search, 5x5 go captures with ko,
-  A\*/IDA\*/alpha-beta — and a deterministic chooser (`src/choose.rs`).
+- **Games** (`src/chess.rs`, `src/chess_play.rs`, `src/go.rs`, `src/search.rs`):
+  legal chess movegen (perft 20/400/8902), mate search, **full self-play
+  games** at fixed depth (negamax + TT + quiescence, real draw rules),
+  5x5 go captures with ko, A\*/IDA\*/alpha-beta — and a deterministic
+  chooser (`src/choose.rs`).
 
 ```sh
 cargo run --example sudoku      # classic puzzle, verified assignment
 cargo run --example queens      # 8-queens
 cargo run --example chess_mate  # back-rank mate in one + alpha-beta line
+cargo run --example chess_play  # full self-play game at depth 2
 cargo run --example go_capture  # 5x5 capture puzzle
 cargo run --example plan        # chooser -> plan verdict
 ```
