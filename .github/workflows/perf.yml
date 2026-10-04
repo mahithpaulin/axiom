@@ -1,0 +1,64 @@
+name: v2.5 perf compare
+
+on:
+  push:
+    branches: [v2.5-exp]
+  workflow_dispatch:
+
+# Compares benches/v2perf.rs on this branch against the same file on main.
+# The bench file must keep compiling against main's API (stable public API
+# only) because perf copies it onto a main checkout. Timings are noisy
+# (~15%); deterministic `ops` counters are the real verdict.
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: new
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: base
+      - uses: dtolnay/rust-toolchain@stable
+      - name: bench the branch
+        run: |
+          cd new
+          cargo bench --bench v2perf 2>&1 | tee "$GITHUB_WORKSPACE/perf-new.txt"
+      - name: bench the main baseline (same bench file, main code)
+        run: |
+          cd base
+          cp ../new/benches/v2perf.rs benches/v2perf.rs
+          printf '\n[[bench]]\nname = "v2perf"\nharness = false\n' >> Cargo.toml
+          cargo bench --bench v2perf 2>&1 | tee "$GITHUB_WORKSPACE/perf-base.txt"
+      - name: comparison table
+        run: |
+          python3 - <<'EOF' | tee "$GITHUB_STEP_SUMMARY"
+          import re
+          def load(path):
+              rows = {}
+              with open(path, errors="replace") as f:
+                  for line in f:
+                      m = re.search(r"PERF (\S+) wall=([\d.]+) ops=(\d+)", line)
+                      if m:
+                          rows[m.group(1)] = (float(m.group(2)), int(m.group(3)))
+              return rows
+          base = load("perf-base.txt")
+          new = load("perf-new.txt")
+          print("## v2.5-exp vs main (benches/v2perf)")
+          print("")
+          print("| bench | main ms | branch ms | speedup | main ops | branch ops | ops x |")
+          print("|---|---|---|---|---|---|---|")
+          for name in sorted(set(base) | set(new)):
+              if name in base and name in new:
+                  (bw, bo), (nw, no) = base[name], new[name]
+                  speed = bw / nw if nw > 0 else float("inf")
+                  opsr = bo / no if no > 0 else float("inf")
+                  print(f"| {name} | {bw:.2f} | {nw:.2f} | {speed:.2f}x | {bo} | {no} | {opsr:.2f}x |")
+              else:
+                  print(f"| {name} | missing on one side | | | | | |")
+          print("")
+          print("Speedup > 1 means the branch is faster. Timing noise is ~15%;")
+          print("trust the `ops` column (deterministic counters) first.")
+          EOF
