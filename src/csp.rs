@@ -15,6 +15,7 @@
 
 use crate::budget::Budget;
 use crate::status::{Exhausted, Status};
+use std::rc::Rc;
 
 /// Variable id: index into [`CspProblem::vars`].
 pub type VarId = u32;
@@ -156,11 +157,88 @@ pub fn verify_csp(prob: &CspProblem, assignment: &[i32]) -> bool {
     })
 }
 
-/// Remove `val` from `domains[v]`; records the reason. Returns true when the
-/// domain changed.
+/// Undo stack for domain removals: backtracking pops entries and restores
+/// values instead of cloning whole domains per node. Domains stay sorted at
+/// all times (removals shift, restores binary-search the slot back), so the
+/// branching order — and therefore the search — is exactly as before.
+/// Branching itself is one `Assign` entry, not one per removed value.
+#[derive(Default)]
+struct Trail {
+    entries: Vec<TrailOp>,
+}
+
+enum TrailOp {
+    Remove(VarId, i32),
+    Assign(VarId, Vec<i32>),
+}
+
+impl Trail {
+    fn mark(&self) -> usize {
+        self.entries.len()
+    }
+
+    fn undo_to(&mut self, domains: &mut [Vec<i32>], mark: usize) {
+        while self.entries.len() > mark {
+            match self.entries.pop().expect("mark is within the trail") {
+                TrailOp::Remove(v, val) => {
+                    let d = &mut domains[v as usize];
+                    if let Err(pos) = d.binary_search(&val) {
+                        d.insert(pos, val);
+                    }
+                }
+                TrailOp::Assign(v, old) => {
+                    domains[v as usize] = old;
+                }
+            }
+        }
+    }
+}
+
+/// Persistent explanation list: pushing is one `Rc` allocation and branching
+/// shares the parent tail with zero copying (the old `Vec<String>` clone per
+/// node dominated hard searches). Flattened oldest-first on `Impossible`.
+#[derive(Clone, Default)]
+struct Trace {
+    top: Option<Rc<TraceNode>>,
+    len: usize,
+}
+
+struct TraceNode {
+    msg: String,
+    parent: Trace,
+}
+
+impl Trace {
+    fn push(&mut self, msg: String) {
+        if self.len >= 1024 {
+            return;
+        }
+        let parent = std::mem::take(self);
+        let len = parent.len + 1;
+        self.top = Some(Rc::new(TraceNode { msg, parent }));
+        self.len = len;
+    }
+
+    fn flatten(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut cur = self;
+        while let Some(rc) = &cur.top {
+            out.push(rc.msg.clone());
+            cur = &rc.parent;
+        }
+        out.reverse();
+        out
+    }
+}
+
+/// Remove `val` from `domains[v]`; records the trail entry and the reason.
+/// Returns true when the domain changed. Order-preserving (`Vec::remove`),
+/// so branching order is untouched.
+#[allow(clippy::too_many_arguments)]
 fn remove(
     domains: &mut [Vec<i32>],
-    trace: &mut Vec<String>,
+    trail: &mut Trail,
+    trace: &mut Trace,
     prob: &CspProblem,
     v: VarId,
     val: i32,
@@ -170,10 +248,9 @@ fn remove(
     let d = &mut domains[v as usize];
     if let Some(pos) = d.iter().position(|x| *x == val) {
         d.remove(pos);
+        trail.entries.push(TrailOp::Remove(v, val));
         *pruned += 1;
-        if trace.len() < 1024 {
-            trace.push(format!("{} != {val} by {why}", var_name(prob, v)));
-        }
+        trace.push(format!("{} != {val} by {why}", var_name(prob, v)));
         true
     } else {
         false
@@ -186,10 +263,93 @@ enum PropErr {
     Budget(Exhausted),
 }
 
-fn conflict_msg(trace: &mut Vec<String>, msg: String) {
-    if trace.len() < 1024 {
-        trace.push(msg);
+/// Kuhn DFS for bipartite matching (one augmenting-path search). Domains are
+/// tiny, so the textbook O(VE) version beats fancier ones; order is scope
+/// order over first-seen values, hence deterministic.
+fn kuhn(
+    i: usize,
+    adj: &[Vec<usize>],
+    match_var: &mut [Option<usize>],
+    match_val: &mut [Option<usize>],
+    seen: &mut [bool],
+) -> bool {
+    for xi in &adj[i] {
+        let xi = *xi;
+        if seen[xi] {
+            continue;
+        }
+        seen[xi] = true;
+        if match_val[xi].is_none()
+            || kuhn(
+                match_val[xi].expect("matched value"),
+                adj,
+                match_var,
+                match_val,
+                seen,
+            )
+        {
+            match_var[i] = Some(xi);
+            match_val[xi] = Some(i);
+            return true;
+        }
     }
+    false
+}
+
+/// Strongly connected components by Kosaraju (iterative, deterministic in
+/// stored edge order). Returns one component id per node.
+fn scc(n: usize, edges: &[Vec<usize>]) -> Vec<usize> {
+    let mut rev: Vec<Vec<usize>> = vec![Vec::new(); n];
+    for (a, outs) in edges.iter().enumerate() {
+        for b in outs {
+            rev[*b].push(a);
+        }
+    }
+    let mut visited = vec![false; n];
+    let mut order = Vec::with_capacity(n);
+    for s in 0..n {
+        if visited[s] {
+            continue;
+        }
+        let mut stack = vec![(s, false)];
+        while let Some((u, done)) = stack.pop() {
+            if done {
+                order.push(u);
+                continue;
+            }
+            if visited[u] {
+                continue;
+            }
+            visited[u] = true;
+            stack.push((u, true));
+            for v in edges[u].iter().rev() {
+                if !visited[*v] {
+                    stack.push((*v, false));
+                }
+            }
+        }
+    }
+    let mut comp = vec![usize::MAX; n];
+    let mut ncomps = 0usize;
+    for s in order.iter().rev() {
+        if comp[*s] != usize::MAX {
+            continue;
+        }
+        let mut stack = vec![*s];
+        while let Some(u) = stack.pop() {
+            if comp[u] != usize::MAX {
+                continue;
+            }
+            comp[u] = ncomps;
+            for v in &rev[u] {
+                if comp[*v] == usize::MAX {
+                    stack.push(*v);
+                }
+            }
+        }
+        ncomps += 1;
+    }
+    comp
 }
 
 /// One pass over every constraint. Returns the net change, or the reason the
@@ -197,7 +357,8 @@ fn conflict_msg(trace: &mut Vec<String>, msg: String) {
 fn propagate_once(
     prob: &CspProblem,
     domains: &mut [Vec<i32>],
-    trace: &mut Vec<String>,
+    trail: &mut Trail,
+    trace: &mut Trace,
     pruned: &mut u64,
 ) -> Result<bool, String> {
     let mut changed = false;
@@ -219,24 +380,39 @@ fn propagate_once(
                     ));
                 }
                 for x in stale {
-                    changed |= remove(domains, trace, prob, *v, x, &tag("value-eq"), pruned);
+                    changed |= remove(domains, trail, trace, prob, *v, x, &tag("value-eq"), pruned);
                 }
             }
             Constraint::ValueNe(v, c) => {
-                changed |= remove(domains, trace, prob, *v, *c, &tag("value-ne"), pruned);
+                changed |= remove(
+                    domains,
+                    trail,
+                    trace,
+                    prob,
+                    *v,
+                    *c,
+                    &tag("value-ne"),
+                    pruned,
+                );
             }
             Constraint::Equal(a, b) => {
-                let (da, db) = (domains[*a as usize].clone(), domains[*b as usize].clone());
-                for x in da {
-                    if !db.contains(&x) {
-                        changed |= remove(domains, trace, prob, *a, x, &tag("equal"), pruned);
-                    }
+                // Intersect without cloning: collect owned values under
+                // shared borrows, then remove.
+                let bad_a: Vec<i32> = domains[*a as usize]
+                    .iter()
+                    .copied()
+                    .filter(|x| !domains[*b as usize].contains(x))
+                    .collect();
+                for x in bad_a {
+                    changed |= remove(domains, trail, trace, prob, *a, x, &tag("equal"), pruned);
                 }
-                let (da, db) = (domains[*a as usize].clone(), domains[*b as usize].clone());
-                for x in db {
-                    if !da.contains(&x) {
-                        changed |= remove(domains, trace, prob, *b, x, &tag("equal"), pruned);
-                    }
+                let bad_b: Vec<i32> = domains[*b as usize]
+                    .iter()
+                    .copied()
+                    .filter(|x| !domains[*a as usize].contains(x))
+                    .collect();
+                for x in bad_b {
+                    changed |= remove(domains, trail, trace, prob, *b, x, &tag("equal"), pruned);
                 }
             }
             Constraint::NotEqual(a, b) => {
@@ -254,11 +430,29 @@ fn propagate_once(
                 }
                 if domains[*a as usize].len() == 1 {
                     let x = domains[*a as usize][0];
-                    changed |= remove(domains, trace, prob, *b, x, &tag("not-equal"), pruned);
+                    changed |= remove(
+                        domains,
+                        trail,
+                        trace,
+                        prob,
+                        *b,
+                        x,
+                        &tag("not-equal"),
+                        pruned,
+                    );
                 }
                 if domains[*b as usize].len() == 1 {
                     let x = domains[*b as usize][0];
-                    changed |= remove(domains, trace, prob, *a, x, &tag("not-equal"), pruned);
+                    changed |= remove(
+                        domains,
+                        trail,
+                        trace,
+                        prob,
+                        *a,
+                        x,
+                        &tag("not-equal"),
+                        pruned,
+                    );
                 }
             }
             Constraint::LessThan(a, b) => {
@@ -273,7 +467,16 @@ fn propagate_once(
                     .filter(|x| *x >= max_b)
                     .collect();
                 for x in bad_a {
-                    changed |= remove(domains, trace, prob, *a, x, &tag("less-than"), pruned);
+                    changed |= remove(
+                        domains,
+                        trail,
+                        trace,
+                        prob,
+                        *a,
+                        x,
+                        &tag("less-than"),
+                        pruned,
+                    );
                 }
                 let bad_b: Vec<i32> = domains[*b as usize]
                     .iter()
@@ -281,42 +484,91 @@ fn propagate_once(
                     .filter(|x| *x <= min_a)
                     .collect();
                 for x in bad_b {
-                    changed |= remove(domains, trace, prob, *b, x, &tag("less-than"), pruned);
+                    changed |= remove(
+                        domains,
+                        trail,
+                        trace,
+                        prob,
+                        *b,
+                        x,
+                        &tag("less-than"),
+                        pruned,
+                    );
                 }
             }
             Constraint::AllDifferent(vs) => {
-                let mut union: Vec<i32> = Vec::new();
+                // Régin-style GAC: a value stays only if some maximum
+                // matching uses it. Strictly stronger than the old
+                // singleton rule (which it subsumes) and the union check.
+                let mut vals: Vec<i32> = Vec::new();
                 for v in vs {
                     for x in &domains[*v as usize] {
-                        if !union.contains(x) {
-                            union.push(*x);
+                        if !vals.contains(x) {
+                            vals.push(*x);
                         }
                     }
                 }
-                if union.len() < vs.len() {
-                    return Err(format!(
-                        "{}: {} variables share {} values",
-                        tag("all-different"),
-                        vs.len(),
-                        union.len()
-                    ));
-                }
-                let singletons: Vec<(VarId, i32)> = vs
+                let k = vs.len();
+                let adj: Vec<Vec<usize>> = vs
                     .iter()
-                    .filter_map(|v| {
-                        if domains[*v as usize].len() == 1 {
-                            Some((*v, domains[*v as usize][0]))
-                        } else {
-                            None
-                        }
+                    .map(|v| {
+                        domains[*v as usize]
+                            .iter()
+                            .map(|x| vals.iter().position(|y| y == x).expect("in universe"))
+                            .collect()
                     })
                     .collect();
-                for (sv, x) in &singletons {
-                    for v in vs {
-                        if *v != *sv {
-                            changed |=
-                                remove(domains, trace, prob, *v, *x, &tag("all-different"), pruned);
+                let mut match_var: Vec<Option<usize>> = vec![None; k];
+                let mut match_val: Vec<Option<usize>> = vec![None; vals.len()];
+                let mut matched = 0usize;
+                for i in 0..k {
+                    let mut seen = vec![false; vals.len()];
+                    if kuhn(i, &adj, &mut match_var, &mut match_val, &mut seen) {
+                        matched += 1;
+                    }
+                }
+                if matched < k {
+                    return Err(format!(
+                        "{}: only {matched} of {} variables placeable",
+                        tag("all-different"),
+                        k
+                    ));
+                }
+                // Alternating digraph: matched edges var -> value, the rest
+                // value -> var. Values prunable exactly when their edge is
+                // unmatched and crosses components.
+                let total = k + vals.len();
+                let mut edges: Vec<Vec<usize>> = vec![Vec::new(); total];
+                for (i, outs) in adj.iter().enumerate() {
+                    for xi in outs {
+                        if match_var[i] == Some(*xi) {
+                            edges[i].push(k + xi);
+                        } else {
+                            edges[k + xi].push(i);
                         }
+                    }
+                }
+                let comp = scc(total, &edges);
+                for (i, v) in vs.iter().enumerate() {
+                    let doomed: Vec<i32> = domains[*v as usize]
+                        .iter()
+                        .copied()
+                        .filter(|x| {
+                            let xi = vals.iter().position(|y| y == x).expect("in universe");
+                            match_var[i] != Some(xi) && comp[i] != comp[k + xi]
+                        })
+                        .collect();
+                    for x in doomed {
+                        changed |= remove(
+                            domains,
+                            trail,
+                            trace,
+                            prob,
+                            *v,
+                            x,
+                            &tag("all-different"),
+                            pruned,
+                        );
                     }
                 }
             }
@@ -356,30 +608,55 @@ fn propagate_once(
                         .filter(|x| others_min + *k * *x as i64 > *bound)
                         .collect();
                     for x in bad {
-                        changed |= remove(domains, trace, prob, *v, x, &tag("linear-le"), pruned);
+                        changed |= remove(
+                            domains,
+                            trail,
+                            trace,
+                            prob,
+                            *v,
+                            x,
+                            &tag("linear-le"),
+                            pruned,
+                        );
                     }
                 }
             }
             Constraint::AbsDiffNe(a, b, k) => {
                 let sep = *k as i64;
                 let close = |x: i32, y: i32| (x as i64 - y as i64).abs() == sep;
-                let (da, db) = (domains[*a as usize].clone(), domains[*b as usize].clone());
-                let bad_a: Vec<i32> = da
+                let bad_a: Vec<i32> = domains[*a as usize]
                     .iter()
                     .copied()
-                    .filter(|x| db.iter().all(|y| close(*x, *y)))
+                    .filter(|x| domains[*b as usize].iter().all(|y| close(*x, *y)))
                     .collect();
                 for x in bad_a {
-                    changed |= remove(domains, trace, prob, *a, x, &tag("absdiff-ne"), pruned);
+                    changed |= remove(
+                        domains,
+                        trail,
+                        trace,
+                        prob,
+                        *a,
+                        x,
+                        &tag("absdiff-ne"),
+                        pruned,
+                    );
                 }
-                let (da, db) = (domains[*a as usize].clone(), domains[*b as usize].clone());
-                let bad_b: Vec<i32> = db
+                let bad_b: Vec<i32> = domains[*b as usize]
                     .iter()
                     .copied()
-                    .filter(|y| da.iter().all(|x| close(*x, *y)))
+                    .filter(|y| domains[*a as usize].iter().all(|x| close(*x, *y)))
                     .collect();
                 for y in bad_b {
-                    changed |= remove(domains, trace, prob, *b, y, &tag("absdiff-ne"), pruned);
+                    changed |= remove(
+                        domains,
+                        trail,
+                        trace,
+                        prob,
+                        *b,
+                        y,
+                        &tag("absdiff-ne"),
+                        pruned,
+                    );
                 }
             }
         }
@@ -400,15 +677,16 @@ fn propagate_once(
 fn propagate(
     prob: &CspProblem,
     domains: &mut [Vec<i32>],
-    trace: &mut Vec<String>,
+    trail: &mut Trail,
+    trace: &mut Trace,
     stats: &mut CspStats,
     budget: &mut Budget,
 ) -> Result<(), PropErr> {
     loop {
         budget.charge(1).map_err(PropErr::Budget)?;
         stats.rounds += 1;
-        let changed =
-            propagate_once(prob, domains, trace, &mut stats.pruned).map_err(PropErr::Conflict)?;
+        let changed = propagate_once(prob, domains, trail, trace, &mut stats.pruned)
+            .map_err(PropErr::Conflict)?;
         if !changed {
             return Ok(());
         }
@@ -417,26 +695,32 @@ fn propagate(
 
 fn dfs(
     prob: &CspProblem,
-    domains: Vec<Vec<i32>>,
-    trace: Vec<String>,
+    domains: &mut Vec<Vec<i32>>,
+    trail: &mut Trail,
+    trace: Trace,
     stats: &mut CspStats,
     budget: &mut Budget,
 ) -> Result<CspOutcome, Exhausted> {
     budget.charge(1)?;
     stats.nodes += 1;
-    let mut domains = domains;
+    let mark = trail.mark();
     let mut trace = trace;
-    match propagate(prob, &mut domains, &mut trace, stats, budget) {
+    match propagate(prob, domains, trail, &mut trace, stats, budget) {
         Ok(()) => {}
-        Err(PropErr::Budget(e)) => return Err(e),
+        Err(PropErr::Budget(e)) => {
+            trail.undo_to(domains, mark);
+            return Err(e);
+        }
         Err(PropErr::Conflict(reason)) => {
-            conflict_msg(&mut trace, reason);
-            return Ok(CspOutcome {
+            trace.push(reason);
+            let out = CspOutcome {
                 status: Status::Impossible,
                 assignment: Vec::new(),
-                explanation: trace,
+                explanation: trace.flatten(),
                 stats: *stats,
-            });
+            };
+            trail.undo_to(domains, mark);
+            return Ok(out);
         }
     }
     if domains.iter().all(|d| d.len() == 1) {
@@ -449,7 +733,8 @@ fn dfs(
             stats: *stats,
         });
     }
-    // Minimum-remaining-values, ties broken by lowest variable id.
+    // Minimum-remaining-values, ties broken by lowest variable id. The trail
+    // preserves domain order, so the value order matches the old solver.
     let next = domains
         .iter()
         .enumerate()
@@ -459,13 +744,13 @@ fn dfs(
         .expect("a non-singleton domain exists");
     let mut first_impossible: Option<CspOutcome> = None;
     for val in domains[next].clone() {
-        let mut child = domains.clone();
-        child[next] = vec![val];
+        let child_mark = trail.mark();
         let mut child_trace = trace.clone();
-        if child_trace.len() < 1024 {
-            child_trace.push(format!("branch {} = {val}", var_name(prob, next as VarId)));
-        }
-        match dfs(prob, child, child_trace, stats, budget)? {
+        // Branch: keep only `val`. One trail entry restores the rest.
+        let old = std::mem::replace(&mut domains[next], vec![val]);
+        trail.entries.push(TrailOp::Assign(next as VarId, old));
+        child_trace.push(format!("branch {} = {val}", var_name(prob, next as VarId)));
+        match dfs(prob, domains, trail, child_trace, stats, budget)? {
             out @ CspOutcome {
                 status: Status::Found,
                 ..
@@ -478,13 +763,18 @@ fn dfs(
                     first_impossible = Some(out);
                 }
             }
-            out => return Ok(out),
+            out => {
+                trail.undo_to(domains, mark);
+                return Ok(out);
+            }
         }
+        trail.undo_to(domains, child_mark);
     }
+    trail.undo_to(domains, mark);
     Ok(first_impossible.unwrap_or(CspOutcome {
         status: Status::Impossible,
         assignment: Vec::new(),
-        explanation: trace,
+        explanation: trace.flatten(),
         stats: *stats,
     }))
 }
@@ -494,7 +784,7 @@ fn dfs(
 /// runs out (which says nothing about satisfiability).
 pub fn solve_csp(prob: &CspProblem, budget: &mut Budget) -> Result<CspOutcome, Exhausted> {
     let mut stats = CspStats::default();
-    let domains: Vec<Vec<i32>> = prob.vars.iter().map(|v| v.domain.clone()).collect();
+    let mut domains: Vec<Vec<i32>> = prob.vars.iter().map(|v| v.domain.clone()).collect();
     for (i, d) in domains.iter().enumerate() {
         if d.is_empty() {
             return Ok(CspOutcome {
@@ -508,5 +798,13 @@ pub fn solve_csp(prob: &CspProblem, budget: &mut Budget) -> Result<CspOutcome, E
             });
         }
     }
-    dfs(prob, domains, Vec::new(), &mut stats, budget)
+    let mut trail = Trail::default();
+    dfs(
+        prob,
+        &mut domains,
+        &mut trail,
+        Trace::default(),
+        &mut stats,
+        budget,
+    )
 }
