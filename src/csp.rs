@@ -161,9 +161,15 @@ pub fn verify_csp(prob: &CspProblem, assignment: &[i32]) -> bool {
 /// values instead of cloning whole domains per node. Domains stay sorted at
 /// all times (removals shift, restores binary-search the slot back), so the
 /// branching order — and therefore the search — is exactly as before.
+/// Branching itself is one `Assign` entry, not one per removed value.
 #[derive(Default)]
 struct Trail {
-    entries: Vec<(VarId, i32)>,
+    entries: Vec<TrailOp>,
+}
+
+enum TrailOp {
+    Remove(VarId, i32),
+    Assign(VarId, Vec<i32>),
 }
 
 impl Trail {
@@ -173,10 +179,16 @@ impl Trail {
 
     fn undo_to(&mut self, domains: &mut [Vec<i32>], mark: usize) {
         while self.entries.len() > mark {
-            let (v, val) = self.entries.pop().expect("mark is within the trail");
-            let d = &mut domains[v as usize];
-            if let Err(pos) = d.binary_search(&val) {
-                d.insert(pos, val);
+            match self.entries.pop().expect("mark is within the trail") {
+                TrailOp::Remove(v, val) => {
+                    let d = &mut domains[v as usize];
+                    if let Err(pos) = d.binary_search(&val) {
+                        d.insert(pos, val);
+                    }
+                }
+                TrailOp::Assign(v, old) => {
+                    domains[v as usize] = old;
+                }
             }
         }
     }
@@ -236,7 +248,7 @@ fn remove(
     let d = &mut domains[v as usize];
     if let Some(pos) = d.iter().position(|x| *x == val) {
         d.remove(pos);
-        trail.entries.push((v, val));
+        trail.entries.push(TrailOp::Remove(v, val));
         *pruned += 1;
         trace.push(format!("{} != {val} by {why}", var_name(prob, v)));
         true
@@ -734,23 +746,9 @@ fn dfs(
     for val in domains[next].clone() {
         let child_mark = trail.mark();
         let mut child_trace = trace.clone();
-        let others: Vec<i32> = domains[next]
-            .iter()
-            .copied()
-            .filter(|x| *x != val)
-            .collect();
-        for x in others {
-            remove(
-                domains,
-                trail,
-                &mut child_trace,
-                prob,
-                next as VarId,
-                x,
-                "branch",
-                &mut stats.pruned,
-            );
-        }
+        // Branch: keep only `val`. One trail entry restores the rest.
+        let old = std::mem::replace(&mut domains[next], vec![val]);
+        trail.entries.push(TrailOp::Assign(next as VarId, old));
         child_trace.push(format!("branch {} = {val}", var_name(prob, next as VarId)));
         match dfs(prob, domains, trail, child_trace, stats, budget)? {
             out @ CspOutcome {
