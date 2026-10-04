@@ -18,6 +18,10 @@
 //! | Module | Role |
 //! |---|---|
 //! | [`bench`] | measurement harness: timing, allocation counting, seeded RNG |
+//! | [`csp`] | finite-domain puzzles: propagation with explanations |
+//! | [`state`] | state-transition systems: plans, BMC lowering |
+//! | [`search`] | explicit graphs and game trees: A*, IDA*, alpha-beta |
+//! | [`repr`] | the V2 representation set: one request, one operation |
 //! | [`hash`] | fast hasher used by every internal table |
 //! | [`symbol`] | name interning; `u32` everywhere after load |
 //! | [`term`] | hash-consed term/atom arena, 16 B per node |
@@ -81,15 +85,19 @@
 pub mod bench;
 pub mod budget;
 pub mod check;
+pub mod csp;
 pub mod db;
 pub mod exterior;
 pub mod hash;
 pub mod program;
 pub mod proof;
+pub mod repr;
 pub mod sat;
+pub mod search;
 pub mod solver;
 pub mod solver_bwd;
 pub mod solver_fwd;
+pub mod state;
 pub mod status;
 pub mod subst;
 pub mod symbol;
@@ -97,15 +105,22 @@ pub mod term;
 pub mod theory;
 
 pub use budget::Budget;
+pub use csp::{solve_csp, verify_csp, Constraint, CspOutcome, CspProblem, CspStats};
 pub use db::Db;
 pub use exterior::{Limits, ParseError};
 pub use program::{Builder, Literal, Program, ProgramError, Rule, RuleId};
 pub use proof::{CheckErr, DerivId, Derivation, Proof, Saturation};
+pub use repr::{run, Operation, Representation, Verdict};
 pub use sat::{
     AtomDesc, Grounding, Lit, STerm, SatCheckErr, SatOutcome, SatSolver, SatStats, TheoryHandler,
     TheoryLemma, TheoryResponse, TheoryStats, UnsatProof, Var,
 };
+pub use search::{
+    alpha_beta, astar, ida_star, verify_line, verify_path, GameOutcome, GameTree, SearchGraph,
+    SearchOutcome,
+};
 pub use solver::{Answer, Outcome, ProofMode, QueryOutcome, Solver, Stats};
+pub use state::{bmc_clauses, shortest_plan, verify_plan, Action, BmcCnf, PlanOutcome, StateGraph};
 pub use status::{Exhausted, Status};
 pub use subst::Subst;
 pub use symbol::SymbolTable;
