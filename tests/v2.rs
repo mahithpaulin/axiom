@@ -367,3 +367,73 @@ fn chess_endgame_tree_plays_mate() {
     assert_eq!(out.value, MATE_SCORE);
     assert!(axiom::verify_line(&tree, &out.line, out.value));
 }
+
+#[test]
+fn go_capture_in_one() {
+    use axiom::{Goban, BLACK, WHITE};
+    // White c3 ringed on three sides; the only liberty is c4.
+    let mut g = Goban::new(5).unwrap();
+    g.set(12, WHITE);
+    for s in [11, 13, 7] {
+        g.set(s, BLACK);
+    }
+    assert_eq!(g.side_to_move(), BLACK);
+    let mut budget = Budget::steps(10_000);
+    assert_eq!(g.capture_in_one(&mut budget).unwrap(), vec![17]);
+    let out = g.play(17).expect("c4 captures");
+    assert_eq!(out.captured, 1);
+    assert_eq!(g.at(12), axiom::EMPTY);
+}
+
+#[test]
+fn go_suicide_is_refused() {
+    use axiom::{Goban, WHITE};
+    let mut g = Goban::new(5).unwrap();
+    g.set(1, WHITE);
+    g.set(5, WHITE);
+    assert!(g.play(0).is_err());
+    assert!(g.play(1).is_err());
+    assert!(Goban::new(0).is_err());
+    assert!(Goban::new(10).is_err());
+}
+
+#[test]
+fn go_simple_ko_is_refused() {
+    use axiom::{Goban, BLACK, WHITE};
+    let mut g = Goban::new(5).unwrap();
+    for s in [6, 10, 12, 16] {
+        g.set(s, WHITE);
+    }
+    for s in [5, 7, 1] {
+        g.set(s, BLACK);
+    }
+    g.set_side(true);
+    let out = g.play(11).expect("b3 captures b2");
+    assert_eq!(out.captured, 1);
+    assert_eq!(g.at(6), axiom::EMPTY);
+    assert!(g.play(6).is_err(), "immediate recapture repeats: ko");
+    g.play(24).expect("playing elsewhere is fine");
+}
+
+#[test]
+fn planning_domains_plan_and_bmc_agree() {
+    use axiom::{gripper_1, stacking_3};
+    for (graph, cost, bound) in [(stacking_3(), 4, 3), (gripper_1(), 3, 3)] {
+        let mut budget = Budget::steps(100_000);
+        let plan = shortest_plan(&graph, &mut budget).expect("within budget");
+        assert_eq!(plan.status, Status::Found);
+        assert_eq!(plan.cost, cost);
+        assert!(verify_plan(&graph, &plan.plan, plan.cost));
+        for (b, want) in [(bound, Status::Found), (bound - 1, Status::Impossible)] {
+            let rep = Representation::States(graph.clone());
+            let mut budget = Budget::steps(1_000_000);
+            let v =
+                run(&rep, Operation::PlanBounded { bound: b }, &mut budget).expect("within budget");
+            assert_eq!(v.status, want, "bound {b}");
+        }
+    }
+    let stacking = stacking_3();
+    let mut budget = Budget::steps(10_000);
+    let plan = shortest_plan(&stacking, &mut budget).expect("within budget");
+    assert_eq!(plan.plan, vec!["stack-a", "stack-b", "finish"]);
+}

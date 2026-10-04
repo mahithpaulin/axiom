@@ -28,6 +28,8 @@
 //! | [`term`] | hash-consed term/atom arena, 16 B per node |
 //! | [`subst`] | union-find unification, trail, term resolution |
 //! | [`db`] | extensional database and indexes |
+//! | [`domains`] | planning instances: stacking, gripper |
+//! | [`go`] | go: liberties, captures, ko, capture puzzles |
 //! | [`program`] | rules, literals, stratification, the exterior-side builder |
 //! | [`proof`] | derivation records and check errors |
 //! | [`puzzle`] | puzzle adapters: sudoku, queens, coloring, logic grids |
@@ -91,7 +93,9 @@ pub mod check;
 pub mod chess;
 pub mod csp;
 pub mod db;
+pub mod domains;
 pub mod exterior;
+pub mod go;
 pub mod hash;
 pub mod program;
 pub mod proof;
@@ -114,7 +118,9 @@ pub use budget::Budget;
 pub use chess::{endgame_tree, find_mate_in_one, move_to_string, perft, Move, Position};
 pub use csp::{solve_csp, verify_csp, Constraint, CspOutcome, CspProblem, CspStats};
 pub use db::Db;
+pub use domains::{gripper_1, stacking_3};
 pub use exterior::{Limits, ParseError};
+pub use go::{Goban, BLACK, EMPTY, WHITE};
 pub use program::{Builder, Literal, Program, ProgramError, Rule, RuleId};
 pub use proof::{CheckErr, DerivId, Derivation, Proof, Saturation};
 pub use puzzle::{logic_grid, map_color, nqueens, sudoku9};
