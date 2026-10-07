@@ -118,3 +118,23 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: V2 examples still build (sudoku, queens, chess, go, plan)
         run: cargo build --examples
+
+  mcp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: axiom-mcp stdio server (unit + prove/sat honesty)
+        run: cargo test -p axiom-mcp
+
+  tui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: axiom-tui check (ratatui + openai/anthropic providers)
+        run: cargo check -p axiom-tui

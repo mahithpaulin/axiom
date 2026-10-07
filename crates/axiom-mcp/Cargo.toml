@@ -1,0 +1,14 @@
+[package]
+name = "axiom-mcp"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "MCP stdio server exposing the Axiom reasoning engine as agent tools. Std only; axiom core stays zero-dep."
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "axiom-mcp"
+path = "src/main.rs"
+
+[dependencies]
+axiom = { path = "../.." }
