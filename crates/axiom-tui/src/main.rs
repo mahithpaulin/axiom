@@ -128,6 +128,7 @@ fn main() -> Result<(), String> {
     let backend = ratatui::backend::CrosstermBackend::new(&mut stdout);
     let mut terminal = Terminal::new(backend).map_err(err_str)?;
     let out = run_loop(&mut terminal, &mut app);
+    drop(terminal);
     let _ = crossterm::terminal::disable_raw_mode();
     let _ = writeln!(stdout);
     out
