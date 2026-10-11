@@ -1,0 +1,250 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# agentctl — Termux CLI for the ai-supervisor autonomous coding system.
+#
+# NOTE: Termux has no /usr/bin/env, so this uses the absolute bash path and
+# runs on Termux/Android only. (The CI-side scripts use `#!/usr/bin/env` and
+# are invoked via an explicit interpreter.)
+#
+# Submits durable coding tasks as GitHub issues and inspects them later.
+# The CLI exits immediately after submission; the phone need not stay on.
+# Requires: bash, gh (authenticated). No other dependencies.
+#
+#   agentctl setup
+#   agentctl submit "Implement feature X, add tests, and fix any failures"
+#   agentctl status TASK_ID
+#   agentctl list
+#   agentctl logs TASK_ID
+#   agentctl retry TASK_ID
+#   agentctl cancel TASK_ID
+#
+# Env overrides: AGENTCTL_REPO (default mahithpaulin/axiom),
+#   AGENTCTL_MODEL (default opencode/space-bunny-free),
+#   AGENTCTL_MAX_ITERS (default 3), AGENTCTL_MAX_ATTEMPTS (default 2).
+# TASK_ID is the GitHub issue number.
+set -uo pipefail
+
+REPO="${AGENTCTL_REPO:-mahithpaulin/axiom}"
+DEFAULT_MODEL="${AGENTCTL_MODEL:-opencode/space-bunny-free}"
+DEFAULT_ITERS="${AGENTCTL_MAX_ITERS:-3}"
+DEFAULT_ATTEMPTS="${AGENTCTL_MAX_ATTEMPTS:-2}"
+
+die() { echo "agentctl: error: $*" >&2; exit 1; }
+need_gh() { command -v gh >/dev/null || die "gh not found — install with: pkg install gh"; }
+
+json_escape() { # stdin -> JSON string content (no surrounding quotes)
+  sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e ':a;N;$!ba;s/\n/\\n/g'
+}
+
+task_status_of() { # task_status_of <issue> — prints ai status (queued|...|unknown)
+  gh issue view "$1" --repo "$REPO" --json labels \
+    --jq '[.labels[].name | select(startswith("ai-status-")) | sub("ai-status-";"")] | .[0] // "unknown"' 2>/dev/null
+}
+
+issue_json() { # issue_json <issue> — compact task fields from hidden block
+  gh issue view "$1" --repo "$REPO" --json number,title,body,url,state 2>/dev/null
+}
+
+cmd_setup() {
+  need_gh
+  gh auth status || die "gh is not authenticated — run: gh auth login"
+  echo "Creating labels in $REPO ..."
+  gh label create "ai-task" --repo "$REPO" --force \
+    --color "0E8A16" --description "Autonomous AI coding task (ai-supervisor)" >/dev/null \
+    || die "cannot create label ai-task"
+  for s in queued running retryable needs_review completed failed cancelled; do
+    gh label create "ai-status-$s" --repo "$REPO" --force \
+      --color "1D76DB" --description "ai-supervisor task status: $s" >/dev/null \
+      || die "cannot create label ai-status-$s"
+  done
+  echo "Labels OK."
+  if gh secret list --repo "$REPO" 2>/dev/null | grep -q '^OPENCODE_API_KEY'; then
+    echo "Secret OPENCODE_API_KEY: present."
+  else
+    echo "Secret OPENCODE_API_KEY: NOT visible (needs repo admin to verify)."
+    echo "  Add it at: https://github.com/$REPO/settings/secrets/actions"
+    echo "  Value: your OpenCode Zen API key (opencode.ai/auth). Never paste it in chat."
+  fi
+  if command -v agentctl >/dev/null && [ "$(command -v agentctl)" != "$HOME/bin/agentctl" ]; then
+    echo "agentctl already on PATH at $(command -v agentctl)."
+  else
+    echo "To activate in Termux:"
+    echo "  ln -sf \"\$PWD/tools/agentctl\" ~/bin/agentctl   # from the repo checkout"
+    echo "  agentctl setup"
+  fi
+}
+
+cmd_submit() {
+  need_gh
+  local desc="${1:-}" model="$DEFAULT_MODEL" iters="$DEFAULT_ITERS" attempts="$DEFAULT_ATTEMPTS" repo="$REPO"
+  [ -n "$desc" ] || die "usage: agentctl submit \"task description\" [--model M] [--max-iters N] [--max-attempts N] [--repo R]"
+  shift
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --model) model="${2:-}"; shift 2 ;;
+      --max-iters) iters="${2:-}"; shift 2 ;;
+      --max-attempts) attempts="${2:-}"; shift 2 ;;
+      --repo) repo="${2:-}"; shift 2 ;;
+      *) die "unknown flag: $1" ;;
+    esac
+  done
+  [ ${#desc} -le 4000 ] || die "description too long (max 4000 chars)"
+  [[ "$iters" =~ ^[1-5]$ ]] || die "--max-iters must be 1..5"
+  [[ "$attempts" =~ ^[1-3]$ ]] || die "--max-attempts must be 1..3"
+  [[ "$model" == *"/"* ]] || die "--model must look like provider/model (e.g. opencode/space-bunny-free)"
+  gh repo view "$repo" --json name >/dev/null 2>&1 || die "cannot access repo $repo"
+  local task_id slug title body url num
+  task_id="t$(date -u +%y%m%d%H%M)-$((RANDOM % 8999 + 1000))"
+  slug="$(echo "$desc" | head -c 60 | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]\+/-/g;s/^-\|-$//g' | cut -c1-40)"
+  [ -n "$slug" ] || slug="task"
+  title="[ai-task] $slug"
+  desc_esc="$(printf '%s' "$desc" | json_escape)"
+  body="$(cat <<EOF
+<!-- ai-task:{"task_id":"$task_id","status":"queued","repo":"$repo","model":"$model","max_iterations":$iters,"max_attempts":$attempts,"attempts":0,"branch":"","commit":""}-->
+
+## Task
+
+$desc
+
+## Bounds
+
+- Model: \`$model\`
+- Max implementation iterations: $iters
+- Max worker attempts (incl. retries): $attempts
+- The worker commits to a dedicated \`ai-task/<issue>-<slug>\` branch and never to the default branch.
+
+## Control
+
+- Retry: \`agentctl retry <issue>\` or comment \`/retry\`
+- Cancel: \`agentctl cancel <issue>\` or comment \`/cancel\`
+EOF
+)"
+  url="$(gh issue create --repo "$repo" --title "$title" \
+    --label "ai-task,ai-status-queued" --body "$body" 2>&1)" \
+    || die "issue creation failed: $url"
+  num="$(basename "$url")"
+  echo "Submitted task $task_id as issue #$num"
+  echo "$url"
+  echo "Worker starts automatically. Check back with: agentctl status $num"
+}
+
+cmd_status() {
+  need_gh
+  local n="${1:-}" ; [ -n "$n" ] || die "usage: agentctl status TASK_ID"
+  local data status branch sha attempts model iters task_id url state
+  data="$(issue_json "$n")" || die "cannot read issue #$n in $REPO"
+  status="$(task_status_of "$n")"
+  branch="$(echo "$data" | grep -o '<!-- ai-task:{[^}]*' | grep -o '"branch":"[^"]*"' | cut -d'"' -f4)"
+  sha="$(echo "$data" | grep -o '"commit":"[^"]*"' | cut -d'"' -f4)"
+  attempts="$(echo "$data" | grep -o '"attempts":[0-9]*' | cut -d: -f2)"
+  model="$(echo "$data" | grep -o '"model":"[^"]*"' | cut -d'"' -f4)"
+  iters="$(echo "$data" | grep -o '"max_iterations":[0-9]*' | cut -d: -f2)"
+  task_id="$(echo "$data" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)"
+  url="$(echo "$data" | grep -o '"url":"[^"]*"' | cut -d'"' -f4)"
+  state="$(echo "$data" | grep -o '"state":"[^"]*"' | cut -d'"' -f4)"
+  echo "Task      $task_id (issue #$n, $state)"
+  echo "Status    $status"
+  echo "Model     $model (max $iters iterations)"
+  echo "Attempts  ${attempts:-0}"
+  echo "Branch    ${branch:-none yet}"
+  echo "Commit    ${sha:-none yet}"
+  echo "URL       $url"
+  echo "--- latest supervisor note ---"
+  gh issue view "$n" --repo "$REPO" --json comments \
+    --jq '[.comments[] | select(.body | contains("ai-supervisor")) | .body] | last // "(no supervisor notes yet)"' 2>/dev/null \
+    | head -c 2000
+  echo
+}
+
+cmd_list() {
+  need_gh
+  gh issue list --repo "$REPO" --label "ai-task" --limit 30 \
+    --json number,title,labels,updatedAt \
+    --jq '.[] | "#\(.number)\t\([.labels[].name | select(startswith("ai-status-"))] | join(","))\t\(.title)"' \
+    || die "cannot list issues in $REPO"
+}
+
+cmd_logs() {
+  need_gh
+  local n="${1:-}" ; [ -n "$n" ] || die "usage: agentctl logs TASK_ID"
+  echo "--- durable record (issue comments, newest last) ---"
+  gh issue view "$n" --repo "$REPO" --json comments \
+    --jq '.comments[] | select(.body | contains("ai-supervisor")) | .body' 2>/dev/null \
+    | tail -c 6000 || echo "(no supervisor comments)"
+  local data branch run_id
+  data="$(issue_json "$n")" || die "cannot read issue #$n"
+  branch="$(echo "$data" | grep -o '"branch":"[^"]*"' | cut -d'"' -f4)"
+  if [ -z "$branch" ]; then echo "(no task branch yet — worker may not have started)"; return 0; fi
+  echo "--- workflow runs on $branch ---"
+  run_id="$(gh run list --repo "$REPO" --workflow "ai-supervisor.yml" --branch "$branch" \
+    --limit 1 --json databaseId --jq '.[0].databaseId // empty' 2>/dev/null || true)"
+  if [ -z "$run_id" ]; then
+    echo "(no ai-supervisor runs found; logs expire after retention — issue comments above are the durable copy)"
+    return 0
+  fi
+  echo "run id: $run_id"
+  gh run view "$run_id" --repo "$REPO" --log 2>&1 | tail -60 || \
+    echo "(run logs expired or unavailable — issue comments above are the durable copy)"
+}
+
+cmd_retry() {
+  need_gh
+  local n="${1:-}" force=0
+  [ -n "$n" ] || die "usage: agentctl retry TASK_ID [--force]"
+  [ "${2:-}" = "--force" ] && force=1
+  local status data attempts max_attempts
+  status="$(task_status_of "$n")"
+  case "$status" in
+    failed|needs_review) ;;
+    cancelled) die "task #$n is cancelled — submit a new task instead" ;;
+    completed) [ "$force" = 1 ] || die "task #$n is completed — use --force to rerun anyway" ;;
+    *) die "task #$n is $status — only failed/needs_review tasks can be retried" ;;
+  esac
+  data="$(issue_json "$n")" || die "cannot read issue #$n"
+  attempts="$(echo "$data" | grep -o '"attempts":[0-9]*' | cut -d: -f2)"
+  max_attempts="$(echo "$data" | grep -o '"max_attempts":[0-9]*' | cut -d: -f2)"
+  attempts="${attempts:-0}"; max_attempts="${max_attempts:-2}"
+  if [ "$attempts" -ge "$max_attempts" ] && [ "$force" != 1 ]; then
+    die "attempt budget exhausted ($attempts/$max_attempts) — use --force to override"
+  fi
+  gh issue comment "$n" --repo "$REPO" --body "/retry (requested via agentctl)" >/dev/null \
+    || die "cannot comment on issue #$n"
+  gh issue edit "$n" --repo "$REPO" --remove-label "ai-status-$status" --add-label "ai-status-queued" >/dev/null \
+    || die "cannot relabel issue #$n"
+  echo "Retry requested for #$n (attempt $((attempts + 1))/$max_attempts)."
+}
+
+cmd_cancel() {
+  need_gh
+  local n="${1:-}" ; [ -n "$n" ] || die "usage: agentctl cancel TASK_ID"
+  local status
+  status="$(task_status_of "$n")"
+  gh issue comment "$n" --repo "$REPO" --body "/cancel (requested via agentctl)" >/dev/null \
+    || die "cannot comment on issue #$n"
+  if [ -n "$status" ] && [ "$status" != "unknown" ]; then
+    gh issue edit "$n" --repo "$REPO" --remove-label "ai-status-$status" --add-label "ai-status-cancelled" >/dev/null || true
+  else
+    gh issue edit "$n" --repo "$REPO" --add-label "ai-status-cancelled" >/dev/null || true
+  fi
+  echo "Cancel requested for #$n. A running worker stops at its next checkpoint."
+}
+
+usage() {
+  sed -n '2,/^#$/p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+main() {
+  local cmd="${1:-help}"
+  case "$cmd" in
+    setup) shift; cmd_setup "$@" ;;
+    submit) shift; cmd_submit "$@" ;;
+    status) shift; cmd_status "$@" ;;
+    list) shift; cmd_list ;;
+    logs) shift; cmd_logs "$@" ;;
+    retry) shift; cmd_retry "$@" ;;
+    cancel) shift; cmd_cancel "$@" ;;
+    -h|--help|help) usage ;;
+    *) die "unknown command: $cmd (try: agentctl help)" ;;
+  esac
+}
+
+main "$@"

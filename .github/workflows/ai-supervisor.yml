@@ -1,0 +1,266 @@
+# ai-supervisor — bounded autonomous coding worker.
+#
+# Queue: GitHub issues labelled `ai-task` (+ `ai-status-*` for state).
+# Submit from Termux:  agentctl submit "Implement feature X, add tests"
+# The phone is not involved after submission; this workflow does the work.
+#
+# Safety properties:
+# - The `validate` job sees NO secrets. Only trusted authors
+#   (OWNER/MEMBER/COLLABORATOR) can start the `execute` job that holds
+#   OPENCODE_API_KEY. Untrusted issues are ignored silently (no oracle, no spam).
+# - Least-privilege per-job permissions (top-level permissions are empty).
+# - One worker per issue (concurrency group). Re-delivery / relabel events are
+#   idempotent: `decide` refuses when status is running/final/cancelled.
+# - Bounded: max 5 attempts total per task (default 2), max 5 iterations per
+#   attempt (default 3), 55 min job timeout, per-call timeouts in controller.
+# - Never commits to the default branch; never merges, deploys or releases.
+# - Pushes with GITHUB_TOKEN do not trigger new workflow runs (no loops).
+# - Our own bot comments are ignored (sender type Bot), so progress comments
+#   and final reports can never retrigger the worker.
+#
+# Required repo secret: OPENCODE_API_KEY (OpenCode Zen API key).
+# Optional: OPENCODE_MODEL_FALLBACK not needed — model comes from the issue.
+
+name: ai-supervisor
+
+on:
+  issues:
+    types: [opened, labeled]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: ai-task-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  validate:
+    name: validate task (no secrets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write # comment + label maintenance only; no code, no secrets
+    outputs:
+      decision: ${{ steps.decide.outputs.decision }}
+      reason: ${{ steps.decide.outputs.reason }}
+      branch: ${{ steps.decide.outputs.branch }}
+      model: ${{ steps.decide.outputs.model }}
+      max_iterations: ${{ steps.decide.outputs.max_iterations }}
+      attempts: ${{ steps.decide.outputs.attempts }}
+    steps:
+      # Sparse read-only checkout of the helper scripts. No secrets are
+      # exposed to this job, so running repo code here is safe.
+      - name: Checkout helper scripts
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # actions/checkout v4 (2026-10-11)
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          sparse-checkout: .github/scripts
+
+      - name: Decide what to do
+        id: decide
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 .github/scripts/ai_supervisor.py decide
+
+      - name: Record attempt state on the issue
+        if: steps.decide.outputs.decision == 'start'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ISSUE='${{ github.event.issue.number }}'
+          gh issue view "$ISSUE" --json body --jq .body > /tmp/issue-body.md
+          python3 .github/scripts/ai_supervisor.py update-body \
+            --body-file /tmp/issue-body.md \
+            --updates-json '{"status":"running","attempts":${{ steps.decide.outputs.attempts }},"branch":"${{ steps.decide.outputs.branch }}"}' \
+            > /tmp/issue-body-new.md
+          gh issue edit "$ISSUE" --body-file /tmp/issue-body-new.md
+          # Move ai-status-* to running (best effort; decide already guards).
+          for L in queued retryable needs_review failed; do
+            gh issue edit "$ISSUE" --remove-label "ai-status-$L" 2>/dev/null || true
+          done
+          gh issue edit "$ISSUE" --add-label "ai-status-running" 2>/dev/null || true
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## ai-supervisor: starting attempt ${{ steps.decide.outputs.attempts }}
+          - Branch: \`${{ steps.decide.outputs.branch }}\`
+          - Model: \`${{ steps.decide.outputs.model }}\`
+          - Reason: ${{ steps.decide.outputs.reason }}
+          EOF
+
+      - name: Apply cancellation (no worker needed)
+        if: steps.decide.outputs.decision == 'cancel'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ISSUE='${{ github.event.issue.number }}'
+          for L in queued running retryable needs_review; do
+            gh issue edit "$ISSUE" --remove-label "ai-status-$L" 2>/dev/null || true
+          done
+          gh issue edit "$ISSUE" --add-label "ai-status-cancelled" 2>/dev/null || true
+          gh issue comment "$ISSUE" --body "## ai-supervisor: cancelled
+
+          Cancellation confirmed. A running worker stops at its next checkpoint; no new work will start."
+
+      - name: Report invalid task fields
+        if: steps.decide.outputs.decision == 'invalid'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ISSUE='${{ github.event.issue.number }}'
+          for L in queued running retryable; do
+            gh issue edit "$ISSUE" --remove-label "ai-status-$L" 2>/dev/null || true
+          done
+          gh issue edit "$ISSUE" --add-label "ai-status-needs_review" 2>/dev/null || true
+          gh issue comment "$ISSUE" --body "## ai-supervisor: task needs attention
+
+          The task fields are invalid: ${{ steps.decide.outputs.reason }}.
+
+          Edit the issue body (keep the hidden \`<!-- ai-task: ... -->\` block valid JSON),
+          then comment \`/retry\` to try again."
+
+  execute:
+    name: run bounded coding attempt
+    needs: validate
+    if: needs.validate.outputs.decision == 'start'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    permissions:
+      contents: write # push task branch only
+      issues: write # progress + final report comments, status labels
+      pull-requests: write # optional PR creation only
+      actions: write # upload diagnostic log artifact
+    env:
+      GH_REPO: ${{ github.repository }}
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      TASK_BRANCH: ${{ needs.validate.outputs.branch }}
+      MODEL: ${{ needs.validate.outputs.model }}
+      MAX_ITERATIONS: ${{ needs.validate.outputs.max_iterations }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # actions/checkout v4 (2026-10-11)
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable (2026-10-11)
+      - name: Restore cargo cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2 (2026-10-11)
+
+      - name: Install OpenCode
+        run: |
+          npm install -g 'opencode@1.18.35'
+          opencode --version
+
+      - name: Write least-privilege worker config
+        run: |
+          # Narrow agent permissions for the autonomous worker. The model may
+          # read/edit files and run project commands; it may not spawn
+          # subagents, touch the network, or use MCP servers. Written to the
+          # runner HOME — never committed to the repo.
+          mkdir -p "$HOME/.config/opencode"
+          cat > "$HOME/.config/opencode/opencode.json" <<'EOF'
+          {
+            "$schema": "https://opencode.ai/config.json",
+            "permission": {
+              "edit": "allow",
+              "read": "allow",
+              "glob": "allow",
+              "grep": "allow",
+              "list": "allow",
+              "bash": "allow",
+              "task": "deny",
+              "webfetch": "deny",
+              "websearch": "deny",
+              "skill": "deny"
+            }
+          }
+          EOF
+          echo "worker opencode.json written (model is passed per-invocation)"
+
+      - name: Extract task text
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue view "$ISSUE_NUMBER" --repo "$GH_REPO" --json body --jq .body > /tmp/issue-body.md
+          python3 - <<'EOF'
+          import sys
+          sys.path.insert(0, ".github/scripts")
+          from ai_supervisor import parse_task_body
+          with open("/tmp/issue-body.md", encoding="utf-8") as fh:
+              data = parse_task_body(fh.read())
+          task = (data.get("task") or "").strip()
+          if not task:
+              raise SystemExit("task text empty — refusing to run")
+          with open("/tmp/task.txt", "w", encoding="utf-8") as fh:
+              fh.write(task)
+          EOF
+
+      - name: Run bounded iteration controller
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          TASK_FILE: /tmp/task.txt
+          # Explicit shared result file: each step gets its own GITHUB_OUTPUT,
+          # so the controller must not use it for cross-step communication.
+          RESULT_FILE: /tmp/ai-result.env
+          # GITHUB_TOKEN is deliberately NOT exported into opencode's
+          # environment: issue updates happen from this shell, not the model.
+        run: |
+          [ -n "$OPENCODE_API_KEY" ] || { echo "::error::OPENCODE_API_KEY secret is not configured"; exit 1; }
+          rm -f /tmp/ai-result.env
+          bash .github/scripts/ai-controller.sh
+          echo "--- controller result ---"
+          cat /tmp/ai-result.env 2>/dev/null || echo "(no result file)"
+
+      - name: Finalise task status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          OUTCOME="$(grep '^outcome=' /tmp/ai-result.env 2>/dev/null | tail -1 | cut -d= -f2)"
+          SHA="$(grep '^commit_sha=' /tmp/ai-result.env 2>/dev/null | tail -1 | cut -d= -f2)"
+          ITERS="$(grep '^iterations_used=' /tmp/ai-result.env 2>/dev/null | tail -1 | cut -d= -f2)"
+          TESTS="$(grep '^tests_summary=' /tmp/ai-result.env 2>/dev/null | tail -1 | cut -d= -f2-)"
+          [ -n "$OUTCOME" ] || OUTCOME="failed"
+          for L in queued running retryable; do
+            gh issue edit "$ISSUE_NUMBER" --remove-label "ai-status-$L" 2>/dev/null || true
+          done
+          gh issue edit "$ISSUE_NUMBER" --add-label "ai-status-$OUTCOME" 2>/dev/null || true
+          gh issue view "$ISSUE_NUMBER" --json body --jq .body > /tmp/issue-body.md
+          python3 .github/scripts/ai_supervisor.py update-body \
+            --body-file /tmp/issue-body.md \
+            --updates-json "{\"status\":\"$OUTCOME\",\"commit\":\"$SHA\",\"last_update\":\"$(date -u +%FT%TZ)\"}" \
+            > /tmp/issue-body-new.md
+          gh issue edit "$ISSUE_NUMBER" --body-file /tmp/issue-body-new.md
+          {
+            echo "## ai-supervisor: $OUTCOME"
+            echo
+            echo "- Branch: \`$TASK_BRANCH\`"
+            echo "- Latest commit: \`${SHA:-none}\`"
+            echo "- Iterations used: \`${ITERS:-?}\`"
+            echo "- Tests: ${TESTS:-not run}"
+            echo "- Model: \`$MODEL\`"
+            echo
+            case "$OUTCOME" in
+              completed) echo "Done. Review the branch and open a PR when ready: \`gh pr create --head $TASK_BRANCH --title 'ai-task #$ISSUE_NUMBER'\`." ;;
+              needs_review) echo "Budget exhausted with unverified work preserved on the branch. Review, fix, or comment \`/retry\` (if attempts remain) to continue." ;;
+              failed) echo "No progress to review. Check the logs, adjust the task, then comment \`/retry\` (if attempts remain)." ;;
+              cancelled) echo "Cancelled. No further action." ;;
+            esac
+          } > /tmp/final-note.md
+          gh issue comment "$ISSUE_NUMBER" --body-file /tmp/final-note.md
+
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # upload-artifact v4 (2026-10-11)
+        with:
+          name: ai-task-${{ github.event.issue.number }}-logs
+          path: .ai-task-logs/
+          if-no-files-found: warn
+          # Short retention: artifacts expire. The durable record is the
+          # issue comments + commits, not this artifact.
+          retention-days: 7
