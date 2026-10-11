@@ -105,7 +105,22 @@ jobs:
 
           Cancellation confirmed. A running worker stops at its next checkpoint; no new work will start."
 
+      # Comment only on `opened`: `labeled` re-deliveries of the same invalid
+      # issue must not post duplicate comments (labels below are idempotent).
       - name: Report invalid task fields
+        if: steps.decide.outputs.decision == 'invalid' && github.event.action == 'opened'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ISSUE='${{ github.event.issue.number }}'
+          gh issue comment "$ISSUE" --body "## ai-supervisor: task needs attention
+
+          The task fields are invalid: ${{ steps.decide.outputs.reason }}.
+
+          Edit the issue body (keep the hidden \`<!-- ai-task: ... -->\` block valid JSON),
+          then comment \`/retry\` to try again."
+
+      - name: Mark invalid task needs_review
         if: steps.decide.outputs.decision == 'invalid'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -115,12 +130,6 @@ jobs:
             gh issue edit "$ISSUE" --remove-label "ai-status-$L" 2>/dev/null || true
           done
           gh issue edit "$ISSUE" --add-label "ai-status-needs_review" 2>/dev/null || true
-          gh issue comment "$ISSUE" --body "## ai-supervisor: task needs attention
-
-          The task fields are invalid: ${{ steps.decide.outputs.reason }}.
-
-          Edit the issue body (keep the hidden \`<!-- ai-task: ... -->\` block valid JSON),
-          then comment \`/retry\` to try again."
 
   execute:
     name: run bounded coding attempt

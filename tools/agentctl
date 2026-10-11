@@ -35,13 +35,18 @@ json_escape() { # stdin -> JSON string content (no surrounding quotes)
   sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e ':a;N;$!ba;s/\n/\\n/g'
 }
 
+task_json_of() { # task_json_of <issue> — prints the hidden ai-task JSON object (compact)
+  gh issue view "$1" --repo "$REPO" --json body --jq .body 2>/dev/null \
+    | grep -o '<!-- ai-task:{.*}-->' | head -1 | sed 's/^<!-- ai-task://; s/-->$//'
+}
+
+task_field() { # task_field <json> <field> — safe extractor, prints "" on missing
+  echo "$1" | jq -r --arg f "$2" '.[$f] // ""' 2>/dev/null
+}
+
 task_status_of() { # task_status_of <issue> — prints ai status (queued|...|unknown)
   gh issue view "$1" --repo "$REPO" --json labels \
     --jq '[.labels[].name | select(startswith("ai-status-")) | sub("ai-status-";"")] | .[0] // "unknown"' 2>/dev/null
-}
-
-issue_json() { # issue_json <issue> — compact task fields from hidden block
-  gh issue view "$1" --repo "$REPO" --json number,title,body,url,state 2>/dev/null
 }
 
 cmd_setup() {
@@ -99,7 +104,7 @@ cmd_submit() {
   title="[ai-task] $slug"
   desc_esc="$(printf '%s' "$desc" | json_escape)"
   body="$(cat <<EOF
-<!-- ai-task:{"task_id":"$task_id","status":"queued","repo":"$repo","model":"$model","max_iterations":$iters,"max_attempts":$attempts,"attempts":0,"branch":"","commit":""}-->
+<!-- ai-task:{"task_id":"$task_id","status":"queued","repo":"$repo","model":"$model","max_iterations":$iters,"max_attempts":$attempts,"attempts":0,"branch":"","commit":"","task":"$desc_esc"}-->
 
 ## Task
 
@@ -130,17 +135,16 @@ EOF
 cmd_status() {
   need_gh
   local n="${1:-}" ; [ -n "$n" ] || die "usage: agentctl status TASK_ID"
-  local data status branch sha attempts model iters task_id url state
-  data="$(issue_json "$n")" || die "cannot read issue #$n in $REPO"
+  local tj status branch sha attempts model iters task_id url state
   status="$(task_status_of "$n")"
-  branch="$(echo "$data" | grep -o '<!-- ai-task:{[^}]*' | grep -o '"branch":"[^"]*"' | cut -d'"' -f4)"
-  sha="$(echo "$data" | grep -o '"commit":"[^"]*"' | cut -d'"' -f4)"
-  attempts="$(echo "$data" | grep -o '"attempts":[0-9]*' | cut -d: -f2)"
-  model="$(echo "$data" | grep -o '"model":"[^"]*"' | cut -d'"' -f4)"
-  iters="$(echo "$data" | grep -o '"max_iterations":[0-9]*' | cut -d: -f2)"
-  task_id="$(echo "$data" | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)"
-  url="$(echo "$data" | grep -o '"url":"[^"]*"' | cut -d'"' -f4)"
-  state="$(echo "$data" | grep -o '"state":"[^"]*"' | cut -d'"' -f4)"
+  # The hidden block is compact single-line JSON: grep the line, parse with jq.
+  tj="$(task_json_of "$n")" || die "cannot read issue #$n in $REPO"
+  [ -n "$tj" ] || die "issue #$n has no ai-task state block"
+  branch="$(task_field "$tj" branch)"; sha="$(task_field "$tj" commit)"
+  attempts="$(task_field "$tj" attempts)"; model="$(task_field "$tj" model)"
+  iters="$(task_field "$tj" max_iterations)"; task_id="$(task_field "$tj" task_id)"
+  url="$(gh issue view "$n" --repo "$REPO" --json url --jq .url 2>/dev/null)"
+  state="$(gh issue view "$n" --repo "$REPO" --json state --jq .state 2>/dev/null)"
   echo "Task      $task_id (issue #$n, $state)"
   echo "Status    $status"
   echo "Model     $model (max $iters iterations)"
@@ -170,9 +174,9 @@ cmd_logs() {
   gh issue view "$n" --repo "$REPO" --json comments \
     --jq '.comments[] | select(.body | contains("ai-supervisor")) | .body' 2>/dev/null \
     | tail -c 6000 || echo "(no supervisor comments)"
-  local data branch run_id
-  data="$(issue_json "$n")" || die "cannot read issue #$n"
-  branch="$(echo "$data" | grep -o '"branch":"[^"]*"' | cut -d'"' -f4)"
+  local tj branch run_id
+  tj="$(task_json_of "$n")" || die "cannot read issue #$n"
+  branch="$(task_field "$tj" branch)"
   if [ -z "$branch" ]; then echo "(no task branch yet — worker may not have started)"; return 0; fi
   echo "--- workflow runs on $branch ---"
   run_id="$(gh run list --repo "$REPO" --workflow "ai-supervisor.yml" --branch "$branch" \
@@ -191,7 +195,7 @@ cmd_retry() {
   local n="${1:-}" force=0
   [ -n "$n" ] || die "usage: agentctl retry TASK_ID [--force]"
   [ "${2:-}" = "--force" ] && force=1
-  local status data attempts max_attempts
+  local status tj attempts max_attempts
   status="$(task_status_of "$n")"
   case "$status" in
     failed|needs_review) ;;
@@ -199,9 +203,9 @@ cmd_retry() {
     completed) [ "$force" = 1 ] || die "task #$n is completed — use --force to rerun anyway" ;;
     *) die "task #$n is $status — only failed/needs_review tasks can be retried" ;;
   esac
-  data="$(issue_json "$n")" || die "cannot read issue #$n"
-  attempts="$(echo "$data" | grep -o '"attempts":[0-9]*' | cut -d: -f2)"
-  max_attempts="$(echo "$data" | grep -o '"max_attempts":[0-9]*' | cut -d: -f2)"
+  tj="$(task_json_of "$n")" || die "cannot read issue #$n"
+  attempts="$(task_field "$tj" attempts)"
+  max_attempts="$(task_field "$tj" max_attempts)"
   attempts="${attempts:-0}"; max_attempts="${max_attempts:-2}"
   if [ "$attempts" -ge "$max_attempts" ] && [ "$force" != 1 ]; then
     die "attempt budget exhausted ($attempts/$max_attempts) — use --force to override"
