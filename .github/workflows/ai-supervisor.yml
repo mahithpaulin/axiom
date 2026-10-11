@@ -161,7 +161,10 @@ jobs:
 
       - name: Install OpenCode
         run: |
-          npm install -g 'opencode@1.18.35'
+          # npm package is `opencode-ai` (bare `opencode` does not exist in the
+          # registry); it provides the `opencode` binary. Pinned to the version
+          # verified on the maintainer's machine.
+          npm install -g 'opencode-ai@1.18.35'
           opencode --version
 
       - name: Write least-privilege worker config
