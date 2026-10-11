@@ -145,6 +145,13 @@ payload with proofs on — the second index level cost ~76 B/fact for a 95×
 speedup — and ~197 B/fact with `ProofMode::Off`, which reports `Found` rather
 than `Proved` because it records nothing to check.
 
+## Automation
+
+Autonomous coding tasks run on GitHub Actions, submitted from Termux with
+`agentctl submit "task"` and tracked as `ai-task` issues — no phone, Codespace
+or Kaggle session needs to stay on. See `docs/AI_SUPERVISOR.md` for setup,
+security, usage and recovery.
+
 ## Licence
 
 MIT OR Apache-2.0.
