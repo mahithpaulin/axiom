@@ -1,0 +1,44 @@
+name: youtube-publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      title:
+        description: Video title
+        default: axiom example upload
+        type: string
+      privacy:
+        description: Visibility (unverified API projects must use private)
+        default: private
+        type: choice
+        options: [private, unlisted, public]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+      - name: install deps
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -q google-api-python-client google-auth-oauthlib
+      - name: make example video (5s test pattern, no repo blobs)
+        run: |
+          ffmpeg -y -f lavfi -i testsrc=size=1280x720:rate=30:duration=5 \
+            -f lavfi -i sine=frequency=440:duration=5 \
+            -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest /tmp/example.mp4
+      - name: upload (private default)
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: |
+          python3 tools/youtube/upload.py --file /tmp/example.mp4 \
+            --title "${{ inputs.title }}" --privacyStatus "${{ inputs.privacy }}"
