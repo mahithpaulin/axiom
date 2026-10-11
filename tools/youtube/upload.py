@@ -66,10 +66,15 @@ def main():
             _, resp = req.next_chunk()
         vid = resp["id"]
         print("VIDEO_ID=" + vid)
-        v = yt.videos().list(id=vid, part="id,snippet,status").execute()
-        items = v.get("items", [])
-        st = items[0]["status"]["privacyStatus"] if items else "?"
-        print("VERIFY privacyStatus=" + st)
+        try:
+            v = yt.videos().list(id=vid, part="id,snippet,status").execute()
+            items = v.get("items", [])
+            st = items[0]["status"]["privacyStatus"] if items else "?"
+            print("VERIFY privacyStatus=" + st)
+        except HttpError as e:
+            # youtube.upload scope allows insert but not list; insert
+            # success above is the real proof. Check Studio manually.
+            print("VERIFY skipped (upload scope cannot list): %s" % e)
     except HttpError as e:
         sys.exit("upload failed: %s" % e)
 
