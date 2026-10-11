@@ -222,6 +222,13 @@ def decide(
         if status == "running":
             out["reason"] = "task already running (duplicate event ignored)"
             return out
+        # Every start consumes attempt budget, no matter which event triggered
+        # it — otherwise relabeling failed->queued would grant unlimited runs.
+        if attempts + 1 > max_attempts:
+            out["reason"] = (
+                f"attempt budget exhausted ({attempts}/{max_attempts})"
+            )
+            return out
         errors = validate_task(data, repo)
         if errors:
             out.update(decision="invalid", reason="; ".join(errors))
@@ -229,8 +236,8 @@ def decide(
         out.update(
             decision="start",
             reason="new/queued task from trusted author",
-            is_retry=False,
-            attempts=max(attempts, 1),
+            is_retry=attempts > 0,
+            attempts=attempts + 1,
         )
         out.update(_task_fields(data, repo, issue_number))
         return out

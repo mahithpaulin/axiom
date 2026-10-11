@@ -236,6 +236,7 @@ jobs:
           OUTCOME="$(grep '^outcome=' /tmp/ai-result.env 2>/dev/null | tail -1 | cut -d= -f2)"
           SHA="$(grep '^commit_sha=' /tmp/ai-result.env 2>/dev/null | tail -1 | cut -d= -f2)"
           ITERS="$(grep '^iterations_used=' /tmp/ai-result.env 2>/dev/null | tail -1 | cut -d= -f2)"
+          [ -n "$ITERS" ] || ITERS=0
           TESTS="$(grep '^tests_summary=' /tmp/ai-result.env 2>/dev/null | tail -1 | cut -d= -f2-)"
           [ -n "$OUTCOME" ] || OUTCOME="failed"
           for L in queued running retryable; do

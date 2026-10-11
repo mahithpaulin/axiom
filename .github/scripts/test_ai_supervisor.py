@@ -117,8 +117,32 @@ class TestDecide(unittest.TestCase):
         )
         self.assertEqual(r["decision"], "start")
         self.assertEqual(r["attempts"], 1)
+        self.assertFalse(r["is_retry"])
         self.assertEqual(r["model"], "opencode/space-bunny-free")
         self.assertTrue(r["branch"].startswith("ai-task/0-") or "ai-task/" in r["branch"])
+
+    def test_relabel_retry_consumes_budget(self):
+        # Relabeling failed->queued goes through the issues path and must
+        # still consume an attempt, or retries would be unlimited.
+        r = decide(
+            event="issues", action="labeled",
+            issue_labels=["ai-task", "ai-status-queued"],
+            issue_body=body_of(attempts=1), issue_author_assoc="OWNER",
+            repo=REPO,
+        )
+        self.assertEqual(r["decision"], "start")
+        self.assertEqual(r["attempts"], 2)
+        self.assertTrue(r["is_retry"])
+
+    def test_issues_path_budget_enforced(self):
+        r = decide(
+            event="issues", action="labeled",
+            issue_labels=["ai-task", "ai-status-queued"],
+            issue_body=body_of(attempts=2, max_attempts=2),
+            issue_author_assoc="OWNER", repo=REPO,
+        )
+        self.assertEqual(r["decision"], "none")
+        self.assertIn("exhausted", r["reason"])
 
     def test_untrusted_author_never_starts(self):
         for assoc in ("NONE", "CONTRIBUTOR", "FIRST_TIMER", ""):
