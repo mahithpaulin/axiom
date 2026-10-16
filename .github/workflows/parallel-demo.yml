@@ -1,0 +1,27 @@
+name: parallel-demo
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/parallel-demo.yml
+
+# 3 jobs with no dependencies = GitHub runs them in parallel.
+# Each sleeps 20s: parallel wall ~20s, serial would be ~60s.
+jobs:
+  task-a:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: sleep 20 && echo "task-a done on $(date -u +%H:%M:%S)"
+
+  task-b:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: sleep 20 && echo "task-b done on $(date -u +%H:%M:%S)"
+
+  task-c:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: sleep 20 && echo "task-c done on $(date -u +%H:%M:%S)"
