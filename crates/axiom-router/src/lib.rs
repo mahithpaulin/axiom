@@ -130,6 +130,7 @@ impl Default for Router {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axiom_core::Verdict;
 
     const DOMAIN: &str = r#"
         (define (domain d)
