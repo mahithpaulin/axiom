@@ -102,7 +102,7 @@ relation are trusted tested code. See `docs/v4/VERIFICATION.md`.
 ## Current verification status
 
 GitHub Actions is authoritative. The Android/Termux device can run local
-checks and release builds, but is not a CI substitute. Run `39596401907` on
+checks and release builds, but is not a CI substitute. Run `39598017389` on
 branch `v4` passed all 10 jobs:
 
 - 243 library/integration tests, 0 failed, 0 ignored;

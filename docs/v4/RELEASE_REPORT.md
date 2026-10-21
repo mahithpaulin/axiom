@@ -123,6 +123,6 @@ separate from the release evidence above:
 
 Local validation on the development device: `cargo fmt --check`, workspace
 `clippy -D warnings`, 243 library/integration tests, and 7 doc tests pass.
-CI run `39596401907` at `65ea4db` also passed all 10 jobs with the same 243
+CI run `39598017389` at `5b16efb` also passed all 10 jobs with the same 243
 tests and 7 doc tests. The release statements in sections 4 and 7 describe
 `d606aab`; this section supersedes them for the new work.
