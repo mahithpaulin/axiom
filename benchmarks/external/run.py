@@ -39,6 +39,7 @@ class Case:
     match: bool | None = None
     skipped: bool = False
     note: str = ""
+    display: str = ""
 
 
 def run(cmd, timeout=120, cwd=None):
@@ -135,6 +136,69 @@ def z3_smt(path: Path):
     if result == z3.unsat:
         return "unsat"
     return "unknown"
+
+
+def z3_smt_script(path: Path):
+    """Interpret a small SMT-LIB script (assert/push/pop/check-sat) with Z3.
+
+    The same file that Axiom reads is replayed here, so the two sides answer
+    the same sequence of questions.
+    """
+    try:
+        import z3  # type: ignore
+    except ImportError:
+        return None
+    text = path.read_text()
+    text = "\n".join(line.split(";")[0] for line in text.splitlines())
+    tokens = text.replace("(", " ( ").replace(")", " ) ").split()
+    commands = []
+    index = 0
+
+    def read_expr():
+        nonlocal index
+        token = tokens[index]
+        index += 1
+        if token != "(":
+            return [token]
+        depth = 1
+        start = index
+        while depth:
+            current = tokens[index]
+            index += 1
+            if current == "(":
+                depth += 1
+            elif current == ")":
+                depth -= 1
+        return tokens[start : index - 1]
+
+    while index < len(tokens):
+        commands.append(read_expr())
+    declarations = []
+    solver = z3.Solver()
+    answers = []
+    for command in commands:
+        head = command[0]
+        if head in ("declare-fun", "declare-const"):
+            declarations.append(" ".join(command))
+        elif head == "assert":
+            source = " ".join(declarations + command)
+            try:
+                solver.add(z3.parse_smt2_string(source))
+            except z3.Z3Exception:
+                return "error"
+        elif head == "push":
+            solver.push()
+        elif head == "pop":
+            solver.pop()
+        elif head == "check-sat":
+            result = solver.check()
+            if result == z3.sat:
+                answers.append("sat")
+            elif result == z3.unsat:
+                answers.append("unsat")
+            else:
+                answers.append("unknown")
+    return ",".join(answers) if answers else None
 
 
 def clingo_count(path: Path, max_models: int = 64):
@@ -479,6 +543,38 @@ def main():
             print(f"MISMATCH smt/{name}: axiom={c.axiom['answer']} oracle={c.oracle_result}", file=sys.stderr)
         cases.append(c)
 
+    # ---- SMT: a push/pop session, Z3 replaying the same file -------------
+    session_work = work / "smt-session"
+    session_work.mkdir()
+    session_source = (
+        "(set-logic QF_IDL)\n"
+        "(declare-fun x () Int)\n"
+        "(assert (<= x 2))\n"
+        "(assert (>= x 0))\n"
+        "(check-sat)\n"
+        "(push 1)\n"
+        "(assert (>= x 5))\n"
+        "(check-sat)\n"
+        "(pop 1)\n"
+        "(check-sat)\n"
+    )
+    session_path = session_work / "push-pop.smt2"
+    session_path.write_text(session_source)
+    c = Case("smt", "push-pop-session", "sat,unsat,sat")
+    c.axiom = axiom_run(axiom_bin, ["smt", str(session_path)])
+    c.oracle = "z3"
+    raw = z3_smt_script(session_path)
+    c.oracle_result = None if raw is None else raw
+    c.skipped = c.oracle_result is None
+    c.match = None if c.skipped else c.axiom["fields"].get("checks") == c.oracle_result == "sat,unsat,sat"
+    c.display = c.axiom["fields"].get("checks", "")
+    if c.match is False:
+        print(
+            f"MISMATCH smt/{c.name}: axiom={c.axiom['fields'].get('checks')} oracle={c.oracle_result}",
+            file=sys.stderr,
+        )
+    cases.append(c)
+
     summary = {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "axiom_binary": str(axiom_bin),
@@ -504,8 +600,9 @@ def main():
         "|---|---|---|---|---|---|---|",
     ]
     for c in cases:
+        answer = c.display or c.axiom["answer"]
         lines.append(
-            f"| {c.family} | {c.name} | {c.expected} | {c.axiom['answer']} | {c.oracle} | "
+            f"| {c.family} | {c.name} | {c.expected} | {answer} | {c.oracle} | "
             f"{'' if c.oracle_result is None else c.oracle_result} | "
             f"{'skip' if c.skipped else ('yes' if c.match else 'NO')} |"
         )

@@ -59,7 +59,7 @@ pub use parse::{Atom, BaseTerm, Decl, Formula, SmtError, SmtProblem};
 
 const EVIDENCE_SAT: &str = "axiom-smt-sat";
 const EVIDENCE_UNSAT: &str = "axiom-smt-unsat";
-const EVIDENCE_HEADER: &str = "axiom-smt-evidence v1";
+const EVIDENCE_HEADER: &str = "axiom-smt-evidence v2";
 /// The implicit zero of the difference-logic fragment.
 const ORIGIN: &str = "%origin";
 
@@ -359,13 +359,13 @@ fn structural(base: &BaseTerm) -> STerm {
 }
 
 fn encode(
-    problem: &SmtProblem,
+    assertions: &[Formula],
     driver: &mut TheoryDriver,
     store: &mut TermStore,
     symbols: &mut SymbolTable,
 ) -> Result<Encoded, SmtError> {
     let mut encoder = Encoder::new(driver, store, symbols);
-    for assertion in &problem.assertions {
+    for assertion in assertions {
         let lit = encoder.encode(assertion)?;
         encoder.add(vec![lit]);
     }
@@ -507,7 +507,8 @@ fn parse_lits(text: &str) -> Result<Vec<Lit>, String> {
         .collect()
 }
 
-struct EvidenceData {
+/// One `check-sat` answer: its mode and the certificate that backs it.
+struct CheckEvidence {
     mode: String,
     model: Option<Vec<i8>>,
     learnts: Vec<Vec<Lit>>,
@@ -515,51 +516,49 @@ struct EvidenceData {
     atoms: Vec<(u32, AtomDesc)>,
 }
 
-fn write_evidence(
-    mode: &str,
-    model: Option<&[i8]>,
-    learnts: &[Vec<Lit>],
-    lemmas: &[TheoryLemma],
-    atoms: &[(u32, AtomDesc)],
-) -> String {
+/// A session: one answer per `check-sat` command in the source.
+struct SessionEvidence {
+    checks: Vec<CheckEvidence>,
+}
+
+fn write_evidence(checks: &[CheckEvidence]) -> String {
     let mut out = String::from(EVIDENCE_HEADER);
     out.push('\n');
-    out.push_str(&format!("mode {mode}\n"));
-    if let Some(model) = model {
-        let values: Vec<String> = model.iter().map(|v| v.to_string()).collect();
-        out.push_str(&format!("model {}\n", values.join(",")));
-    }
-    for (var, desc) in atoms {
-        out.push_str(&format!("atom {var} {}\n", render_atom(desc)));
-    }
-    for clause in learnts {
-        out.push_str(&format!("learnt {}\n", render_lits(clause)));
-    }
-    for lemma in lemmas {
-        let concl = match lemma.concl {
-            Some(c) => c.to_string(),
-            None => "-".to_string(),
-        };
-        out.push_str(&format!(
-            "lemma clause={} hyps={} concl={concl}\n",
-            render_lits(&lemma.clause),
-            render_lits(&lemma.hyps)
-        ));
+    out.push_str(&format!("checks {}\n", checks.len()));
+    for (index, check) in checks.iter().enumerate() {
+        out.push_str(&format!("check {index} {}\n", check.mode));
+        if let Some(model) = &check.model {
+            let values: Vec<String> = model.iter().map(|v| v.to_string()).collect();
+            out.push_str(&format!("model {}\n", values.join(",")));
+        }
+        for (var, desc) in &check.atoms {
+            out.push_str(&format!("atom {var} {}\n", render_atom(desc)));
+        }
+        for clause in &check.learnts {
+            out.push_str(&format!("learnt {}\n", render_lits(clause)));
+        }
+        for lemma in &check.lemmas {
+            let concl = match lemma.concl {
+                Some(c) => c.to_string(),
+                None => "-".to_string(),
+            };
+            out.push_str(&format!(
+                "lemma clause={} hyps={} concl={concl}\n",
+                render_lits(&lemma.clause),
+                render_lits(&lemma.hyps)
+            ));
+        }
     }
     out
 }
 
-fn read_evidence(payload: &str) -> Result<EvidenceData, String> {
+fn read_evidence(payload: &str) -> Result<SessionEvidence, String> {
     let mut lines = payload.lines();
     let header = lines.next().ok_or("empty evidence")?;
     if header.trim() != EVIDENCE_HEADER {
         return Err("unknown evidence header".to_string());
     }
-    let mut mode = String::new();
-    let mut model = None;
-    let mut learnts = Vec::new();
-    let mut lemmas = Vec::new();
-    let mut atoms = Vec::new();
+    let mut checks: Vec<CheckEvidence> = Vec::new();
     for line in lines {
         let line = line.trim();
         if line.is_empty() {
@@ -568,7 +567,37 @@ fn read_evidence(payload: &str) -> Result<EvidenceData, String> {
         let mut parts = line.split_whitespace();
         let head = parts.next().unwrap_or_default();
         match head {
-            "mode" => mode = parts.next().unwrap_or_default().to_string(),
+            "checks" => {
+                let count: usize = parts
+                    .next()
+                    .unwrap_or_default()
+                    .parse()
+                    .map_err(|_| "check count is not a number".to_string())?;
+                if count != 0 && checks.is_empty() {
+                    // The count is checked against the parsed sections below.
+                }
+            }
+            "check" => {
+                let index: usize = parts
+                    .next()
+                    .ok_or("check needs an index")?
+                    .parse()
+                    .map_err(|_| "check index is not a number".to_string())?;
+                let mode = parts.next().unwrap_or_default().to_string();
+                if index != checks.len() {
+                    return Err("check indices must be consecutive".to_string());
+                }
+                if mode != "sat" && mode != "unsat" {
+                    return Err(format!("unknown check mode {mode}"));
+                }
+                checks.push(CheckEvidence {
+                    mode,
+                    model: None,
+                    learnts: Vec::new(),
+                    lemmas: Vec::new(),
+                    atoms: Vec::new(),
+                });
+            }
             "model" => {
                 let text = parts.next().unwrap_or_default();
                 let mut values = Vec::new();
@@ -578,7 +607,8 @@ fn read_evidence(payload: &str) -> Result<EvidenceData, String> {
                             .map_err(|_| format!("model entry {part} is not a number"))?,
                     );
                 }
-                model = Some(values);
+                let check = checks.last_mut().ok_or("model outside a check section")?;
+                check.model = Some(values);
             }
             "atom" => {
                 let fields = split_top_level(line);
@@ -588,11 +618,14 @@ fn read_evidence(payload: &str) -> Result<EvidenceData, String> {
                     .parse()
                     .map_err(|_| "atom variable is not a number".to_string())?;
                 let desc = parse_atom(&fields[2..].join(" "))?;
-                atoms.push((var, desc));
+                let check = checks.last_mut().ok_or("atom outside a check section")?;
+                check.atoms.push((var, desc));
             }
             "learnt" => {
                 let text = parts.next().unwrap_or_default();
-                learnts.push(parse_lits(text)?);
+                let clause = parse_lits(text)?;
+                let check = checks.last_mut().ok_or("learnt outside a check section")?;
+                check.learnts.push(clause);
             }
             "lemma" => {
                 let mut clause = None;
@@ -621,7 +654,8 @@ fn read_evidence(payload: &str) -> Result<EvidenceData, String> {
                 let clause = clause.ok_or("lemma needs a clause")?;
                 let hyps = hyps.ok_or("lemma needs hypotheses")?;
                 let concl = concl.ok_or("lemma needs a conclusion")?;
-                lemmas.push(TheoryLemma {
+                let check = checks.last_mut().ok_or("lemma outside a check section")?;
+                check.lemmas.push(TheoryLemma {
                     clause,
                     hyps,
                     concl,
@@ -630,16 +664,10 @@ fn read_evidence(payload: &str) -> Result<EvidenceData, String> {
             other => return Err(format!("unknown evidence line {other}")),
         }
     }
-    if mode.is_empty() {
-        return Err("evidence has no mode".to_string());
+    if checks.is_empty() {
+        return Err("evidence has no checks".to_string());
     }
-    Ok(EvidenceData {
-        mode,
-        model,
-        learnts,
-        lemmas,
-        atoms,
-    })
+    Ok(SessionEvidence { checks })
 }
 
 // ---------------------------------------------------------------------------
@@ -660,18 +688,20 @@ fn parse_source(source: &str) -> Result<SmtProblem, Outcome> {
     })
 }
 
-/// Parse and encode a problem. The driver returned here is the one that
+/// Encode one assertion set. The driver returned here is the one that
 /// allocated the variables, so the same numbering is used for solving and
 /// for the certificate.
-fn build(source: &str) -> Result<(TheoryDriver, Encoded, TermStore, SymbolTable), Outcome> {
-    let problem = parse_source(source)?;
+fn build(
+    assertions: &[Formula],
+) -> Result<(TheoryDriver, Encoded, TermStore, SymbolTable), Outcome> {
     let mut driver = TheoryDriver::new();
     let mut store = TermStore::new();
     let mut symbols = SymbolTable::new();
-    let encoded = encode(&problem, &mut driver, &mut store, &mut symbols).map_err(|e| match e {
-        SmtError::Unsupported { .. } => Outcome::unsupported(e.to_string()),
-        SmtError::Parse { .. } => Outcome::error(format!("SMT encoding error: {e}")),
-    })?;
+    let encoded =
+        encode(assertions, &mut driver, &mut store, &mut symbols).map_err(|e| match e {
+            SmtError::Unsupported { .. } => Outcome::unsupported(e.to_string()),
+            SmtError::Parse { .. } => Outcome::error(format!("SMT encoding error: {e}")),
+        })?;
     Ok((driver, encoded, store, symbols))
 }
 
@@ -683,11 +713,12 @@ impl Engine for SmtEngine {
                 "SMT-LIB 2 subset: quantifier-free difference logic and uninterpreted functions",
             )
             .fragment("Boolean structure encoded by Tseitin CNF over a CDCL(T) core")
+            .fragment("push/pop scopes and several check-sat commands per file")
             .guarantee(Guarantee::Sound)
             .guarantee(Guarantee::Deterministic)
             .guarantee(Guarantee::EvidenceChecked)
             .limit("no general linear arithmetic, no arrays, bitvectors, strings or quantifiers")
-            .limit("no push/pop, no incremental solving, no second check-sat")
+            .limit("each check is solved from scratch: no learnt clause or theory state is reused")
             .limit("the model reports atom truth values, not reconstructed integer values")
     }
 
@@ -697,36 +728,57 @@ impl Engine for SmtEngine {
             Err(message) => return Outcome::error(message),
         };
         let start = Instant::now();
-        let (mut driver, encoded, store, symbols) = match build(source) {
-            Ok(b) => b,
+        let parsed = match parse_source(source) {
+            Ok(p) => p,
             Err(o) => return o,
         };
-        for clause in &encoded.clauses {
-            driver.add_clause(clause);
+        let mut checks: Vec<CheckEvidence> = Vec::new();
+        let mut any_unsat = false;
+        for assertions in parsed.check_assertions() {
+            let (mut driver, encoded, store, symbols) = match build(&assertions) {
+                Ok(b) => b,
+                Err(o) => return o,
+            };
+            for clause in &encoded.clauses {
+                driver.add_clause(clause);
+            }
+            let outcome = match driver.solve(&store, &symbols, budget) {
+                Ok(o) => o,
+                Err(e) => return Outcome::resource_limit(e.to_string()),
+            };
+            match outcome {
+                TheoryOutcome::Sat { model, theory } => {
+                    checks.push(CheckEvidence {
+                        mode: "sat".to_string(),
+                        model: Some(model),
+                        learnts: Vec::new(),
+                        lemmas: theory.lemmas,
+                        atoms: theory.atoms,
+                    });
+                }
+                TheoryOutcome::Unsat { sat, theory } => {
+                    any_unsat = true;
+                    checks.push(CheckEvidence {
+                        mode: "unsat".to_string(),
+                        model: None,
+                        learnts: sat.learnts,
+                        lemmas: theory.lemmas,
+                        atoms: theory.atoms,
+                    });
+                }
+            }
         }
-        let outcome = match driver.solve(&store, &symbols, budget) {
-            Ok(o) => o,
-            Err(e) => return Outcome::resource_limit(e.to_string()),
-        };
         let stats = Stats::new(budget.spent(), start.elapsed().as_millis() as u64)
-            .with("atoms", encoded.atoms.len() as u64)
-            .with("lemmas", driver.stats().lemmas)
-            .with("theory_rounds", driver.stats().rounds);
-        match outcome {
-            TheoryOutcome::Sat { model, theory } => {
-                let payload =
-                    write_evidence("sat", Some(&model), &[], &theory.lemmas, &theory.atoms);
-                Outcome::definite(Verdict::Found, Evidence::new(EVIDENCE_SAT, payload), stats)
-            }
-            TheoryOutcome::Unsat { sat, theory } => {
-                let payload =
-                    write_evidence("unsat", None, &sat.learnts, &theory.lemmas, &theory.atoms);
-                Outcome::definite(
-                    Verdict::Impossible,
-                    Evidence::new(EVIDENCE_UNSAT, payload),
-                    stats,
-                )
-            }
+            .with("checks", checks.len() as u64);
+        let payload = write_evidence(&checks);
+        if any_unsat {
+            Outcome::definite(
+                Verdict::Impossible,
+                Evidence::new(EVIDENCE_UNSAT, payload),
+                stats,
+            )
+        } else {
+            Outcome::definite(Verdict::Found, Evidence::new(EVIDENCE_SAT, payload), stats)
         }
     }
 
@@ -740,8 +792,8 @@ impl Engine for SmtEngine {
             return Ok(());
         }
         let source = source_of(problem).map_err(VerifyError::Malformed)?;
-        let (_driver, encoded, _store, _symbols) =
-            build(source).map_err(|o| VerifyError::Malformed(o.notes.join("; ")))?;
+        let parsed =
+            parse_source(source).map_err(|o| VerifyError::Malformed(o.notes.join("; ")))?;
         let evidence = outcome
             .evidence
             .as_ref()
@@ -761,72 +813,82 @@ impl Engine for SmtEngine {
                 evidence.kind
             )));
         }
-        let parsed = read_evidence(&evidence.payload)
+        let session = read_evidence(&evidence.payload)
             .map_err(|e| VerifyError::InvalidEvidence(format!("malformed evidence: {e}")))?;
-        // The atom meanings in the evidence must be exactly the ones the
-        // problem produces, so a certificate cannot be replayed against a
-        // different problem.
-        if parsed.atoms != encoded.atoms {
+        let assertions_per_check = parsed.check_assertions();
+        if session.checks.len() != assertions_per_check.len() {
             return Err(VerifyError::InvalidEvidence(
-                "evidence atoms do not match the problem's atoms".into(),
+                "the evidence has a different number of checks than the problem".into(),
             ));
         }
-        let theory = TheoryProof {
-            atoms: encoded.atoms.clone(),
-            lemmas: parsed.lemmas.clone(),
-        };
-        match outcome.verdict {
-            Verdict::Found => {
-                if parsed.mode != "sat" {
-                    return Err(VerifyError::InvalidEvidence(format!(
-                        "evidence mode {} does not match a sat answer",
-                        parsed.mode
-                    )));
-                }
-                let Some(model) = parsed.model.as_ref() else {
-                    return Err(VerifyError::InvalidEvidence(
-                        "a sat answer needs a model".into(),
-                    ));
-                };
-                if !verify_sat(&encoded.clauses, model) {
-                    return Err(VerifyError::InvalidEvidence(
-                        "the model does not satisfy the encoded clauses".into(),
-                    ));
-                }
-                if !verify_theory_sat(model, &theory) {
-                    return Err(VerifyError::InvalidEvidence(
-                        "the model is not consistent with the theory".into(),
-                    ));
-                }
-                Ok(())
+        let mut any_unsat = false;
+        for (index, assertions) in assertions_per_check.iter().enumerate() {
+            let check = &session.checks[index];
+            let (_driver, encoded, _store, _symbols) =
+                build(assertions).map_err(|o| VerifyError::Malformed(o.notes.join("; ")))?;
+            // The atom meanings in the evidence must be exactly the ones the
+            // problem produces, so a certificate cannot be replayed against a
+            // different assertion set.
+            if check.atoms != encoded.atoms {
+                return Err(VerifyError::InvalidEvidence(format!(
+                    "evidence atoms for check {index} do not match the problem's atoms"
+                )));
             }
-            Verdict::Impossible => {
-                if parsed.mode != "unsat" {
-                    return Err(VerifyError::InvalidEvidence(format!(
-                        "evidence mode {} does not match an unsat answer",
-                        parsed.mode
-                    )));
-                }
-                for (i, lemma) in parsed.lemmas.iter().enumerate() {
-                    let mut expected = lemma.hyps.iter().map(|l| -l).collect::<Vec<Lit>>();
-                    if let Some(concl) = lemma.concl {
-                        expected.push(concl);
-                    }
-                    if expected != lemma.clause {
+            let theory = TheoryProof {
+                atoms: encoded.atoms.clone(),
+                lemmas: check.lemmas.clone(),
+            };
+            match check.mode.as_str() {
+                "sat" => {
+                    let Some(model) = check.model.as_ref() else {
+                        return Err(VerifyError::InvalidEvidence(
+                            "a sat answer needs a model".into(),
+                        ));
+                    };
+                    if !verify_sat(&encoded.clauses, model) {
                         return Err(VerifyError::InvalidEvidence(format!(
-                            "theory lemma {i} has a clause that does not match its justification"
+                            "the model for check {index} does not satisfy the encoded clauses"
+                        )));
+                    }
+                    if !verify_theory_sat(model, &theory) {
+                        return Err(VerifyError::InvalidEvidence(format!(
+                            "the model for check {index} is not consistent with the theory"
                         )));
                     }
                 }
-                let proof = UnsatProof {
-                    learnts: parsed.learnts,
-                };
-                verify_theory_unsat(&encoded.clauses, &proof, &theory)
-                    .map_err(|e| VerifyError::InvalidEvidence(e.to_string()))?;
-                Ok(())
+                "unsat" => {
+                    any_unsat = true;
+                    for (i, lemma) in check.lemmas.iter().enumerate() {
+                        let mut expected = lemma.hyps.iter().map(|l| -l).collect::<Vec<Lit>>();
+                        if let Some(concl) = lemma.concl {
+                            expected.push(concl);
+                        }
+                        if expected != lemma.clause {
+                            return Err(VerifyError::InvalidEvidence(format!(
+                                "theory lemma {i} for check {index} has a clause that does not \
+                                 match its justification"
+                            )));
+                        }
+                    }
+                    let proof = UnsatProof {
+                        learnts: check.learnts.clone(),
+                    };
+                    verify_theory_unsat(&encoded.clauses, &proof, &theory)
+                        .map_err(|e| VerifyError::InvalidEvidence(format!("check {index}: {e}")))?;
+                }
+                other => {
+                    return Err(VerifyError::InvalidEvidence(format!(
+                        "unknown check mode {other}"
+                    )))
+                }
             }
-            _ => unreachable!("verdict checked above"),
         }
+        if any_unsat != (outcome.verdict == Verdict::Impossible) {
+            return Err(VerifyError::InvalidEvidence(
+                "the verdict does not match the checked answers".into(),
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -910,9 +972,8 @@ mod tests {
         let out = engine.solve(&problem, &mut budget);
         assert_eq!(out.verdict, Verdict::Found, "{out:?}");
         let payload = out.evidence.as_ref().unwrap().payload.clone();
-        let mut lines = payload.lines();
         let mut rewritten = String::new();
-        for line in lines.by_ref() {
+        for line in payload.lines() {
             if let Some(rest) = line.strip_prefix("model ") {
                 let flipped: Vec<String> = rest
                     .split(',')
@@ -972,8 +1033,32 @@ mod tests {
     }
 
     #[test]
-    fn push_pop_is_unsupported() {
-        let out = solve("(push 1)");
-        assert_eq!(out.verdict, Verdict::Unsupported, "{out:?}");
+    fn push_pop_scopes_change_the_answer() {
+        // The first check sees only the base scope, the second also sees the
+        // pushed assertion, and the third is back to the base scope.
+        let source = format!(
+            "{DECLS} \
+             (assert (<= x 2)) (assert (>= x 0)) (check-sat) \
+             (push 1) (assert (>= x 5)) (check-sat) (pop 1) (check-sat)"
+        );
+        let problem = Problem::smt(source);
+        let mut budget = Budget::steps(1_000_000);
+        let mut engine = SmtEngine::new();
+        let out = engine.solve(&problem, &mut budget);
+        assert_eq!(out.verdict, Verdict::Impossible, "{out:?}");
+        engine.verify(&problem, &out).unwrap();
+        let payload = out.evidence.as_ref().unwrap().payload.clone();
+        let modes: Vec<&str> = payload
+            .lines()
+            .filter(|l| l.starts_with("check "))
+            .map(|l| l.split_whitespace().nth(2).unwrap_or(""))
+            .collect();
+        assert_eq!(modes, vec!["sat", "unsat", "sat"], "{payload}");
+    }
+
+    #[test]
+    fn a_pop_below_the_base_scope_is_an_error() {
+        let out = solve("(pop 1)");
+        assert_eq!(out.verdict, Verdict::Error, "{out:?}");
     }
 }

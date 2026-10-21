@@ -140,6 +140,16 @@ fn run() -> Result<(), String> {
             let mut budget = Budget::steps(100_000_000);
             let out = engine.solve(&problem, &mut budget);
             println!("verdict={}", out.verdict.as_str());
+            if let Some(evidence) = &out.evidence {
+                // One answer per check-sat command, in order.
+                let modes: Vec<&str> = evidence
+                    .payload
+                    .lines()
+                    .filter(|line| line.starts_with("check "))
+                    .filter_map(|line| line.split_whitespace().nth(2))
+                    .collect();
+                println!("checks={}", modes.join(","));
+            }
             println!("steps={}", out.stats.steps);
         }
         _ => usage(),

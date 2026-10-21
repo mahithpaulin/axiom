@@ -215,12 +215,37 @@ pub enum Decl {
     BoolConst(String),
 }
 
-/// A parsed SMT-LIB problem: the declarations and the asserted formulas.
+/// One `check-sat` command: the assertions that were in scope when it ran.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct Check {
+    pub assertions: Vec<Formula>,
+}
+
+/// A parsed SMT-LIB problem: the declarations, the assertion scopes, and the
+/// `check-sat` commands.
+///
+/// Scopes model `push`/`pop`: scope 0 is the top level, and each `push` adds
+/// one. A `check-sat` snapshots the assertions in scope, so the same file can
+/// ask several questions with different assertion sets and a `pop` cannot
+/// change an answer that was already given.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct SmtProblem {
     pub logic: Option<String>,
     pub decls: Vec<Decl>,
-    pub assertions: Vec<Formula>,
+    pub scopes: Vec<Vec<Formula>>,
+    pub checks: Vec<Check>,
+}
+
+impl SmtProblem {
+    /// The assertions of every check, in order. A file with no `check-sat`
+    /// has one implicit check over everything that was asserted.
+    pub fn check_assertions(&self) -> Vec<Vec<Formula>> {
+        if self.checks.is_empty() {
+            vec![self.scopes.iter().flat_map(|s| s.iter().cloned()).collect()]
+        } else {
+            self.checks.iter().map(|c| c.assertions.clone()).collect()
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -291,13 +316,17 @@ fn atom_text(expr: &SExpr) -> Option<&str> {
 /// Parse one SMT-LIB source file into a problem.
 ///
 /// `check-sat` is optional; the answer always describes the conjunction of all
-/// assertions. `push`/`pop` and a second `check-sat` are rejected: they need
-/// incremental solving, which this fragment does not provide.
+/// assertions. `push`/`pop` scopes and several `check-sat` commands are
+/// supported: each check is answered independently, and no learnt clause or
+/// theory state is reused between them.
 pub fn parse_problem(source: &str) -> Result<SmtProblem> {
     let exprs = read_all(source)?;
     let mut ctx = Ctx::new();
-    let mut problem = SmtProblem::default();
-    let mut checks = 0usize;
+    let mut problem = SmtProblem {
+        scopes: vec![Vec::new()],
+        ..SmtProblem::default()
+    };
+    let mut check_count = 0usize;
     for expr in &exprs {
         let offset = expr.offset();
         let SExpr::List(items, _) = expr else {
@@ -362,22 +391,42 @@ pub fn parse_problem(source: &str) -> Result<SmtProblem> {
                     return parse_err(offset, "assert takes one formula");
                 }
                 let formula = parse_formula(&items[1], &ctx)?;
-                problem.assertions.push(formula);
+                if let Some(scope) = problem.scopes.last_mut() {
+                    scope.push(formula);
+                }
             }
             "check-sat" => {
                 if items.len() != 1 {
                     return parse_err(offset, "check-sat takes no arguments");
                 }
-                checks += 1;
-                if checks > 1 {
-                    return unsupported(offset, "more than one check-sat is not supported");
-                }
+                check_count += 1;
+                let assertions = problem
+                    .scopes
+                    .iter()
+                    .flat_map(|scope| scope.iter().cloned())
+                    .collect();
+                problem.checks.push(Check { assertions });
             }
             "get-model" | "get-value" | "get-info" | "exit" => {}
-            "push" | "pop" => return unsupported(offset, "push/pop needs incremental solving"),
+            "push" => {
+                let count = scope_count(&items[1..], offset)?;
+                for _ in 0..count {
+                    problem.scopes.push(Vec::new());
+                }
+            }
+            "pop" => {
+                let count = scope_count(&items[1..], offset)?;
+                for _ in 0..count {
+                    if problem.scopes.len() <= 1 {
+                        return parse_err(offset, "pop would remove the top-level scope");
+                    }
+                    problem.scopes.pop();
+                }
+            }
             other => return unsupported(offset, format!("command {other} is not supported")),
         }
     }
+    let _ = check_count;
     problem.decls = ctx.decls.clone();
     Ok(problem)
 }
@@ -486,6 +535,25 @@ fn parse_formula(expr: &SExpr, ctx: &Ctx) -> Result<Formula> {
                 other => parse_err(offset, format!("unknown operator {other}")),
             }
         }
+    }
+}
+
+/// The optional count of a `push`/`pop` command (default 1).
+fn scope_count(items: &[SExpr], offset: usize) -> Result<usize> {
+    match items.len() {
+        0 => Ok(1),
+        1 => {
+            let text = atom_text(&items[0]).unwrap_or_default();
+            let n: usize = match text.parse() {
+                Ok(n) => n,
+                Err(_) => return parse_err(offset, format!("scope count {text} is not a number")),
+            };
+            if n == 0 {
+                return parse_err(offset, "scope count must be at least 1");
+            }
+            Ok(n)
+        }
+        _ => parse_err(offset, "push/pop takes at most one argument"),
     }
 }
 
@@ -906,7 +974,10 @@ mod tests {
             format!("(declare-fun x () Int) (declare-fun y () Int) (assert {src}) (check-sat)");
         let problem = parse_problem(&source).unwrap();
         problem
-            .assertions
+            .check_assertions()
+            .into_iter()
+            .next()
+            .expect("one check")
             .into_iter()
             .next()
             .expect("one assertion")
@@ -966,9 +1037,25 @@ mod tests {
     }
 
     #[test]
-    fn push_and_pop_are_rejected() {
-        let err = parse_problem("(push 1)").unwrap_err();
-        assert!(matches!(err, SmtError::Unsupported { .. }), "{err}");
+    fn push_and_pop_open_and_close_scopes() {
+        let p = parse_problem(
+            "(declare-fun x () Int) (assert (<= x 2)) (push 1) (assert (>= x 5)) \
+             (check-sat) (pop 1) (check-sat)",
+        )
+        .unwrap();
+        assert_eq!(p.scopes.len(), 1, "the pushed scope is closed again");
+        let checks = p.check_assertions();
+        assert_eq!(checks.len(), 2);
+        assert_eq!(
+            checks[0].len(),
+            2,
+            "the check inside the pushed scope sees both"
+        );
+        assert_eq!(
+            checks[1].len(),
+            1,
+            "the check after the pop sees the base scope only"
+        );
     }
 
     #[test]
