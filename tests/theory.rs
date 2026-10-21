@@ -122,6 +122,31 @@ fn disequality_against_merge_is_unsat() {
 }
 
 #[test]
+fn congruence_conflict_over_function_terms_verifies() {
+    // a = b but f(a) != f(b): the conflict only shows up through congruence,
+    // and the verifier has to know the function terms before the equality is
+    // asserted.
+    let mut b = Builder::new();
+    let v = consts(&mut b, &["a", "b"]);
+    let (a, c) = (v[0], v[1]);
+    let fa = b.func("f", 1, &[a]);
+    let fb = b.func("f", 1, &[c]);
+    let mut d = TheoryDriver::new();
+    let v1 = d.theory_var(&b.store, TheoryAtom::Eq(a, c)).unwrap();
+    let v2 = d.theory_var(&b.store, TheoryAtom::Neq(fa, fb)).unwrap();
+    d.add_clause(&[v1 as i32 + 1]);
+    d.add_clause(&[v2 as i32 + 1]);
+    let mut budget = Budget::unlimited();
+    match d.solve(&b.store, &b.symbols, &mut budget) {
+        Ok(TheoryOutcome::Unsat { sat, theory }) => {
+            check_unsat(&[&[v1 as i32 + 1], &[v2 as i32 + 1]], &sat, &theory)
+        }
+        Ok(_) => panic!("must be unsat"),
+        Err(_) => panic!("within budget"),
+    }
+}
+
+#[test]
 fn nelson_oppen_exchange_fires() {
     // x - y <= 0, y - x <= 0 entail x ≈ y; x ≠ y then conflicts. Neither
     // theory alone sees it: the equality must cross over.

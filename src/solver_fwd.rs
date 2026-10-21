@@ -341,10 +341,6 @@ impl Solver {
                 self.subst.undo_to(mark);
                 return Ok(());
             }
-            if !self.negatives_hold(rule) {
-                self.subst.undo_to(mark);
-                return Ok(());
-            }
         }
 
         let head = self.ren_head(rule);

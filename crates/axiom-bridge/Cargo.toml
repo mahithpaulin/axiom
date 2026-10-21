@@ -1,0 +1,14 @@
+[package]
+name = "axiom-bridge"
+version = "0.2.0"
+edition = "2021"
+rust-version = "1.75"
+description = "Axiom v4 sound cross-domain pipelines with evidence from every stage."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/mahithpaulin/axiom"
+
+[dependencies]
+axiom = { path = "../.." }
+axiom-core = { path = "../axiom-core" }
+axiom-asp = { path = "../axiom-asp" }
+axiom-planning = { path = "../axiom-planning" }

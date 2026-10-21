@@ -78,12 +78,16 @@ derived fact (DD-0011). The benchmark suite exposed it as semi-naive appearing
 ### 3.1 Negation
 
 A negated literal blocks the derivation if it matches a stored fact **or** if it
-is not fully instantiated.
+is not fully instantiated. Negation is tested only after every positive body
+position has completed its join; testing it directly after a delta seed was B3
+and is fixed with a regression test.
 
 The second clause is a **soundness** requirement, not an optimisation. Treating a
 partially instantiated `not q(X)` as satisfied would derive facts that classical
 negation does not license. The price is incompleteness for programs whose
-negations never become ground — recorded in `KNOWN_LIMITATIONS.md`.
+negations never become ground — recorded in `KNOWN_LIMITATIONS.md`. Programs are
+expected to be safe; forward rules that violate safety are rejected at build
+time. Function-head `backward_only` rules retain the older, incomplete contract.
 
 ### 3.2 Completeness boundary
 
@@ -154,32 +158,52 @@ Same program, same least model, `n = 600` path graph:
 
 | | rounds | derivations | candidates | wall (3 iters) | allocs |
 |---|---|---|---|---|---|
-| semi-naive | see `PERFORMANCE.md` | | | | |
+| semi-naive | see `v4/BASELINE.md` | | | | |
 | naive fixpoint | | | | | |
 
 The counters matter more than the wall time: a change that moves them changed the
 *algorithm*; one that does not only moved a constant factor. The measured values
-and the 13× memory attribution are in `PERFORMANCE.md`.
+and the 13× memory attribution are in `v4/BASELINE.md`.
 
 ---
 
-## 8. Not implemented
+## 8. Implemented and not implemented
 
-Named so their absence is unambiguous. Each has a ROADMAP entry:
+Implemented in this repository:
 
-* **SAT / CDCL** — implemented (`src/sat.rs`): two-watched propagation,
-  first-UIP learning, VSIDS, phase saving, Luby restarts, activity-based
-  detachment. Certificates both ways (models by satisfaction, unsat by RUP),
-  frozen DIMACS corpus in `benches/data/`, cross-engine differential in
-  `tests/sat.rs`.
-* **CDCL(T) / theory combination** — linear integer/real arithmetic, congruence
-  closure. Requires the SAT core first (now present).
-* **Constraint propagation** — domains, propagators, MAC search, *explanation
-  producing*. The explanation requirement is the interesting part: a propagator
-  that removes a value without recording why cannot support a proof.
-* **Search** — IDA\*, A\*, alpha-beta, transposition tables. Primitives for games
-  and planning; the state-space lowering already exists for Datalog.
-* **Symbolic mathematics** — polynomials, intervals, combinatorial identities.
-* **Strategy selection** — the portfolio chooser. Pointless with one engine.
-* **Partial evaluation** — the compiler passes in §9 of the charter are mostly
-  unimplemented; only constant folding and dead-static-rule elimination exist.
+* **SAT / CDCL** (`src/sat.rs`): two-watched propagation, first-UIP learning,
+  VSIDS, phase saving, Luby restarts, learned-clause deletion. Models are checked
+  by satisfaction, UNSAT by RUP; frozen corpus in `benches/data/`, differential
+  tests in `tests/sat.rs`.
+* **CDCL(T)** (`src/theory.rs`): integer difference logic, equality/disequality,
+  congruence closure, Nelson–Oppen combination. Models and UNSAT lemmas are
+  re-checked. Not a general arithmetic solver and not incremental.
+* **CSP / propagation** (`src/csp.rs`, `src/puzzle.rs`): finite domains,
+  explanation-producing propagation, sudoku/queens/coloring/logic grids.
+* **Search** (`src/search.rs`, `src/state.rs`): A*, IDA*, Dijkstra, alpha-beta,
+  explicit-state planning and a bounded SAT lowering.
+* **V2 representations** (`src/repr.rs`, `src/choose.rs`): a deterministic
+  chooser over the implemented puzzle/plan paths.
+* **SMT-LIB frontend** (`crates/axiom-smt/`): a subset reader that normalises
+  comparisons to differences, encodes the Boolean structure by Tseitin CNF, and
+  decides the result with the CDCL(T) driver. `push`/`pop` scopes and several
+  `check-sat` commands are supported, each check solved from scratch. Not a
+  general SMT solver.
+* **v4 engines** (`crates/`): finite ASP with independent model validation,
+  bounded FOL resolution with a trusted kernel (ground equality by congruence
+  closure, otherwise equality axioms), untyped STRIPS A*/BFS planning, a
+  verifying router, and one checked ASP-to-planning bridge. Their algorithms are
+  in `docs/v4/SEMANTICS.md`.
+
+Not implemented:
+
+* general linear integer/real arithmetic, arrays, bitvectors, strings;
+* incremental theory solving / push-pop / assumptions;
+* a full SMT-LIB or TPTP front end (a quantifier-free difference-logic subset
+  is implemented);
+* FOL superposition/paramodulation (equality is handled by normalization or axioms);
+* provenance semirings, magic sets, join-order planning, parallel evaluation;
+* ASP aggregates, cardinality bounds, optimisation, and function symbols;
+* action costs and typed PDDL (an admissible `h_max` heuristic is implemented);
+* broad external-solver differential benchmarks (a 14-fixture harness exists);
+* any neural component.

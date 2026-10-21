@@ -79,6 +79,9 @@ pub enum ProgramError {
     ArityMismatch { pred: u32, declared: u16, used: u16 },
     /// Duplicate or empty predicate name.
     BadPredicate { name: String },
+    /// A forward rule has a head variable, or a negated body variable, that no
+    /// positive body literal can bind.
+    UnsafeRule { rule: usize, variable: u32 },
 }
 
 impl fmt::Display for ProgramError {
@@ -101,6 +104,10 @@ impl fmt::Display for ProgramError {
             ProgramError::BadPredicate { name } => {
                 write!(f, "invalid predicate declaration '{name}'")
             }
+            ProgramError::UnsafeRule { rule, variable } => write!(
+                f,
+                "rule #{rule} is unsafe: variable #{variable} is not bound by a positive body literal"
+            ),
         }
     }
 }
@@ -382,10 +389,56 @@ impl Builder {
         found
     }
 
+    fn collect_rule_vars(&self, root: TermId, out: &mut std::collections::BTreeSet<u32>) {
+        let mut stack = vec![root];
+        while let Some(x) = stack.pop() {
+            let n = self.store.node(x);
+            if n.kind == T_VAR {
+                out.insert(n.sym);
+                continue;
+            }
+            if n.kind == crate::term::T_ATOM || n.kind == crate::term::T_FUN {
+                for i in 0..n.len as usize {
+                    stack.push(self.store.children_at(n.start as usize + i));
+                }
+            }
+        }
+    }
+
+    /// Reject rules outside the safe fragment. Forward rules must bind every
+    /// head variable, and every negated variable, in a positive body literal.
+    /// `backward_only` rules keep their older contract: they are not evaluated
+    /// bottom-up, and their function-valued heads are outside Datalog safety.
+    fn check_safety(&self, rule: usize, r: &Rule) -> Result<(), ProgramError> {
+        let mut positive = std::collections::BTreeSet::new();
+        for l in r.body.iter().filter(|l| l.pos) {
+            self.collect_rule_vars(l.atom, &mut positive);
+        }
+        if !r.backward_only {
+            let mut head = std::collections::BTreeSet::new();
+            self.collect_rule_vars(r.head, &mut head);
+            if let Some(&variable) = head.iter().find(|v| !positive.contains(v)) {
+                return Err(ProgramError::UnsafeRule { rule, variable });
+            }
+        }
+        for l in r.body.iter().filter(|l| !l.pos) {
+            let mut negated = std::collections::BTreeSet::new();
+            self.collect_rule_vars(l.atom, &mut negated);
+            if let Some(&variable) = negated.iter().find(|v| !positive.contains(v)) {
+                return Err(ProgramError::UnsafeRule { rule, variable });
+            }
+        }
+        Ok(())
+    }
+
     pub fn build(mut self) -> Result<Program, ProgramError> {
         let num_preds = self.symbols.count();
         self.pred_idb.resize(num_preds, false);
         self.pred_edb.resize(num_preds, false);
+
+        for (i, r) in self.rules.iter().enumerate() {
+            self.check_safety(i, r)?;
+        }
 
         // Relaxation to a stratification, enforcing both edge kinds in the
         // *same* loop:
@@ -540,8 +593,8 @@ mod tests {
         // A predicate is interned per (name, arity), so a mismatch cannot occur
         // through the builder; this pins that property.
         let mut b = Builder::new();
-        let x = b.var("X");
-        let h = b.atom("p", 1, &[x]);
+        let a = b.constant("a");
+        let h = b.atom("p", 1, &[a]);
         b.fact(h);
         let prog = b.build().unwrap();
         assert!(prog.arity_check().is_ok());
@@ -553,5 +606,39 @@ mod tests {
         let a = b.atom("p", 1, &[]);
         assert_eq!(b.store.kind(a), T_ATOM);
         assert_eq!(b.symbols.kind(b.store.sym(a)), crate::symbol::SK_PRED);
+    }
+
+    #[test]
+    fn unbound_forward_head_variable_is_rejected() {
+        let mut b = Builder::new();
+        let x = b.var("X");
+        let y = b.var("Y");
+        let head = b.atom("p", 1, &[x]);
+        let body = b.pos("q", 1, &[y]);
+        b.rule(head, vec![body]);
+        assert!(matches!(b.build(), Err(ProgramError::UnsafeRule { .. })));
+    }
+
+    #[test]
+    fn unbound_negated_variable_is_rejected() {
+        let mut b = Builder::new();
+        let x = b.var("X");
+        let y = b.var("Y");
+        let head = b.atom("p", 1, &[x]);
+        let q = b.pos("q", 1, &[x]);
+        let n = Literal::neg(b.atom("r", 1, &[y]));
+        b.rule(head, vec![q, n]);
+        assert!(matches!(b.build(), Err(ProgramError::UnsafeRule { .. })));
+    }
+
+    #[test]
+    fn bound_negation_is_still_accepted() {
+        let mut b = Builder::new();
+        let x = b.var("X");
+        let head = b.atom("p", 1, &[x]);
+        let q = b.pos("q", 1, &[x]);
+        let n = Literal::neg(b.atom("r", 1, &[x]));
+        b.rule(head, vec![q, n]);
+        assert!(b.build().is_ok());
     }
 }

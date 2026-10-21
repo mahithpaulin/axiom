@@ -24,7 +24,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: unit + integration (zero exclusions; use -- --ignored to list none)
-        run: cargo test --lib --tests
+        run: cargo test --workspace --lib --tests
 
   doc:
     runs-on: ubuntu-latest
@@ -34,7 +34,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: doc tests (shell timeout so a hang fails fast with signal)
-        run: timeout 300 cargo test --doc
+        run: timeout 300 cargo test --workspace --doc
 
   fmt:
     runs-on: ubuntu-latest
@@ -57,7 +57,7 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - name: clippy (deny warnings, lib + tests only)
-        run: cargo clippy --lib --tests -- -D warnings
+        run: cargo clippy --workspace --lib --tests -- -D warnings
 
   known-defects:
     runs-on: ubuntu-latest
@@ -67,7 +67,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: confirm no ignored tests remain (I5/I6 un-ignored after fix)
-        run: cargo test -- --ignored
+        run: cargo test --workspace -- --ignored
 
   bench-ci:
     runs-on: ubuntu-latest
@@ -77,7 +77,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: CI bench subset (quick sizes, no scaling table)
-        run: cargo bench --bench kernel -- ci
+        run: cargo bench -p axiom --bench kernel -- ci
 
   bench-sat:
     runs-on: ubuntu-latest
@@ -87,7 +87,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: SAT core on the frozen corpus
-        run: cargo bench --bench sat
+        run: cargo bench -p axiom --bench sat
 
   bench-theory:
     runs-on: ubuntu-latest
@@ -97,7 +97,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: theories through the DPLL(T) driver
-        run: cargo bench --bench theory
+        run: cargo bench -p axiom --bench theory
 
   diag:
     runs-on: ubuntu-latest
@@ -107,7 +107,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: I1 scaling probe (n=100..800, candidates slope must go 3 -> 2)
-        run: cargo bench --bench kernel -- diag
+        run: cargo bench -p axiom --bench kernel -- diag
 
   examples:
     runs-on: ubuntu-latest
@@ -117,4 +117,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: V2 examples still build (sudoku, queens, chess, go, plan)
-        run: cargo build --examples
+        run: cargo build -p axiom --examples

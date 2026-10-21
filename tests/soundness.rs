@@ -525,6 +525,31 @@ fn stratification_rejects_negative_cycles() {
     );
 }
 
+/// Regression for B3: a delta seed can bind only part of the body. Checking
+/// negation immediately after the seed used to reject a rule whose negated
+/// variable was bound by a later positive literal. Negation must be checked
+/// only after all positive joins have produced a complete solution.
+#[test]
+fn negation_waits_for_later_positive_bindings() {
+    let src = "\
+base(a). base(b).
+q(X) :- base(X).
+r(a).
+s(a). s(b).
+p(X,Y) :- q(X), not r(Y), s(Y).
+";
+    let s = solve(src, 1_000_000);
+    let p = s.prog.symbols.predicate_id("p", 2).unwrap();
+    let got: std::collections::BTreeSet<String> = s
+        .facts_of(p)
+        .iter()
+        .map(|&a| s.prog.store.show(a, &s.prog.symbols))
+        .collect();
+    let want: std::collections::BTreeSet<String> =
+        ["p(a,b)", "p(b,b)"].iter().map(|s| s.to_string()).collect();
+    assert_eq!(got, want, "negation was evaluated before Y was bound");
+}
+
 #[test]
 fn stratified_negation_matches_the_reference() {
     let src = "\

@@ -235,7 +235,7 @@ and the A1(iii) depth-bound test (70 deep is `Unknown`).
 
 ---
 
-## B. Scope: logic that is not implemented
+## B. Scope boundaries and root-engine gaps
 
 ### B1. Stratified Datalog only. Not a theorem prover.
 
@@ -248,7 +248,9 @@ a real claim rather than "the search gave up". Half the value is in refusing
 programs that have no least model instead of picking one.
 
 **Cost.** No general first-order refutation. No clauses, no disjunction, no
-quantifiers, no equality over non-ground terms, no Herbrand theorem. Proving
+quantifiers, no equality in the root Datalog engine, no Herbrand theorem.
+(The separate v4 FOL crate has bounded equality support; see
+`docs/v4/KNOWN_LIMITATIONS.md`.) Proving
 `p ∨ q` is out of reach; so is anything requiring more than one positive
 alternative.
 
@@ -277,50 +279,35 @@ answer.
 **What would remove it.** Nothing. This is the reason `Status` exists in the
 shape it does.
 
-### B3. A negated body literal that is not fully instantiated blocks the derivation
+### B3. Negation scheduling — FIXED, with a remaining safety requirement
 
-**What it is.** `Solver::negatives_hold` (`src/solver_fwd.rs:98-116`) returns
-`false` — blocking the derivation — when a negated literal resolves to a term that
-still contains a variable, or when it matches a stored fact:
-
-```rust
-let a = self.subst.resolve(&mut self.prog.store, lit.atom);
-if !self.prog.store.is_ground(a) {
-    return false;
-}
-if self.db.contains(a) {
-    return false;
-}
-```
-
-**Why.** Soundness, not optimisation. Treating a partially instantiated
-`not q(X)` as satisfied would derive facts that classical negation does not
-license. Soundness over completeness, deliberately.
-
-**Cost.** **The engine is incomplete for stratified Datalog**, which is
-otherwise its home territory. Any program in which a negation is evaluated
-before every variable in it is bound silently drops those derivations, and the
-answer is presented as a definite `Refuted` rather than as `Unknown`. This is the
-sharpest edge in the whole design and the one most likely to surprise a user.
-
-Worked example of the incompleteness, by inspection:
+**What it was.** The forward engine tested `negatives_hold` immediately after a
+delta seed, before later positive body literals had bound the negated
+variables. A rule like
 
 ```text
-node(a). node(b). blocked(b).
-safe(X) :- node(X), not blocked(X).
-pair(X, Y) :- safe(X), safe(Y).
-?- pair(a, a).
+p(X,Y) :- q(X), not r(Y), s(Y).
 ```
 
-`pair(a,a)` follows: `safe(a)` holds because `blocked(a)` is absent. But during
-the join for `pair`, `safe(X)` is seeded from the delta while `X` is still
-partially determined, `negatives_hold` sees `not blocked(X)` as not ground, and
-the derivation is blocked.
+derived nothing, because `not r(Y)` was evaluated while `Y` was still unbound.
+The check also ran once per seed rather than once per completed join.
 
-**What would remove it.** An anti-join / tabling evaluation for stratified
-negation: instead of testing each candidate individually, compute the negation by
-subtracting the negation predicate's closure from the cross-product of the
-positive literals' closures. That is a new rule-evaluation strategy, not a patch.
+**Fix.** The premature check was removed from `eval_rule_inner`; negation is
+now tested only after the positive join completes. Regression:
+`tests/soundness.rs::negation_waits_for_later_positive_bindings`, which requires
+`p(a,b)` and `p(b,b)`.
+
+**Remaining limitation (updated).** Forward rules now pass a safety check:
+every head variable and every variable in a negated literal must be bound by a
+positive body literal. Unsafe forward rules are rejected as `UnsafeRule` rather
+than silently deriving an incomplete closure. `backward_only` function-head
+rules are exempt from the head check and can still decline on non-ground
+negation.
+
+**What would remove the remaining limitation.** An anti-join/tabling strategy
+that handles non-ground negation explicitly for `backward_only` rules. The v4
+Datalog adapter now exposes the rejection instead of documenting silent
+incompleteness.
 
 ### B4. Function symbols in rule heads are `backward_only`
 
@@ -388,53 +375,54 @@ outside the engine entirely.
 evaluation, plus proof recording for the negated goal. Substantially more than a
 flag flip, and it is not on the Stage-2 roadmap for that reason.
 
-### B7. No SMT, constraints, arithmetic, search, strategy selection, or neural components
+### B7. Capability boundaries after v4
 
-Absent, in full, and named here so their absence is unambiguous
-(`docs/ALGORITHMS.md` §8). The SAT row flipped to yes with ROADMAP II1:
+Some earlier absences are now implemented. The table records the current state;
+details and evidence are in `docs/v4/CAPABILITY_MATRIX.md` and
+`docs/v4/SEMANTICS.md`.
 
 | Capability | Present? | Note |
 |---|---|---|
-| CDCL / SAT / clause learning / watched literals / VSIDS | **yes** (`src/sat.rs`, RUP-checked) | frozen corpus + cross-engine differential in `tests/sat.rs` |
-| Theory combination, CDCL(T), linear arithmetic, congruence closure | no | depends on the SAT core (now present; next) |
-| Constraint propagators, domains, MAC search | no | and must record explanations — a propagator that removes a value without recording why cannot support a proof |
-| Symbolic arithmetic: polynomials, intervals, identities | no | |
-| Search: IDA*, A*, alpha-beta, transposition tables | no | |
-| Strategy selection / solver portfolio | no | pointless with one engine |
-| Partial evaluation / the charter's compiler passes | no | only constant folding and dead-static-rule elimination exist |
+| CDCL / SAT / learning / watched literals / VSIDS | **yes** | RUP-checked, frozen corpus |
+| CDCL(T), integer difference logic, congruence closure | **yes** | checked models, replayed theory lemmas; no general arithmetic |
+| SMT-LIB 2 subset frontend (QF_IDL/QF_UF) | **yes** | `crates/axiom-smt`; Tseitin CNF over CDCL(T); no printer, no conformance suite |
+| Incremental theory solving / push-pop | no | single-shot driver |
+| General linear/real arithmetic, arrays, bitvectors, strings | no | outside the fragment |
+| Constraint propagation with explanations | **yes** | finite-domain CSP/puzzles |
+| Search: A*, IDA*, alpha-beta, Dijkstra | **yes** | explicit graphs/trees, bounded |
+| ASP: grounding, choice rules, stable models | **yes** | finite universe, 22-atom cap |
+| FOL resolution with a trusted kernel | **yes** | bounded; ground equality normalization or non-ground equality axioms; never `Refuted` |
+| Untyped STRIPS planning | **yes** | A* `h_max` / BFS; no costs/typed PDDL |
+| Strategy selection / portfolio | partial | V2 chooser; router dispatches by kind |
+| SMT-LIB / TPTP | partial | a quantifier-free difference-logic subset of SMT-LIB 2 is read; no TPTP |
+| External differential comparison | partial | small manual harness; no conformance claim |
+| Neural components | no | nothing in the crate is a model |
 
-There are **no neural components**. DD-0013 records the decision and the
-reasoning; nothing in the crate is a model, and nothing in `[dependencies]`
-(DD-0007 keeps the dependency list empty).
+**Cost.** The platform is a set of scoped fragments, not a general prover. Every
+row marked no requires a new solver or adapter, not just a document change.
 
-**Cost.** The engine reasons over Horn programs and nothing else. Every family
-above the line in `docs/ARCHITECTURE.md` §7 requires an adapter *and* a new
-solver, not an adapter alone.
+### B8. Root IR serialisation is still absent
 
-**What would remove it.** Each row, in the dependency order given in
-`docs/ROADMAP.md` Stage 2.
+**What it is.** The root hash-consed arena has no binary or textual IR dump. The
+only interchange formats are the exterior's surface syntax and the Rust
+`Builder` API (`docs/IR_SPEC.md` §10).
 
-### B8. No IR serialisation
+v4's `crates/axiom-ir` provides a typed structural IR and deterministic
+S-expression serialisation, but it is **not** a serialisation of the root
+arena and does not preserve root proof ids. It is used by the FOL and planning
+crates for their own syntax.
 
-**What it is.** There is no binary or textual IR dump. The only interchange
-formats are the exterior's surface syntax and the Rust `Builder` API
-(`docs/IR_SPEC.md` §10).
+**Why it is hard.** Root node ids are positions in a `Vec<TermNode>` plus offsets
+into a flat child vector, so a dump has to encode arena topology and the symbol
+table consistently, and reloading must reproduce identical ids or recorded
+proofs become invalid.
 
-**Why it is hard.** The IR is a hash-consed arena. Node ids are positions in a
-`Vec<TermNode>` plus offsets into a flat child vector, so a dump has to encode
-the arena topology and the symbol table consistently, and reloading has to
-reproduce identical ids or every recorded proof becomes invalid — `inst` is
-keyed by rule-local variable ids and `concl` by arena node
-(`docs/IR_SPEC.md` §8).
+**Cost.** No persistent root problems, no cross-process root proofs, no shipping
+a root model.
 
-**Cost.** No persistent problems, no cross-process proofs, no shipping a model.
-`show` (`src/exterior.rs:438`) renders rules back to text and is not
-serialisation: it loses queries, loses original variable names, and loses the
-symbol-id layout that proofs depend on.
-
-**What would remove it.** A versioned arena format plus a rehash-on-load pass, and
-a decision — recorded, not assumed — about whether proofs survive a round trip
-through it.
+**What would remove it.** A versioned root-arena format plus a rehash-on-load
+pass, with an explicit decision about whether proofs survive the round trip.
+`axiom-ir` serialisation is not a substitute.
 
 ---
 
@@ -458,11 +446,10 @@ cargo bench --bench kernel -- diag
 which prints `n`, `facts`, `rounds`, `derivations`, `candidates` and wall time
 for n ∈ {100, 200, 400, 800} (`benches/kernel.rs:513-532`).
 
-**Note on provenance.** These figures are instrumented, not written down: no
-checked-in document contains them, and `docs/PERFORMANCE.md` — referenced from
-`src/solver.rs:42`, `src/term.rs:247`, `src/subst.rs:68`, `src/budget.rs:11` and
-`docs/ALGORITHMS.md:157` — does not exist. They must be re-derived and recorded
-before they are trusted.
+**Note on provenance.** These figures are now recorded in
+`docs/v4/BASELINE.md` from a named CI run. The old `docs/PERFORMANCE.md`
+references were stale; there is no such file. Re-derive with the `diag` job
+before trusting a changed number.
 
 **The root cause is established by attribution.** What can be ruled out from
 the code:
@@ -569,17 +556,17 @@ unindexed; the trigger for a third level is in `docs/ROADMAP.md` with DD-0006.
 | A4 | wrong-argument index key (FIXED by position-tagged keys) | correctness | **was yes** | done |
 | A5 | `Unknown` never constructed (now constructed; `Impossible` reserved) | correctness | claims now true | done |
 | A6 | `saturate_naive` wrong model (FIXED: stale cursors) | correctness | **was yes**, benchmarks only | done |
-| A7 | benchmarks measure nothing (FIXED) | measurement | no | done |
+| A7 | benchmark/RSS defects (open) | measurement | no; numbers misleading | small |
 | A8 | raised `Limits` corrupt terms silently | correctness | yes, if limits are raised | small |
 | A9 | SLD reused cached renamings across recursion (FIXED) | correctness | **yes**, both directions | small |
 | B1 | stratified Datalog only | scope | no | large |
 | B2 | undecidability | scope | no — not fixable | n/a |
-| B3 | non-ground negation blocks derivations | incompleteness | reported as `Refuted` | large |
+| B3 | negation scheduling (FIXED); non-ground negation blocks | incompleteness | unsafe programs only | small safety check or large tabling |
 | B4 | `backward_only` heads | scope | contributes to A1/A2 | large |
 | B5 | backward fragment restrictions | scope | contributes to A1 | medium |
 | B6 | no negation in backward mode | scope | contributes to A1 | large |
-| B7 | no SAT/SMT/CP/search/portfolio/neural | scope | no | large |
-| B8 | no IR serialisation | scope | no | medium |
+| B7 | scoped fragments: no general arithmetic, incremental theory, ASP aggregates, FOL superposition, or external parity | scope | no | large |
+| B8 | root IR serialisation absent (`axiom-ir` is separate) | scope | no | medium |
 | C1 | join scaled n³ (FIXED: second index, slope 2.00, 0 unbound) | performance | no | done |
 | C2 | 324 B/fact vs 20 B payload (was 248; +76 for the 95× speedup) | memory | no | medium, or use `ProofMode::Off` (197) |
 | C3 | least selective seed dominates | performance | no | large |

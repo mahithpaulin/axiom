@@ -1,0 +1,10 @@
+[package]
+name = "axiom-ir"
+version = "0.2.0"
+edition = "2021"
+rust-version = "1.75"
+description = "Axiom v4 typed intermediate representation and stable serialisation."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/mahithpaulin/axiom"
+
+[dependencies]

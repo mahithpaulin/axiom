@@ -35,6 +35,8 @@
 //! | [`program`] | rules, literals, stratification, the exterior-side builder |
 //! | [`proof`] | derivation records and check errors |
 //! | [`puzzle`] | puzzle adapters: sudoku, queens, coloring, logic grids |
+//! | [`sat`] | CDCL SAT core with RUP certificates |
+//! | [`theory`] | CDCL(T): integer difference logic and congruence closure |
 //! | [`check`] | independent proof checking |
 //! | [`solver`] | the solver object; public API surface |
 //! | [`solver_fwd`] | semi-naive bottom-up evaluation |
@@ -46,13 +48,22 @@
 //!
 //! ## What this crate does and does not do
 //!
-//! Stage 1 implements **stratified Datalog**: facts, rules with positive and
-//! stratified-negated bodies, function symbols in rule heads handled by
-//! resolution rather than saturation, and complete least-model computation. It is
-//! complete for that fragment and says so in its `Status`; outside it, it returns
-//! `Unknown` or `Exhausted` rather than guessing. Constraints, arithmetic theories,
-//! planning, search and strategy selection are specified in docs/ROADMAP.md and are
-//! **not** implemented yet. See docs/KNOWN_LIMITATIONS.md.
+//! This crate implements stratified Datalog (facts, positive and
+//! stratified-negated rules, complete least-model computation), a CDCL SAT core
+//! with checked certificates, a quantifier-free CDCL(T) fragment over integer
+//! difference logic and congruence closure, finite-domain CSP/puzzles,
+//! explicit-state planning, and bounded search/game move generation.
+//!
+//! It does **not** implement general first-order theorem proving, a general
+//! linear-arithmetic SMT solver, SMT-LIB, external prover parity, or
+//! cross-domain evidence composition. Those boundaries are stated in
+//! `docs/KNOWN_LIMITATIONS.md` and `docs/v4/KNOWN_LIMITATIONS.md`. The v4
+//! workspace crates add ASP, FOL resolution, STRIPS planning, a trusted proof
+//! kernel, and a router; they are separate packages in this workspace.
+//!
+//! A non-ground negated literal blocks a forward derivation; programs are
+//! expected to be safe. `Refuted` requires a completed least model, never a
+//! search decline.
 //!
 //! ## Example
 //!

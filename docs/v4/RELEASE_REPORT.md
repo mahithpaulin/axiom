@@ -1,0 +1,160 @@
+# Axiom v4 — release report
+
+Status: release candidate on branch `v4`.
+Code and documentation verification run: `39592092838` at `ae05d33`
+(2026-10-21).
+
+## 1. What this release adds
+
+Axiom v4 turns the repository into a workspace with one common engine contract:
+
+- `axiom-core`: `Problem`, `Verdict`, `Evidence`, `Engine`, `EngineRegistry`,
+  routing records, and the Datalog adapter;
+- `axiom-ir`: typed structural IR and deterministic S-expression
+  serialisation;
+- `axiom-asp`: finite ASP grounding, stable-model enumeration, and independent
+  model validation;
+- `axiom-proof`: a small trusted resolution kernel and an STLC type checker;
+- `axiom-prover`: FOL parsing, NNF/Skolem/CNF, bounded given-clause resolution,
+  and a verified prover engine;
+- `axiom-planning`: untyped STRIPS PDDL, grounding, BFS planning, and plan
+  replay;
+- `axiom-router`: the standard four-engine bundle with verification on every
+  definite outcome.
+
+Existing root capabilities (Datalog, SAT, CDCL(T), CSP, search, games) remain
+available and keep their own tests and certificates.
+
+## 2. Verification evidence
+
+Run `39592092838` (all 10 jobs successful):
+
+| Job | Result |
+|---|---|
+| `test` | 231 passed, 0 failed, 0 ignored across 17 targets |
+| `doc` | 6 doc tests passed |
+| `clippy` | clean with `-D warnings` over the workspace, lib + tests |
+| `fmt` | clean |
+| `known-defects` | no ignored tests remain |
+| `examples` | all examples build |
+| `bench-ci`, `bench-sat`, `bench-theory`, `diag` | successful; no new perf claim |
+
+The run includes the B3 regression, all kernel negative tests, ASP truncation
+and non-model tests, the FOL smuggled-input test, the planning tampered-plan
+test, and the router domain sweep.
+
+## 3. Correctness changes
+
+- **B3 fixed**: forward evaluation no longer checks negation immediately after a
+  delta seed. Negation is evaluated after all positive joins, so a later
+  positive literal can bind the negated variable. Regression:
+  `negation_waits_for_later_positive_bindings`.
+- **Proof rule serialisation** now matches the five-field `resolve` form.
+- **ASP positive loop** test corrected: `p :- p.` has the empty set as its only
+  stable model; the engine already implemented that and the test was wrong.
+- **Planning and prover** compile/clippy/test defects found by CI were fixed
+  before this report.
+
+## 4. What is deliberately not claimed
+
+- No competitive performance claim against clingo, Vampire, Fast Downward, Z3,
+  Soufflé, or Lean.
+- No complete first-order theorem prover. The prover is bounded, has no
+  equality, and never emits `Refuted`.
+- No formal verification. The kernel is a small checker, not a proved
+  metatheory.
+- No complete ASP count when the model cap is reached.
+- No “impossible” planning answer from a resource cap.
+- No cross-domain composition beyond routing.
+- No valid peak-RSS numbers from the kernel benchmark column.
+
+## 5. Fragment summary
+
+| Domain | Decides | Main caps | Negative result |
+|---|---|---|---|
+| Datalog | least model, ground goals, queries | root step/depth budgets | `Refuted` only from completed least model |
+| ASP | stable models over finite Herbrand universe | 22 atoms, 200k ground rules, 1024 models | `Impossible` only when complete and zero |
+| FOL | refutations by bounded resolution | 4096 clauses, 2048 selected, 8192 generated | never `Refuted`; saturation is `Unknown` |
+| SMT | satisfiability of a difference-logic subset | SAT/theory budgets and the root caps | `Impossible` only with a checked certificate |
+| Planning | shortest untyped STRIPS plan | 100k actions, 50k states, 100k expansions | `Impossible` only after exhaustive BFS |
+| STLC | type inference/checking | structural | typing error |
+
+## 6. Upgrade and compatibility notes
+
+- The root crate remains zero-dependency and keeps its public API.
+- v4 crates are workspace members with path dependencies; they are not
+  published.
+- `Cargo.lock` is still gitignored.
+- Root docs that previously denied SMT, theory, planning, and search were stale;
+  they are corrected in this release.
+- The RSS column in kernel output is still post-solve; it is documented as
+  invalid for peak memory, not silently reinterpreted.
+
+## 7. Open work
+
+- external differential suites and a conformance harness;
+- in-closure peak-RSS measurement;
+- ASP performance and a real grounder;
+- FOL superposition and countermodel/`Refuted` support (ground/non-ground
+  equality is implemented in §8);
+- planning heuristics and cost-aware search;
+- cross-domain evidence translation;
+- MSRV CI for the declared 1.75;
+- root theory allocation blow-up (`rdl_chain_sat`).
+
+Nothing in this report should be read as a promise that those are complete.
+
+## 8. Post-release development after `d606aab`
+
+The branch now also contains the next improvement round. This section is
+separate from the release evidence above:
+
+- planning uses A* with an admissible delete-relaxation `h_max` heuristic by
+  default, while `planner::plan` keeps breadth-first order for compatibility.
+  Both searches preserve the shortest-plan guarantee;
+- forward Datalog rules are checked for safety and unsafe rules are rejected as
+  `ProgramError::UnsafeRule`;
+- `AspEngine::models` exposes validated, structured stable models;
+- `axiom-bridge` adds a checked ASP-to-planning pipeline;
+- `axiom-bench` and `benchmarks/external/run.py` provide small differential
+  correctness rounds, run manually by `.github/workflows/external-bench.yml`;
+- differential round 2 (run `39597261031`) matched all 12 fixtures against Z3,
+  clingo, Soufflé, Fast Downward, and Vampire, with no mismatches or skips;
+- FOL equality is parsed as an infix atom. Ground equality is normalised by
+  congruence closure when the axioms are positive units; other equality uses
+  reflexivity, symmetry, transitivity, and congruence axioms. Both paths still
+  produce ordinary resolution proofs checked by the kernel;
+- differential round 3 (run `39601253129`) added equality-substitution and
+  equality-congruence FOL cases and matched all 14 fixtures with no mismatches
+  or skips;
+- `axiom-smt` adds an SMT-LIB 2 frontend, and the router now registers five
+  engines: a quantifier-free difference-logic
+  subset with uninterpreted functions, encoded by Tseitin CNF and decided by
+  the root crate's CDCL(T) driver. A `Found` answer carries the SAT model and
+  is re-checked against the encoded clauses and a fresh theory state; an
+  `Impossible` answer carries the RUP proof and the theory lemmas and is
+  replayed. A coefficient other than `1` or `-1`, `push`/`pop`, and a second
+  `check-sat` are `Unsupported`, not approximated;
+- the root theory checker had a gap: the congruence closure only merges
+  *indexed* terms, and the verifier built a fresh store per lemma, so
+  `a = b` could not contradict `f(a) != f(b)`. The verifier now indexes every
+  hypothesis term before asserting it, with the regression test
+  `tests/theory.rs::congruence_conflict_over_function_terms_verifies`;
+- differential round 4 (run `39607159188`) added five SMT-LIB fixtures and
+  matched all 19 fixtures with no mismatches or skips; Z3 agreed with Axiom on
+  every SMT case, including the congruence case;
+- the SMT frontend supports `push`/`pop` scopes and several `check-sat`
+  commands per file: each check snapshots the assertions in scope and carries
+  its own certificate. Every check is solved from scratch, so no learnt clause
+  and no theory state is reused: this is incremental *questions*, not
+  incremental *solving*, and the documentation says so;
+- differential round 5 (run `39610655498`) added a `push`/`pop` session and
+  matched all 20 fixtures with no mismatches or skips. The harness replays the
+  same file through Z3's `push`/`pop` API and compares the answers per check;
+- documentation is updated for these changes.
+
+Local validation on the development device: `cargo fmt --check`, workspace
+`clippy --all-targets -D warnings`, 274 library/integration tests, and 8 doc
+tests pass. CI run `39610624826` at `59303ee` also passed all 10 jobs. The
+release statements in sections 4 and 7 describe `d606aab`; this section
+supersedes them for the new work.

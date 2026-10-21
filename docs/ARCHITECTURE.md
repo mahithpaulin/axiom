@@ -1,232 +1,143 @@
 # ARCHITECTURE
 
-## 1. The one-sentence thesis
+This document describes the root `axiom` crate and its relation to the v4
+workspace. The v4-specific architecture, including ASP, FOL, planning, the proof
+kernel, and the router, is in [`v4/ARCHITECTURE.md`](v4/ARCHITECTURE.md).
 
-**Problems are compiled into a single logical intermediate representation; a
-portfolio of solvers reasons over that representation; every definite answer is
-accompanied by a derivation that a separate checker re-verifies from the rules
-alone.**
+## 1. Thesis
 
-Everything else in this document is either a consequence of that sentence or a
-measured correction to it.
+There is no single logic that covers Datalog, ASP, first-order refutation,
+SAT modulo theories, and planning. The project therefore uses one **contract**
+and several **engines**, not one universal formula type:
 
----
-
-## 2. Layers
-
-```
-                     EXTERNAL WORLD
-                           │
-                           ▼
-             ┌───────────────────────────────┐
-             │       LOGICAL EXTERIOR        │   domain knowledge lives here
-             │  parse · encode · adapt       │
-             │  state/action → rules         │
-             │  answers → prose              │
-             └───────────────┬───────────────┘
-                             │  Program (the IR)
-                             ▼
-             ┌───────────────────────────────┐
-             │         LOGICAL CORE          │   no domain knowledge at all
-             │  representation (hash-consed) │
-             │  unification · matching       │
-             │  indexing · semi-naive eval   │
-             │  resolution · proof checking  │
-             └───────────────┬───────────────┘
-                             │
-              ┌──────────────┼──────────────┐
-              ▼              ▼              ▼
-        forward chain   backward res.   (later: CDCL(T), CP, search)
-              └──────────────┼──────────────┘
-                             ▼
-              Status + Derivation + independent check
+```text
+Problem ──▶ Engine::solve ──▶ Outcome { Verdict, Evidence }
+                                      │
+                                      ▼
+                              Engine::verify
 ```
 
-The boundary that matters is the arrow from the exterior to the core. Nothing
-below it knows what a graph, a schedule, or a game is. §19's generality test is
-exactly this: adding a domain costs an adapter, not a core change. Section 8
-gives the evidence.
+The contract lives in `crates/axiom-core`. Each engine owns its syntax and
+semantics. This avoids pretending that, for example, closed-world Datalog
+negation and ASP default negation are the same operation.
 
----
+## 2. Root crate layers
 
-## 3. Why one IR does not mean one algorithm
+```text
+surface text (src/exterior.rs)
+        │
+        ▼
+hash-consed terms / atoms / rules (src/term.rs, src/program.rs)
+        │
+        ├── forward least model (src/solver_fwd.rs)
+        ├── backward SLD (src/solver_bwd.rs)
+        ├── proofs and checking (src/proof.rs, src/check.rs)
+        ├── CDCL SAT (src/sat.rs)
+        ├── CDCL(T) RDL + UF (src/theory.rs)
+        └── V2 representations (src/repr.rs, csp, state, search, games)
+```
 
-The charter asks for a representation general enough to serve deduction,
-constraints, search, planning, and mathematics, on one CPU, without a pile of
-special cases. The naive reading — "one evaluator, one data structure" — is
-wrong, and measurably so:
+The exterior is the only place with source-level domain knowledge. The core
+operates on interned symbols and arena terms. Terms are `u32` ids; the arena is
+hash-consed.
 
-* A hash-consed term DAG is excellent for symbolic equality and unification, and
-  poor for interval arithmetic, where a dense `f64` pair beats a pointer chase
-  by more than an order of magnitude.
-* A CDCL solver wants a flat array of literals, not a DAG.
-* A constraint propagator wants a bitset domain, not a DAG.
+## 3. Root module map
 
-So the IR is the **interchange format**, not the **executable form**. Each solver
-lowers the IR into a representation it can execute quickly, and the charter's
-own §9 anticipates this: "compile into a lower-level representation optimized for
-execution." The compiler is real, it lives in `program.rs` and `solver_fwd.rs`,
-and lowering is cheap relative to solving.
+| Module | Role |
+|---|---|
+| `symbol` | name interning |
+| `term` | hash-consed term/atom arena |
+| `subst` | union-find unification with occurs check and trail |
+| `db` | extensional database with two index levels |
+| `program` | rules, literals, stratification, builder |
+| `solver_fwd` | semi-naive forward evaluation and stratified negation |
+| `solver_bwd` | depth-bounded SLD for `prove` and `query` |
+| `proof`, `check` | derivation records and independent replay |
+| `sat` | two-watched CDCL, learning, restarts, RUP certificates |
+| `theory` | DPLL(T) over RDL and congruence closure |
+| `csp`, `puzzle` | finite-domain propagation with explanations |
+| `state`, `domains` | explicit-state planning and BMC lowering |
+| `search` | A*, IDA*, alpha-beta over explicit graphs/trees |
+| `chess`, `chess_play`, `go` | bounded game move generation and play |
+| `choose` | deterministic chooser among V2 paths |
+| `bench` | timing/allocation harness (RSS column is post-solve) |
+| `budget`, `status` | resource limits and the honesty contract |
 
-This is also the answer to the sharpest tension in the requirements: §3 demands a
-compact, fast IR, and §12 demands coverage of constraint and numeric problem
-families. Those pull apart. Resolving them by compromise gives an IR that is
-adequate at everything. Resolving them by *specialising below the IR* gives an
-IR that is merely the exchange rate between specialised solvers.
+## 4. Datalog semantics in the root crate
 
----
+- Stratified Datalog over finite terms.
+- The forward engine computes the least model; evaluation is semi-naive.
+- A negated literal succeeds only when fully ground and absent. If it never
+  becomes ground, the derivation is blocked. Programs are expected to be safe;
+  unsafe programs are incomplete rather than reinterpreted.
+- B3 (fixed in v4) was an ordering bug: negation was tested before later
+  positive literals bound its variables. The check now runs after the positive
+  joins.
+- Function symbols in rule heads make a rule `backward_only`; forward
+  saturation does not enumerate an infinite Herbrand universe.
+- `Refuted` requires a completed least model, not a depth or budget decline.
+  Declines are `Unknown`/`Exhausted`.
 
-## 4. Module map
+## 5. SAT and theory
 
-| Module | Responsibility | Domain knowledge |
-|---|---|---|
-| `hash` | Fast hasher for all internal tables | none |
-| `symbol` | Interning; `u32` symbols after load | none |
-| `term` | Hash-consed term/atom arena, 16 B/node | none |
-| `subst` | Union-find unification, trail, resolution | none |
-| `db` | Extensional database and indexes | none |
-| `program` | Rules, literals, stratification, builder | none |
-| `proof` | Derivation records, check errors | none |
-| `check` | Independent proof checking | none |
-| `solver*` | Engines and the public API | none |
-| `exterior` | Surface syntax, tokeniser, parser | all of it |
-| `bench` | Measurement harness | none |
+`src/sat.rs` is a CDCL solver with two-watched propagation, first-UIP learning,
+VSIDS, phase saving, Luby restarts, and learned-clause deletion. Models are
+checked by satisfaction; UNSAT is checked by reverse unit propagation.
 
-`exterior.rs` is the only file allowed to know what a problem means. If a
-concept from the outside world appears anywhere else, the architecture has been
-violated and the test suite should say so.
+`src/theory.rs` is a DPLL(T) driver over:
 
----
+- integer difference constraints `x - y ≤ c`;
+- equality/disequality over uninterpreted terms;
+- congruence closure;
+- Nelson–Oppen combination of the two.
 
-## 5. Data flow, end to end
+Theory lemmas carry hypotheses; `verify_theory_unsat` replays them together
+with the propositional RUP proof. `verify_theory_sat` re-asserts the model and
+checks consistency. There is no general linear arithmetic, real arithmetic,
+arrays, bitvectors, strings, quantifiers, or incremental push/pop.
 
-1. **Parse.** `exterior::parse` tokenises and builds a `Program`. Identifier case
-   is preserved (lower-casing would silently convert every rule into a ground
-   fact — a soundness bug, not a style choice). Every axis an attacker controls
-   — token count, nesting depth, arity, rule count — is bounded and produces a
-   `ParseError` with a position.
-2. **Compile.** Names become interned symbol ids; terms become hash-consed arena
-   nodes; variables become rule-local slots; rules are stratified by bound
-   relaxation. Rules whose heads contain function symbols are marked
-   `backward_only` because their relation is infinite.
-3. **Execute.** `Solver::saturate` runs semi-naive bottom-up evaluation per
-   stratum. `Solver::prove` tries that first and falls back to depth-bounded SLD.
-4. **Record.** Each new fact gets a `Derivation`: rule id, the instantiation of
-   that rule's variables, the resolved conclusion, and *all* resolved premises in
-   body order.
-5. **Check.** `Solver::verify` re-derives the goal using an implementation that
-   shares no code with the solver — not the arena, not `Subst`, not the join.
-6. **Report.** A `Status` that cannot distinguish "solved" from "gave up".
+## 6. Status contract
 
----
+Root `Status` and v4 `Verdict` use different vocabularies but the same rule:
 
-## 6. The status contract
+- a definite answer carries evidence;
+- an inconclusive answer carries none;
+- inconclusive is never a negative answer.
 
-This is the engine's most important honesty mechanism, so it is stated as an
-invariant rather than a convention:
+`ProofMode::Off` produces `Found` rather than `Proved` because there is nothing
+to check. Planning `Impossible` is only emitted after exhaustive finite search,
+never after a cap.
 
-> A status that claims knowledge (`Proved`, `Refuted`, `Found`, `Impossible`)
-> carries a proof object. A status that does not (`Exhausted`, `Unknown`) carries
-> no proof, and callers must not read it as a negative answer.
+## 7. Verification
 
-Two consequences worth stating explicitly:
+`Solver::verify` re-derives a goal from facts and rules without the solver's
+substitution, arena, or join. `tests/reference.rs` is a second implementation
+(string terms, naive fixpoint, no index) used for differential testing. SAT and
+theory have separate checkers.
 
-* **Undecidability is not a resource problem.** General first-order validity is
-  undecidable; Church's theorem means no complete procedure exists for
-  arbitrary quantified formulas. No amount of compute changes this. The engine
-  therefore reports `Unknown` rather than pretending. (This mirrors the invariant
-  adopted by the `z3rs` pure-Rust port of Z3: *soundness before completeness —
-  a budget yields a sound `unknown`, never a wrong verdict*.)
-* **`Refuted` has a specific meaning.** For bottom-up saturation it is "the atom
-  is absent from the least model *and the least model was computed to
-  completion*", and it is accompanied by a closure certificate: round count, IDB
-  fact count, and an order-independent fingerprint of the whole closure. If
-  saturation was cut short by a budget, the answer is `Exhausted`. This is
-  enforced structurally — the certificate is only attached when `saturate`
-  returned `Ok`.
+v4 engines use serialised evidence and per-engine verifiers. See
+[`v4/VERIFICATION.md`](v4/VERIFICATION.md) for the exact checks and trust
+assumptions.
 
-The `ProofMode::Off` switch makes the same discipline visible from the other
-side. With derivations disabled the engine *cannot* support a `Proved` claim, so
-it reports `Found` — "a witness exists, no proof attached" — instead of a
-definite status with nothing behind it.
+## 8. Performance posture
 
----
+Measured on the root crate:
 
-## 7. What is actually complete, and what is not
+- 16 bytes per term node; duplicate interning allocates nothing;
+- first-argument index examines 495.8× fewer tuples than a scan;
+- transitive-closure candidate growth slope ≈ 2.00 over `n = 100..800`, with
+  zero unbound scans;
+- ~324 B RSS per derived fact with proofs, ~197 B without.
 
-Stage 1 implements **stratified Datalog**: facts, rules with positive and
-stratified-negated bodies, function symbols in heads handled by resolution
-rather than saturation, and complete least-model computation.
+Memory is the cost. The kernel RSS column is sampled after the solver drops and
+is not peak memory (`src/bench.rs:206-258`, F-03). Only the in-closure memory
+probe is valid for per-fact memory claims.
 
-It is complete for that fragment. Outside it, it returns `Unknown` or
-`Exhausted`. See `KNOWN_LIMITATIONS.md` for the itemised list, including two
-that are genuine incompleteness rather than missing features:
+## 9. Non-goals
 
-* A negated body literal that is not fully instantiated **blocks** the
-  derivation rather than being assumed true. Treating it as satisfied would
-  derive facts classical negation does not license — soundness over
-  completeness, deliberately.
-* Backward resolution handles ground goals with positive bodies only. Negation
-  and non-ground goals in backward mode are absent rather than approximated,
-  because an incomplete version under the same status enum would be worse than
-  no version.
-
----
-
-## 8. The generality test
-
-§19 asks that a new problem domain require only a new exterior adapter plus a
-logical program. The evidence so far:
-
-| Domain | Core changes required | Status |
-|---|---|---|
-| Graph reachability | none — two rules | works |
-| Transitive closure | none — two rules | works |
-| Logic-grid / scheduling (as Datalog) | none — rules + negation | works, `stratified_negation_5000` |
-| Recursive functions in heads | none — same rules, backward engine | works |
-
-The interesting one is the last. Adding an infinite-domain relation did **not**
-require touching the inference engines' design; it required a flag at compile
-time (`backward_only`) and a second engine that already existed. That is what
-the architecture is for.
-
----
-
-## 9. Performance posture
-
-CPU-first, single-threaded by default, no GPU path, no runtime dependencies. The
-representational choices are all in service of cache locality and predictable
-allocation:
-
-* 16 bytes per term node; a term is a `u32`; equality is an integer compare.
-* Hash-consing gives structural sharing and makes the fact table a
-  `HashSet<TermId>` rather than a set of vectors.
-* All term traversals are iterative. A 200k-deep term is a test case, not a
-  crash.
-* Join backtracking uses reusable cursor and trail-mark stacks, so a rule firing
-  allocates nothing for control state.
-
-Measured numbers, the memory-attribution experiment, and the two algorithms
-whose measurement contradicted my expectation are in `PERFORMANCE.md`. That last
-point is the most useful thing in this document: semi-naive evaluation initially
-appeared **350× slower** than the naive baseline, which is what exposed a
-completeness bug in the join rather than a performance problem.
-
----
-
-## 10. Explicit non-goals
-
-Stated so they are not mistaken for gaps:
-
-* **Not a complete theorem prover.** Full first-order refutation is out of scope
-  for Stage 1 and would require a saturation-based engine with its own
-  trade-offs.
-* **Not an SMT solver.** No theory combination yet (ROADMAP II2 is next).
-  The CDCL core itself is built (`src/sat.rs`): two-watched propagation,
-  first-UIP learning, VSIDS, RUP-checked certificates. `z3rs` and
-  `vampire-prover` were surveyed as prior art; both are dependencies
-  this project declines, for the reason in `DESIGN_DECISIONS.md` (DD-0007).
-* **No neural components.** §6 permits them under 1 M parameters. None are
-  present, and none are justified yet: see DD-0013.
-* **Not "solves any puzzle."** §24 of the charter already concedes this, and
-  `KNOWN_LIMITATIONS.md` keeps the concession honest and itemised.
+- one IR that hides semantic differences between engines;
+- competitive parity with specialist solvers;
+- formal verification of the implementation;
+- external solver dependencies in the runtime;
+- distributed or GPU execution;
+- claims unsupported by checked evidence.
