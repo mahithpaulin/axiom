@@ -63,6 +63,13 @@ assert_eq!(out.outcome.verdict, axiom_core::Verdict::Proved);
 let asp = Problem::asp("{ p }. :- p.", 0);
 let out = router.solve(&asp, &mut budget).unwrap();
 assert_eq!(out.outcome.verdict, axiom_core::Verdict::Found);
+
+// SMT: an SMT-LIB 2 difference-logic problem, decided over CDCL(T).
+let smt = Problem::smt(
+    "(declare-fun x () Int) (assert (<= x 2)) (assert (>= x 5)) (check-sat)",
+);
+let out = router.solve(&smt, &mut budget).unwrap();
+assert_eq!(out.outcome.verdict, axiom_core::Verdict::Impossible);
 ```
 
 ## What each engine decides
@@ -72,6 +79,7 @@ assert_eq!(out.outcome.verdict, axiom_core::Verdict::Found);
 | Datalog (`axiom-core`) | stratified Datalog, finite terms, safe forward rules | least-model derivation or completed absence |
 | SAT (`axiom::sat`) | propositional CNF | model checked by satisfaction; UNSAT by RUP |
 | CDCL(T) (`axiom::theory`) | integer difference logic + equality/congruence | checked model or replayed theory lemmas |
+| SMT (`axiom-smt`) | SMT-LIB 2 subset: quantifier-free difference logic, uninterpreted functions | model re-asserted in a fresh theory state, or RUP proof plus replayed theory lemmas |
 | ASP (`axiom-asp`) | normal/choice rules, constraints, finite Herbrand grounding | each listed model passes the stable-model test |
 | FOL (`axiom-prover`) | quantifiers, predicates, functions; ground equality by congruence closure, non-ground equality by axioms; no arithmetic | kernel-checked empty clause |
 | Planning (`axiom-planning`) | untyped STRIPS, negative preconditions, A* h_max | replayable shortest plan, or exhausted state space |
@@ -79,8 +87,10 @@ assert_eq!(out.outcome.verdict, axiom_core::Verdict::Found);
 
 Scoped limits are intentional. FOL saturation is `Unknown`, never `Refuted`.
 ASP returns `Impossible` only for a complete zero-model enumeration. Planning
-returns `Impossible` only after exhaustive search. A resource cap is
-`ResourceLimit`, not a negative answer.
+returns `Impossible` only after exhaustive search. SMT returns `Impossible`
+only with a checked unsatisfiability certificate, and `Found` only with a model
+that satisfies the encoded clauses and is consistent with the theory. A
+resource cap is `ResourceLimit`, not a negative answer.
 
 ## The honesty contract
 
@@ -102,11 +112,11 @@ relation are trusted tested code. See `docs/v4/VERIFICATION.md`.
 ## Current verification status
 
 GitHub Actions is authoritative. The Android/Termux device can run local
-checks and release builds, but is not a CI substitute. Run `39601214713` on
-branch `v4` (`8073d13`) passed all 10 jobs:
+checks and release builds, but is not a CI substitute. Run `39607136661` on
+branch `v4` (`95bbd4b`) passed all 10 jobs:
 
-- 255 library/integration tests, 0 failed, 0 ignored;
-- 7 doc tests;
+- 273 library/integration tests, 0 failed, 0 ignored;
+- 8 doc tests;
 - workspace `clippy -D warnings`, `fmt --check`, examples, and known-defects
   gates;
 - existing kernel, SAT, theory, and scaling probes.
@@ -126,6 +136,7 @@ separate contract. Details and run IDs are in `docs/v4/RELEASE_REPORT.md`.
 | `crates/axiom-asp/` | ASP syntax, grounding, stable models |
 | `crates/axiom-proof/` | trusted resolution kernel, STLC checker |
 | `crates/axiom-prover/` | FOL parser, CNF, bounded resolution |
+| `crates/axiom-smt/` | SMT-LIB 2 subset frontend over the CDCL(T) core |
 | `crates/axiom-planning/` | untyped STRIPS planner and validator |
 | `crates/axiom-router/` | standard engine bundle |
 | `crates/axiom-bridge/` | checked ASP-to-planning composition |
@@ -148,10 +159,11 @@ measurements (baseline `docs/v4/BASELINE.md`):
 The `rss kB` column in kernel output is sampled after the solver is dropped and
 is **not** peak memory (`src/bench.rs:206-258`, F-03). Do not use it as a
 baseline. A differential harness now exists (`benchmarks/external/` and the
-`external differential benchmarks` workflow). Round 3 (run `39601253129`)
-matched all 14 fixtures against Z3, clingo, Soufflé, Fast Downward, and Vampire,
-with zero mismatches and zero skips; it adds two ground-equality FOL cases.
-These are small correctness fixtures, not a competitive performance claim.
+`external differential benchmarks` workflow). Round 4 (run `39607159188`)
+matched all 19 fixtures against Z3, clingo, Soufflé, Fast Downward, and Vampire,
+with zero mismatches and zero skips; it adds two ground-equality FOL cases and
+five SMT-LIB cases. These are small correctness fixtures, not a competitive
+performance claim.
 
 ## Documentation
 

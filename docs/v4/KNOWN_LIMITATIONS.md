@@ -94,7 +94,26 @@ This is the unflattering list. If a capability is not here, check
 - Proof text is a custom S-expression format, not TSTP/TPTP.
 - The prover does not parse TPTP or SMT-LIB.
 
-## 5. Planning (`axiom-planning`)
+## 5. SMT (`axiom-smt`)
+
+- The frontend reads an SMT-LIB 2 subset only: `set-logic`, `declare-fun`,
+  `declare-const`, `assert`, `check-sat`; `Int` and `Bool` sorts; quantifier-free
+  difference logic with uninterpreted functions. There is no printer and no
+  conformance suite.
+- The theory fragment is difference logic plus congruence closure. There is no
+  general linear arithmetic, no real arithmetic, no arrays, bitvectors or
+  strings, and no quantifiers.
+- A coefficient other than `1` or `-1`, a sum of two terms on one side of a
+  comparison, and a numeral function argument are `Unsupported` rather than
+  approximated.
+- `push`/`pop`, a second `check-sat`, and incremental solving are
+  `Unsupported`: the driver is single-shot per formula.
+- The model reports the truth value of each theory atom. Integer values are
+  not reconstructed, so `get-model` output is not a numeric assignment.
+- `Unknown` is never returned for a well-formed problem; a stopped search is
+  `ResourceLimit`.
+
+## 6. Planning (`axiom-planning`)
 
 - Untyped STRIPS only. Typing, equality, numeric fluents, conditional effects,
   quantified/disjunctive goals, costs, and durative actions are rejected.
@@ -111,7 +130,7 @@ This is the unflattering list. If a capability is not here, check
 - No plan optimality certificate beyond the admissible heuristic and exhaustive
   search argument.
 
-## 6. Proof kernel (`axiom-proof`)
+## 7. Proof kernel (`axiom-proof`)
 
 - The trusted base includes the S-expression parser, clause normalisation, and
   unification. It is small but not proved.
@@ -123,7 +142,7 @@ This is the unflattering list. If a capability is not here, check
   this kernel. Each engine keeps its own evidence format.
 - No Lean/Coq formalisation.
 
-## 7. Router (`axiom-router`)
+## 8. Router (`axiom-router`)
 
 - Dispatch only; first engine registered for a kind wins.
 - No capability negotiation, cost model, fallback, or portfolio scheduling.
@@ -132,13 +151,12 @@ This is the unflattering list. If a capability is not here, check
 - There is no evidence translation or provenance graph across domains.
 - No persistence, caching, or incremental solving.
 
-## 8. Root engine limitations retained
+## 9. Root engine limitations retained
 
 The root crate still has the issues catalogued in `docs/KNOWN_LIMITATIONS.md`,
 including:
 
 - the post-solve RSS measurement defect;
-- no SMT-LIB parser;
 - no general linear arithmetic or real arithmetic;
 - no incremental/push-pop theory solving;
 - no provenance semirings or magic sets;
@@ -146,7 +164,7 @@ including:
 
 v4 did not fix these by renaming them.
 
-## 9. Claims that must not be made
+## 10. Claims that must not be made
 
 Do not claim, in a README, release note, or issue:
 

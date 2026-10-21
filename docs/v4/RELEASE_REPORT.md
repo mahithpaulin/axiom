@@ -75,6 +75,7 @@ test, and the router domain sweep.
 | Datalog | least model, ground goals, queries | root step/depth budgets | `Refuted` only from completed least model |
 | ASP | stable models over finite Herbrand universe | 22 atoms, 200k ground rules, 1024 models | `Impossible` only when complete and zero |
 | FOL | refutations by bounded resolution | 4096 clauses, 2048 selected, 8192 generated | never `Refuted`; saturation is `Unknown` |
+| SMT | satisfiability of a difference-logic subset | SAT/theory budgets and the root caps | `Impossible` only with a checked certificate |
 | Planning | shortest untyped STRIPS plan | 100k actions, 50k states, 100k expansions | `Impossible` only after exhaustive BFS |
 | STLC | type inference/checking | structural | typing error |
 
@@ -126,10 +127,26 @@ separate from the release evidence above:
 - differential round 3 (run `39601253129`) added equality-substitution and
   equality-congruence FOL cases and matched all 14 fixtures with no mismatches
   or skips;
+- `axiom-smt` adds an SMT-LIB 2 frontend, and the router now registers five
+  engines: a quantifier-free difference-logic
+  subset with uninterpreted functions, encoded by Tseitin CNF and decided by
+  the root crate's CDCL(T) driver. A `Found` answer carries the SAT model and
+  is re-checked against the encoded clauses and a fresh theory state; an
+  `Impossible` answer carries the RUP proof and the theory lemmas and is
+  replayed. A coefficient other than `1` or `-1`, `push`/`pop`, and a second
+  `check-sat` are `Unsupported`, not approximated;
+- the root theory checker had a gap: the congruence closure only merges
+  *indexed* terms, and the verifier built a fresh store per lemma, so
+  `a = b` could not contradict `f(a) != f(b)`. The verifier now indexes every
+  hypothesis term before asserting it, with the regression test
+  `tests/theory.rs::congruence_conflict_over_function_terms_verifies`;
+- differential round 4 (run `39607159188`) added five SMT-LIB fixtures and
+  matched all 19 fixtures with no mismatches or skips; Z3 agreed with Axiom on
+  every SMT case, including the congruence case;
 - documentation is updated for these changes.
 
 Local validation on the development device: `cargo fmt --check`, workspace
-`clippy --all-targets -D warnings`, 255 library/integration tests, and 7 doc
-tests pass. CI run `39601214713` at `8073d13` also passed all 10 jobs. The
+`clippy --all-targets -D warnings`, 273 library/integration tests, and 8 doc
+tests pass. CI run `39607136661` at `95bbd4b` also passed all 10 jobs. The
 release statements in sections 4 and 7 describe `d606aab`; this section
 supersedes them for the new work.

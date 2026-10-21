@@ -23,7 +23,7 @@ capability is not upgraded from Partial/Planned because a document claims it.
 | Engine family | v4 status |
 |---|---|
 | 1. Axiom foundation (Datalog, SAT, V2) | implemented with scoped limits; B3 scheduling fixed |
-| 2. SMT / constraints (Z3 reference) | implemented for RDL + UF only |
+| 2. SMT / constraints (Z3 reference) | RDL + UF over CDCL(T), with an SMT-LIB 2 subset frontend |
 | 3. High-performance Datalog (Soufflé reference) | partial: correct, not competitive |
 | 4. ASP (clingo reference) | implemented finite fragment with model validation |
 | 5. First-order proving (Vampire reference) | implemented bounded resolution; ground equality normalization plus non-ground equality axioms; no superposition or `Refuted` |
@@ -87,9 +87,10 @@ by a DPLL(T) driver over the existing SAT core.
 | Model construction and validation | Implemented | `src/theory.rs:1309` `verify_theory_sat` | Re-asserts the model's atoms and checks consistency. |
 | Unsat evidence | Implemented | `src/theory.rs:1152` `verify_theory_unsat`; `tests/theory.rs` | Propositional RUP plus theory-lemma replay. |
 | Optimization (minimize/maximize, MaxSMT) | Absent | — | Planned after the decision fragment is reliable. |
-| SMT-LIB parser / printer | Absent | — | Rust API only; no external conformance suite. |
+| SMT-LIB parser | Implemented (subset) | `crates/axiom-smt/src/parse.rs` | `set-logic`, `declare-fun`, `declare-const`, `assert`, `check-sat`; Int/Bool sorts; quantifier-free difference logic with uninterpreted functions. No printer. |
+| SMT-LIB conformance | Absent | — | No external conformance suite; the differential harness checks five hand-written fixtures against Z3. |
 | Arrays, bitvectors, strings, quantifiers | Absent | — | Explicitly outside the current fragment. |
-| Differential testing against Z3 | Partial | `benchmarks/external/run.py` (SAT fixtures) | Test-only oracle; no runtime dependency. Two pigeonhole cases only. |
+| Differential testing against Z3 | Partial | `benchmarks/external/run.py` | Test-only oracle; no runtime dependency. Two pigeonhole SAT cases and five SMT-LIB cases. |
 
 ---
 

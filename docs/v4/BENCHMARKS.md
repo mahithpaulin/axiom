@@ -61,10 +61,10 @@ A small differential correctness round is separate from these gates:
 
 | Harness | Command | Scope |
 |---|---|---|
-| External differential | `python3 benchmarks/external/run.py --axiom target/release/axiom-bench` | 14 fixtures against Z3, clingo, Soufflé, Fast Downward, and Vampire when installed |
+| External differential | `python3 benchmarks/external/run.py --axiom target/release/axiom-bench` | 19 fixtures against Z3, clingo, Soufflé, Fast Downward, and Vampire when installed |
 
 The workflow `.github/workflows/external-bench.yml` is manual and uploads
-`results.json` and `results.md`. Round 3 required every oracle and matched all 14
+`results.json` and `results.md`. Round 4 required every oracle and matched all 19
 fixtures. A skipped oracle is not agreement, and one fixture per family is not a
 conformance or performance result. No v4 engine has a throughput benchmark or
 scaling study, and no competitive ranking is claimed.
@@ -94,7 +94,7 @@ separate process-level probe.
 
 The external harness exists, but these are still not done:
 
-- a broad external differential suite (the current suite has 14 fixtures);
+- a broad external differential suite (the current suite has 19 fixtures);
 - a cross-engine conformance fixture format;
 - performance and scaling comparisons with clingo/Vampire/Fast Downward/Z3;
 - peak-RSS instrumentation;
@@ -156,3 +156,19 @@ The FOL cases are `equality-substitution` (`a = b`, `P(a)` therefore `P(b)`) and
 `equality-congruence` (`a = b` therefore `f(a) = f(b)`); Vampire reported
 `Theorem` for both. The suite remains a small functional differential check, not
 a conformance or performance claim.
+
+### Round 4
+
+Run `39607159188` (2026-10-21, commit `95bbd4b`) added five SMT-LIB 2 fixtures
+and required every oracle:
+
+- 19 cases total;
+- 19 matched an independent oracle;
+- 0 mismatches;
+- 0 skipped.
+
+The new family is SMT: `difference-sat`, `difference-unsat`, `equality-unsat`,
+`congruence-unsat`, and `boolean-sat`. Z3 agreed with Axiom on all five. The
+`congruence-unsat` case is the interesting one: `a = b` together with
+`f(a) != f(b)` is unsatisfiable only through congruence, and both solvers
+found it. This is still five hand-written fixtures, not a conformance suite.

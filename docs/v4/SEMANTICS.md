@@ -176,9 +176,63 @@ hence the goal follows. `Proved` is emitted only after the kernel check passes.
 - `Error`: malformed input or an internal inconsistency.
 - `Refuted`: never emitted. There is no model/countermodel construction.
 
-## 5. STRIPS planning (`axiom-planning`)
+## 5. SMT (`axiom-smt`)
 
 ### 5.1 Fragment
+
+`Problem::smt(source)` reads an SMT-LIB 2 subset:
+
+- commands: `set-logic`, `set-info`, `set-option`, `declare-fun`,
+  `declare-const`, `assert`, `check-sat`, `get-model`, `exit`;
+- sorts: `Int` and `Bool`;
+- terms: numerals, declared constants, uninterpreted function application,
+  `+`, `-`, `*` with a numeral coefficient of `1` or `-1`;
+- formulas: `true`, `false`, declared Boolean constants, `not`, `and`, `or`,
+  `xor`, `=>`, `ite`, `=`, `distinct`, `<`, `<=`, `>`, `>=`.
+
+The theory fragment is **quantifier-free difference logic with uninterpreted
+functions**: `x - y <= c`, `x = y`, `x != y` over terms. A coefficient other
+than `1` or `-1`, a sum of two terms on one side, a numeral function argument,
+`push`/`pop`, and a second `check-sat` are `Unsupported`, never approximated.
+
+### 5.2 Translation
+
+1. Each comparison is normalised to a difference: `lhs - rhs` has at most one
+   positive term and one negative term, plus an integer offset. Two terms on
+   one side is a coefficient of `2` and is rejected.
+2. A comparison with a bare numeral on one side uses the fragment's implicit
+   origin: `x <= 3` becomes `x - origin <= 3`. Every constraint in the
+   fragment is a difference, so the system is defined only up to a constant
+   shift; taking the origin as zero recovers the intended values.
+3. Equality becomes either one `=` atom (equal offsets) or the two bounds that
+   pin the difference (`a = b` is `a - b <= 0` and `b - a <= 0`).
+4. The Boolean structure is encoded by Tseitin CNF. `not` of a theory atom is
+   the complementary theory atom: `not (x - y <= c)` is `y - x <= -c-1`, and
+   `not (x = y)` is `x != y`.
+5. Each theory atom becomes one SAT variable; the assertions become unit
+   clauses. The result is handed to the root crate's CDCL(T) driver, which
+   combines difference logic with congruence closure over Nelson-Oppen.
+
+### 5.3 Verdicts
+
+- `Found`: the assertion set is satisfiable. The evidence carries the SAT
+  model; the checker re-checks that the model satisfies the encoded clauses
+  and re-asserts the model's atoms in a fresh theory state.
+- `Impossible`: the assertion set is unsatisfiable. The evidence carries the
+  RUP proof and the theory lemmas; the checker replays the propositional proof
+  and every theory lemma in a fresh state.
+- `ResourceLimit`: a budget stopped the search.
+- `Unsupported`: the input is outside the declared fragment.
+- `Error`: the input could not be parsed.
+- `Unknown` is never returned for a well-formed problem: the search either
+  produces a model, a refutation, or hits a cap.
+
+The model reports the truth value of each theory atom. Integer values are not
+reconstructed.
+
+## 6. STRIPS planning (`axiom-planning`)
+
+### 6.1 Fragment
 
 Untyped STRIPS PDDL with:
 
@@ -193,7 +247,7 @@ Typing, equality, numeric fluents, conditional effects, quantified or
 disjunctive goals, action costs, and durative actions are rejected as
 `Unsupported`.
 
-### 5.2 Transition semantics
+### 6.2 Transition semantics
 
 A ground action is applicable in state `S` iff all positive preconditions are in
 `S` and all negative preconditions are absent. Applying it produces
@@ -203,7 +257,7 @@ A goal is satisfied iff every goal literal holds in the final state.
 Grounding uses action parameters over objects and constants. At most 100,000
 ground actions are allowed; beyond that is `ResourceLimit`.
 
-### 5.3 Search and verdicts
+### 6.3 Search and verdicts
 
 The engine uses A* with the admissible delete-relaxation `h_max` heuristic by
 default; `planner::plan` selects breadth-first order for compatibility. Both
@@ -217,7 +271,7 @@ return a shortest plan. Caps: 50,000 stored states and 100,000 expansions.
 - `ResourceLimit`: a cap or the step budget stopped the search. This is not
   impossibility.
 
-## 6. Simply typed lambda calculus (`axiom-proof::stlc`)
+## 7. Simply typed lambda calculus (`axiom-proof::stlc`)
 
 The kernel also contains a small STLC type checker: types are base types,
 arrows, and products; expressions are variables, abstractions, applications,
@@ -226,7 +280,7 @@ pairs, projections, and typed constants. `infer_type` returns a type or a
 one. This checks typing, not logical consistency, termination, or the correctness
 of a compiler.
 
-## 7. Router semantics
+## 8. Router semantics
 
 `Router::standard()` dispatches by `ProblemKind` in a fixed order. It does not
 merge semantics. A precise answer from the router is exactly the answer of the
@@ -247,7 +301,7 @@ not assert anything about the planning task without the ASP facts, nor that the
 selected stable model is unique. Other cross-domain compositions, including
 Datalog-to-theory and ASP-to-SMT filtering, are not implemented.
 
-## 8. Resource-limit semantics
+## 9. Resource-limit semantics
 
 A `ResourceLimit` is a statement about the run, not about the problem. It
 carries no evidence and must not be cached as a final answer. The same input

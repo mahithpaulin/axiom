@@ -184,6 +184,9 @@ Implemented in this repository:
   explicit-state planning and a bounded SAT lowering.
 * **V2 representations** (`src/repr.rs`, `src/choose.rs`): a deterministic
   chooser over the implemented puzzle/plan paths.
+* **SMT-LIB frontend** (`crates/axiom-smt/`): a subset reader that normalises
+  comparisons to differences, encodes the Boolean structure by Tseitin CNF, and
+  decides the result with the CDCL(T) driver. Not a general SMT solver.
 * **v4 engines** (`crates/`): finite ASP with independent model validation,
   bounded FOL resolution with a trusted kernel (ground equality by congruence
   closure, otherwise equality axioms), untyped STRIPS A*/BFS planning, a
@@ -194,7 +197,8 @@ Not implemented:
 
 * general linear integer/real arithmetic, arrays, bitvectors, strings;
 * incremental theory solving / push-pop / assumptions;
-* SMT-LIB or TPTP parsing;
+* a full SMT-LIB or TPTP front end (a quantifier-free difference-logic subset
+  is implemented);
 * FOL superposition/paramodulation (equality is handled by normalization or axioms);
 * provenance semirings, magic sets, join-order planning, parallel evaluation;
 * ASP aggregates, cardinality bounds, optimisation, and function symbols;

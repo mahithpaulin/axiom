@@ -25,9 +25,9 @@ A manual differential harness now compares small fixtures against Z3, clingo,
 Soufflé, Fast Downward, and Vampire. It is test-only; there is no runtime
 dependency and no parity claim.
 
-Remaining work: more FOL equality cases, SMT-LIB cases, and larger instances.
-Each new family must state skipped or unavailable oracles rather than treating
-them as agreement.
+Remaining work: more FOL equality cases, more SMT-LIB cases, and larger
+instances. Each new family must state skipped or unavailable oracles rather
+than treating them as agreement.
 
 ### 1.3 Shared-code verification gaps
 
@@ -36,7 +36,17 @@ Either build second implementations for the small checkers or state the trust
 assumption prominently. The FOL kernel is the model: small, separately tested,
 and fed serialised evidence.
 
-### 1.4 B3 residual safety
+### 1.4 SMT beyond difference logic
+
+`crates/axiom-smt` reads a quantifier-free difference-logic subset of
+SMT-LIB 2 and decides it over CDCL(T) with checked certificates.
+
+Remaining work: general linear integer arithmetic (a Simplex or an
+Farkas-based decision procedure), `push`/`pop` with incremental solving, a
+printer, and an external conformance suite. Until then, a coefficient of `2`
+or a second `check-sat` is `Unsupported` rather than approximated.
+
+### 1.5 B3 residual safety
 
 The scheduling bug is fixed. Non-ground negation still blocks a derivation
 rather than being rejected. Add a parse-time safety check or anti-join/tabling;

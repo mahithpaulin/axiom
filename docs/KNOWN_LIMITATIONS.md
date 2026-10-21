@@ -385,6 +385,7 @@ details and evidence are in `docs/v4/CAPABILITY_MATRIX.md` and
 |---|---|---|
 | CDCL / SAT / learning / watched literals / VSIDS | **yes** | RUP-checked, frozen corpus |
 | CDCL(T), integer difference logic, congruence closure | **yes** | checked models, replayed theory lemmas; no general arithmetic |
+| SMT-LIB 2 subset frontend (QF_IDL/QF_UF) | **yes** | `crates/axiom-smt`; Tseitin CNF over CDCL(T); no printer, no conformance suite |
 | Incremental theory solving / push-pop | no | single-shot driver |
 | General linear/real arithmetic, arrays, bitvectors, strings | no | outside the fragment |
 | Constraint propagation with explanations | **yes** | finite-domain CSP/puzzles |
@@ -393,7 +394,7 @@ details and evidence are in `docs/v4/CAPABILITY_MATRIX.md` and
 | FOL resolution with a trusted kernel | **yes** | bounded; ground equality normalization or non-ground equality axioms; never `Refuted` |
 | Untyped STRIPS planning | **yes** | A* `h_max` / BFS; no costs/typed PDDL |
 | Strategy selection / portfolio | partial | V2 chooser; router dispatches by kind |
-| SMT-LIB / TPTP | no | not implemented |
+| SMT-LIB / TPTP | partial | a quantifier-free difference-logic subset of SMT-LIB 2 is read; no TPTP |
 | External differential comparison | partial | small manual harness; no conformance claim |
 | Neural components | no | nothing in the crate is a model |
 

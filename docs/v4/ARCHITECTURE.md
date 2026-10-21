@@ -33,6 +33,7 @@ source text / domain input
         │
         ├── axiom-asp ───────── finite grounding + stable-model enumeration
         ├── axiom-prover ────── FOL parse → NNF/Skolem → CNF → resolution
+        ├── axiom-smt ───────── SMT-LIB 2 parse → Tseitin CNF → CDCL(T)
         ├── axiom-planning ──── untyped STRIPS → grounding → A* / BFS → plan replay
         └── proof kernel ────── axiom-proof: resolution and STLC checks
                     │
@@ -58,6 +59,7 @@ differences that the verifier must preserve.
 | `axiom-asp` | ASP syntax, finite grounding, stable-model search and validation | `axiom`, `axiom-core` |
 | `axiom-proof` | Trusted resolution kernel and STLC type checker | `axiom-ir` |
 | `axiom-prover` | FOL syntax, CNF, bounded resolution, FOL engine/verifier | `axiom-ir`, `axiom-proof`, `axiom-core` |
+| `axiom-smt` | SMT-LIB 2 subset frontend, Tseitin encoding, SMT engine/verifier | `axiom`, `axiom-core` |
 | `axiom-planning` | Untyped STRIPS PDDL, grounding, A* `h_max` / BFS planner, validator | `axiom`, `axiom-ir`, `axiom-core` |
 | `axiom-router` | Standard engine bundle and verified routing | all four engines |
 | `axiom-bridge` | Checked ASP→planning composition and task translation | `axiom-core`, `axiom-asp`, `axiom-planning` |
@@ -111,6 +113,15 @@ bounded given-clause resolution runs. A refutation is serialised and checked by
 `axiom-proof::check_resolution`. Verification additionally reconstructs the
 same deterministic equality normalisation/CNF and requires every input clause in
 the proof to occur there.
+
+### SMT
+
+`Problem::smt(source)` is parsed as an SMT-LIB 2 subset. Comparisons are
+normalised to differences over terms, the Boolean structure is encoded by
+Tseitin CNF, and every theory atom becomes a SAT variable. The root crate's
+CDCL(T) driver decides the result: a model is re-checked by re-asserting it in
+a fresh theory state, an unsatisfiability certificate is replayed
+propositionally (RUP) and then in the theory.
 
 ### Planning
 
@@ -176,7 +187,8 @@ checker, not a proof of the Rust compiler, parser, or CNF converter.
 1. `DatalogEngine`
 2. `AspEngine`
 3. `FolEngine`
-4. `PlanningEngine`
+4. `SmtEngine`
+5. `PlanningEngine`
 
 Routing is by `Problem::kind()`. First registered wins. `Router::solve` calls
 the engine and then the engine's `verify` for every definite outcome. A failed

@@ -34,6 +34,8 @@ Rules enforced across engines:
 | `axiom-datalog-query` | Datalog | `Proved`, `Refuted` | verdict, answer count, saturation hash |
 | `axiom-asp-models` | ASP | `Found`, `Impossible` | complete flag, count, counters, universe, models |
 | `axiom-fol-resolution` | FOL | `Proved` | S-expression resolution proof |
+| `axiom-smt-sat` | SMT | `Found` | SAT model, atom meanings |
+| `axiom-smt-unsat` | SMT | `Impossible` | RUP learnts, theory lemmas, atom meanings |
 | `axiom-plan` | Planning | `Found` | length, search counters, action sequence |
 | `axiom-plan-exhausted` | Planning | `Impossible` | state/action counters |
 
@@ -188,6 +190,11 @@ These are part of the acceptance criteria:
   `proves_impossibility_by_exhaustion`, `typed_input_is_unsupported`,
   `astar_and_bfs_return_shortest_plans`,
   `astar_respects_negative_preconditions`.
+- `crates/axiom-smt` `a_tampered_model_is_rejected`,
+  `a_tampered_unsat_proof_is_rejected`, `unsupported_fragments_are_explicit`,
+  `push_pop_is_unsupported`.
+- `tests/theory.rs::congruence_conflict_over_function_terms_verifies` — the
+  theory checker must know the function terms before an equality is asserted.
 - `crates/axiom-bridge` `stable_model_supplies_planning_init`,
   `undeclared_predicates_are_ignored`, `arity_mismatch_is_rejected`,
   `missing_model_is_rejected`, `verification_detects_a_changed_request`.
