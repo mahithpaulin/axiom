@@ -224,10 +224,10 @@ pub fn search(input: Vec<Clause>, budget: &mut Budget, limits: Limits) -> Search
 
         // Binary resolution against every active clause.
         for &other in &active {
-            let other_clause = &proof.clauses[other].clause;
+            let other_clause = proof.clauses[other].clause.clone();
             for i in 0..current_clause.literals.len() {
                 for j in 0..other_clause.literals.len() {
-                    let Some((c, _)) = resolve(&current_clause, other_clause, i, j) else {
+                    let Some((c, _)) = resolve(&current_clause, &other_clause, i, j) else {
                         continue;
                     };
                     if c.is_empty() {

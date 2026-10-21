@@ -5,6 +5,7 @@ members = [
     "crates/axiom-asp",
     "crates/axiom-proof",
     "crates/axiom-prover",
+    "crates/axiom-planning",
 ]
 resolver = "2"
 
