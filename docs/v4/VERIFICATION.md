@@ -177,7 +177,9 @@ These are part of the acceptance criteria:
   `occurs_check_prevents_cycles`.
 - `crates/axiom-prover` `tampered_evidence_is_rejected`,
   `smuggled_input_is_rejected`, `a_non_theorem_is_unknown_not_refuted`,
-  `unsupported_equality_is_explicit`.
+  `equality_substitution_is_proved_and_verified`,
+  `non_ground_equality_falls_back_to_axioms_and_proves`,
+  `unsupported_arithmetic_is_explicit`.
 - `crates/axiom-asp` `validator_rejects_a_non_model`,
   `truncation_is_not_reported_as_complete`,
   `unsat_constraint_is_impossible_only_after_complete_enumeration`,

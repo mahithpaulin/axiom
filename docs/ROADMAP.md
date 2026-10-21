@@ -10,29 +10,24 @@ search, ASP, FOL resolution, planning). The authoritative capability status is
 
 ### 1.1 FOL equality
 
-The prover rejects equality as `Unsupported`. Options:
+Ground equality is implemented by congruence closure over positive unit
+equalities; other equality is encoded with reflexivity, symmetry, transitivity,
+and congruence axioms. Both paths produce ordinary resolution proofs checked by
+the same kernel.
 
-- implement superposition/paramodulation with kernel-checked steps;
-- encode a bounded equality fragment with explicit axioms and document the
-  blow-up;
-- decide permanently that equality is out of scope and keep the explicit
-  `Unsupported` result.
-
-Done means: a decision is recorded, the kernel checks whatever is added, and
-negative tests show equality is never silently approximated.
+Remaining work: superposition/paramodulation with kernel-checked steps, and
+better control of the equality-axiom blow-up for non-theorems. Until then,
+equality-heavy non-theorems may return `ResourceLimit` rather than `Unknown`.
 
 ### 1.2 Independent cross-checks
 
-No v4 engine has been compared with clingo, Vampire, Fast Downward, Z3, or
-Soufflé. Add test-only differential fixtures:
+A manual differential harness now compares small fixtures against Z3, clingo,
+Soufflé, Fast Downward, and Vampire. It is test-only; there is no runtime
+dependency and no parity claim.
 
-- ASP: small programs with expected stable models, ideally cross-checked once
-  against clingo offline;
-- FOL: TPTP problems with known refutations, run as test data only;
-- planning: standard small STRIPS instances with known plan lengths;
-- Datalog: existing Soufflé-compatible datasets, counts only.
-
-This is test-only. No runtime dependency and no claim of parity.
+Remaining work: more FOL equality cases, SMT-LIB cases, and larger instances.
+Each new family must state skipped or unavailable oracles rather than treating
+them as agreement.
 
 ### 1.3 Shared-code verification gaps
 

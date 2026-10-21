@@ -26,7 +26,7 @@ capability is not upgraded from Partial/Planned because a document claims it.
 | 2. SMT / constraints (Z3 reference) | implemented for RDL + UF only |
 | 3. High-performance Datalog (Soufflé reference) | partial: correct, not competitive |
 | 4. ASP (clingo reference) | implemented finite fragment with model validation |
-| 5. First-order proving (Vampire reference) | implemented bounded resolution; no equality, no `Refuted` |
+| 5. First-order proving (Vampire reference) | implemented bounded resolution; ground equality normalization plus non-ground equality axioms; no superposition or `Refuted` |
 | 6. Trusted proof kernel (Lean 4 reference) | small resolution kernel + STLC checker; not formally verified |
 | 7. Planning / heuristic search (Fast Downward reference) | untyped STRIPS with A* `h_max`; root StateGraph retained |
 | 8. v4 common infrastructure | implemented `Engine`/evidence/registry contract; external harness added |
@@ -133,12 +133,12 @@ by a DPLL(T) driver over the existing SAT core.
 
 | Capability | Status | Evidence | Notes / boundary |
 |---|---|---|---|
-| FOL syntax | Implemented | `crates/axiom-prover/src/fol.rs` | Quantifiers, Boolean connectives, predicates/functions. No equality/sorts/arithmetic. |
+| FOL syntax | Implemented | `crates/axiom-prover/src/fol.rs` | Quantifiers, Boolean connectives, predicates/functions, infix equality. No sorts/arithmetic. |
 | Variable scope and capture avoidance | Implemented | NNF alpha-renaming, Skolemisation | `cnf.rs`; tested on small formulas. |
 | Clausal form | Implemented | `cnf.rs` | NNF, Skolem, CNF with deterministic naming. |
 | Resolution and factoring | Implemented bounded | `resolve.rs`; `Limits` | Given-clause, factoring, tautology/subsumption checks. |
 | Clause selection/search strategies | Partial | `resolve.rs` | Simple deterministic selection; no portfolio or sophisticated heuristics. |
-| Equality/superposition | Absent | parser rejects `=` | Explicit `Unsupported`. |
+| Equality | Partial | `fol.rs::normalize_ground_equality`, `Signature::equality_axioms` | Ground equalities use congruence closure; non-ground equality uses reflexivity/symmetry/transitivity/congruence axioms. No superposition/paramodulation. |
 | Simplification/redundancy | Partial | tautology + subsumption | No rewrite/term indexing beyond simple checks. |
 | Proof production | Implemented | `axiom-fol-resolution` evidence | S-expression resolution proof. |
 | Independent proof checking | Implemented | `axiom-proof::check_resolution` | Re-runs unification and clause construction. |

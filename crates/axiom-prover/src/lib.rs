@@ -30,7 +30,7 @@ use axiom::Budget;
 use axiom_core::{
     Capabilities, Evidence, Guarantee, Outcome, ProblemKind, Stats, Verdict, VerifyError,
 };
-use axiom_proof::{check_resolution, KernelError, ResolutionProof};
+use axiom_proof::{check_resolution, Clause, KernelError, ResolutionProof};
 use std::time::Instant;
 
 pub use axiom_core::{Engine, Problem};
@@ -58,7 +58,7 @@ impl FolEngine {
     fn parse(&self, problem: &Problem) -> Result<FolProblem, Outcome> {
         let source = Self::source(problem).map_err(Outcome::error)?;
         fol::parse_problem(source).map_err(|e| {
-            if e.to_string().contains("equality and arithmetic") {
+            if e.to_string().contains("arithmetic") {
                 Outcome::unsupported(format!("outside the FOL fragment: {e}"))
             } else {
                 Outcome::error(format!("FOL parse error: {e}"))
@@ -69,6 +69,15 @@ impl FolEngine {
     fn evidence(proof: &ResolutionProof) -> Evidence {
         Evidence::new(EVIDENCE_KIND, proof.to_text())
     }
+
+    fn clauses(parsed: &FolProblem) -> Result<Vec<Clause>, CnfError> {
+        if let Some(normalized) = fol::normalize_ground_equality(parsed) {
+            return cnf::clausal_form(&normalized.axioms, &normalized.goal);
+        }
+        let mut axioms = parsed.axioms.clone();
+        axioms.extend(parsed.signature.equality_axioms());
+        cnf::clausal_form(&axioms, &parsed.goal)
+    }
 }
 
 impl Engine for FolEngine {
@@ -76,11 +85,13 @@ impl Engine for FolEngine {
         Capabilities::new("axiom-fol-resolution", env!("CARGO_PKG_VERSION"))
             .handles(ProblemKind::Fol)
             .fragment("first-order formulas with predicate and function symbols")
+            .fragment("equality by reflexivity, symmetry, transitivity, and congruence axioms")
             .fragment("bounded given-clause resolution with factoring")
             .guarantee(Guarantee::Sound)
             .guarantee(Guarantee::Deterministic)
             .guarantee(Guarantee::EvidenceChecked)
-            .limit("no equality, arithmetic, sorts, or higher-order constructs")
+            .limit("equality is axiomatised, not built into the resolution calculus")
+            .limit("no arithmetic, sorts, or higher-order constructs")
             .limit("clause/selection/generation caps and a deterministic step budget")
     }
 
@@ -90,7 +101,7 @@ impl Engine for FolEngine {
             Ok(p) => p,
             Err(o) => return o,
         };
-        let clauses = match cnf::clausal_form(&parsed.axioms, &parsed.goal) {
+        let clauses = match Self::clauses(&parsed) {
             Ok(c) => c,
             Err(CnfError::TooLarge(m)) => return Outcome::resource_limit(m),
             Err(e) => return Outcome::error(format!("CNF error: {e}")),
@@ -130,8 +141,7 @@ impl Engine for FolEngine {
         }
         let parsed = fol::parse_problem(Self::source(problem).map_err(VerifyError::Malformed)?)
             .map_err(|e| VerifyError::Malformed(e.to_string()))?;
-        let clauses = cnf::clausal_form(&parsed.axioms, &parsed.goal)
-            .map_err(|e| VerifyError::Malformed(e.to_string()))?;
+        let clauses = Self::clauses(&parsed).map_err(|e| VerifyError::Malformed(e.to_string()))?;
         let evidence = outcome
             .evidence
             .as_ref()
@@ -208,8 +218,64 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_equality_is_explicit() {
+    fn equality_substitution_is_proved_and_verified() {
+        let out = solve("axiom a = b. axiom P(a). goal P(b).");
+        assert_eq!(out.verdict, Verdict::Proved, "{out:?}");
+    }
+
+    #[test]
+    fn equality_symmetry_is_proved() {
+        let out = solve("axiom a = b. goal b = a.");
+        assert_eq!(out.verdict, Verdict::Proved, "{out:?}");
+    }
+
+    #[test]
+    fn reflexive_ground_equality_is_proved_without_axioms() {
+        let out = solve("goal a = a.");
+        assert_eq!(out.verdict, Verdict::Proved, "{out:?}");
+    }
+
+    #[test]
+    fn non_ground_equality_falls_back_to_axioms_and_proves() {
+        let out = solve("axiom forall x. x = f(x). goal f(a) = a.");
+        assert_eq!(out.verdict, Verdict::Proved, "{out:?}");
+    }
+
+    #[test]
+    fn distinct_ground_equality_is_unknown() {
+        let out = solve("axiom a = b. goal c = d.");
+        assert_eq!(out.verdict, Verdict::Unknown, "{out:?}");
+    }
+
+    #[test]
+    fn inconsistent_ground_equality_is_not_reported_as_proved() {
+        let p = Problem::fol("axiom a = b. goal not a = b.");
+        let mut b = Budget::steps(1_000_000);
+        let out = FolEngine::new().solve(&p, &mut b);
+        assert_eq!(out.verdict, Verdict::Unknown, "{out:?}");
+    }
+
+    #[test]
+    fn equality_congruence_over_functions_is_proved() {
+        let out = solve("fun f/1. axiom a = b. goal f(a) = f(b).");
+        assert_eq!(out.verdict, Verdict::Proved, "{out:?}");
+    }
+
+    #[test]
+    fn equality_does_not_make_an_unrelated_goal_true() {
         let p = Problem::fol("axiom a = b. goal P(a).");
+        let mut b = Budget::steps(50_000);
+        let out = FolEngine::new().solve(&p, &mut b);
+        assert!(
+            matches!(out.verdict, Verdict::Unknown | Verdict::ResourceLimit),
+            "{out:?}"
+        );
+        assert!(out.evidence.is_none());
+    }
+
+    #[test]
+    fn unsupported_arithmetic_is_explicit() {
+        let p = Problem::fol("axiom a + b = c. goal P(a).");
         let mut b = Budget::steps(1_000);
         let out = FolEngine::new().solve(&p, &mut b);
         assert_eq!(out.verdict, Verdict::Unsupported, "{out:?}");

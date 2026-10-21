@@ -103,11 +103,14 @@ each listed model.
 
 ### FOL
 
-`Problem::fol(source)` is parsed into formulas. The goal is negated, the formula
-set is converted to CNF with Skolemisation, and bounded given-clause resolution
-runs. A refutation is serialised and checked by `axiom-proof::check_resolution`.
-Verification additionally reconstructs the deterministic CNF and requires every
-input clause in the proof to occur there.
+`Problem::fol(source)` is parsed into formulas. Ground equality is normalised by
+congruence closure when the equality axioms are positive units; other equality
+is encoded with reflexivity, symmetry, transitivity, and congruence axioms. The
+goal is negated, the formula set is converted to CNF with Skolemisation, and
+bounded given-clause resolution runs. A refutation is serialised and checked by
+`axiom-proof::check_resolution`. Verification additionally reconstructs the
+same deterministic equality normalisation/CNF and requires every input clause in
+the proof to occur there.
 
 ### Planning
 

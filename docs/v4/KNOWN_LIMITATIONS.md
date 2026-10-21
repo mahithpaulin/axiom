@@ -72,8 +72,12 @@ This is the unflattering list. If a capability is not here, check
 
 ## 4. FOL (`axiom-prover`)
 
-- No equality, sorts, arithmetic, higher-order constructs, or type
-  declarations. Equality is `Unsupported`.
+- Ground equality is normalised by congruence closure over positive unit
+  equalities in the axioms. Other equality, including non-ground equality, is
+  sent through reflexivity/symmetry/transitivity/congruence axioms. There is no
+  superposition or paramodulation, and equality-heavy non-theorems can hit the
+  generated-clause cap.
+- No sorts, arithmetic, higher-order constructs, or type declarations.
 - No `Refuted` verdict. A saturated search is `Unknown`; there is no
   countermodel or finite-model finder.
 - Resolution is bounded: 4,096 clauses, 2,048 selected clauses, 8,192 generated

@@ -357,22 +357,38 @@ def main():
         print(f"MISMATCH planning/{c.name}: axiom={c.axiom['answer']} oracle={c.oracle_result}", file=sys.stderr)
     cases.append(c)
 
-    # ---- FOL: a tiny implication chain, Vampire oracle -----------------
+    # ---- FOL: implication and equality, Vampire oracle -----------------
     fol_work = work / "fol"
     fol_work.mkdir()
-    (fol_work / "simple.ax").write_text("axiom P(a) -> Q(a). axiom P(a). goal Q(a).\n")
-    (fol_work / "simple.p").write_text(
-        "fof(ax1,axiom,(p(a) => q(a))).\nfof(ax2,axiom,p(a)).\nfof(goal,conjecture,q(a)).\n"
-    )
-    c = Case("fol", "implication", "proved")
-    c.axiom = axiom_run(axiom_bin, ["fol", str(fol_work / "simple.ax")])
-    c.oracle = "vampire"
-    c.oracle_result = vampire_status(fol_work / "simple.p")
-    c.skipped = c.oracle_result is None
-    c.match = None if c.skipped else c.axiom["answer"] == c.oracle_result == "proved"
-    if c.match is False:
-        print(f"MISMATCH fol/{c.name}: axiom={c.axiom['answer']} oracle={c.oracle_result}", file=sys.stderr)
-    cases.append(c)
+    fol_cases = [
+        (
+            "implication",
+            "axiom P(a) -> Q(a). axiom P(a). goal Q(a).\n",
+            "fof(ax1,axiom,(p(a) => q(a))).\nfof(ax2,axiom,p(a)).\nfof(goal,conjecture,q(a)).\n",
+        ),
+        (
+            "equality-substitution",
+            "axiom a = b. axiom P(a). goal P(b).\n",
+            "fof(ax1,axiom,a=b).\nfof(ax2,axiom,p(a)).\nfof(goal,conjecture,p(b)).\n",
+        ),
+        (
+            "equality-congruence",
+            "fun f/1. axiom a = b. goal f(a) = f(b).\n",
+            "fof(ax1,axiom,a=b).\nfof(goal,conjecture,f(a)=f(b)).\n",
+        ),
+    ]
+    for name, axiom_src, tptp_src in fol_cases:
+        (fol_work / f"{name}.ax").write_text(axiom_src)
+        (fol_work / f"{name}.p").write_text(tptp_src)
+        c = Case("fol", name, "proved")
+        c.axiom = axiom_run(axiom_bin, ["fol", str(fol_work / f"{name}.ax")])
+        c.oracle = "vampire"
+        c.oracle_result = vampire_status(fol_work / f"{name}.p")
+        c.skipped = c.oracle_result is None
+        c.match = None if c.skipped else c.axiom["answer"] == c.oracle_result == "proved"
+        if c.match is False:
+            print(f"MISMATCH fol/{c.name}: axiom={c.axiom['answer']} oracle={c.oracle_result}", file=sys.stderr)
+        cases.append(c)
 
     summary = {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),

@@ -73,7 +73,7 @@ assert_eq!(out.outcome.verdict, axiom_core::Verdict::Found);
 | SAT (`axiom::sat`) | propositional CNF | model checked by satisfaction; UNSAT by RUP |
 | CDCL(T) (`axiom::theory`) | integer difference logic + equality/congruence | checked model or replayed theory lemmas |
 | ASP (`axiom-asp`) | normal/choice rules, constraints, finite Herbrand grounding | each listed model passes the stable-model test |
-| FOL (`axiom-prover`) | quantifiers, predicates, functions; no equality/arithmetic | kernel-checked empty clause |
+| FOL (`axiom-prover`) | quantifiers, predicates, functions; ground equality by congruence closure, non-ground equality by axioms; no arithmetic | kernel-checked empty clause |
 | Planning (`axiom-planning`) | untyped STRIPS, negative preconditions, A* h_max | replayable shortest plan, or exhausted state space |
 | STLC (`axiom-proof::stlc`) | simply typed lambda calculus | inferred type accepted by the checker |
 

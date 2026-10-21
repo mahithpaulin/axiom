@@ -6,8 +6,10 @@
 //! * `pred p/2.`, `fun f/1.`, `const a.` declarations are optional;
 //! * `true`, `false`, `not`/`~`/`!`, `and`/`&`, `or`/`|`, `->`, `<->`;
 //! * `forall x, y. ...` and `exists x. ...`;
-//! * predicate/function symbols with fixed arities; no equality, sorts,
-//!   arithmetic, or higher-order constructs.
+//! * predicate/function symbols with fixed arities;
+//! * infix equality `t = u` over terms; ground equality is normalised by
+//!   congruence closure, non-ground equality is handled by equality axioms;
+//! * no sorts, arithmetic, or higher-order constructs.
 //!
 //! Variables are exactly those bound by a quantifier. An identifier used as a
 //! term outside any quantifier is a constant. Parse errors are errors; nothing
@@ -38,7 +40,112 @@ pub struct Signature {
     pub constants: BTreeSet<String>,
 }
 
+fn equality_formula(lhs: Term, rhs: Term) -> Formula {
+    Formula::Atom(Atom::new("=", vec![lhs, rhs]))
+}
+
+fn conjoin(parts: Vec<Formula>) -> Formula {
+    match parts.len() {
+        0 => Formula::True,
+        1 => parts.into_iter().next().expect("one formula"),
+        _ => Formula::And(parts),
+    }
+}
+
 impl Signature {
+    pub fn has_equality(&self) -> bool {
+        self.predicates.get("=") == Some(&2)
+    }
+
+    /// Equality axioms for the current signature.
+    ///
+    /// Equality is not built into the resolution calculus. These axioms make it
+    /// available to the existing clausal prover without changing the kernel.
+    pub fn equality_axioms(&self) -> Vec<Formula> {
+        if !self.has_equality() {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        let x = "eq_x".to_string();
+        let y = "eq_y".to_string();
+        let z = "eq_z".to_string();
+        out.push(Formula::Forall(
+            vec![x.clone()],
+            Box::new(equality_formula(Term::var(&x), Term::var(&x))),
+        ));
+        out.push(Formula::Forall(
+            vec![x.clone(), y.clone()],
+            Box::new(Formula::Implies(
+                Box::new(equality_formula(Term::var(&x), Term::var(&y))),
+                Box::new(equality_formula(Term::var(&y), Term::var(&x))),
+            )),
+        ));
+        out.push(Formula::Forall(
+            vec![x.clone(), y.clone(), z.clone()],
+            Box::new(Formula::Implies(
+                Box::new(conjoin(vec![
+                    equality_formula(Term::var(&x), Term::var(&y)),
+                    equality_formula(Term::var(&y), Term::var(&z)),
+                ])),
+                Box::new(equality_formula(Term::var(&x), Term::var(&z))),
+            )),
+        ));
+
+        for (name, &arity) in &self.functions {
+            if arity == 0 {
+                continue;
+            }
+            let xs: Vec<String> = (0..arity).map(|i| format!("eq_fx{i}")).collect();
+            let ys: Vec<String> = (0..arity).map(|i| format!("eq_fy{i}")).collect();
+            let mut vars = xs.clone();
+            vars.extend(ys.iter().cloned());
+            let premises = xs
+                .iter()
+                .zip(&ys)
+                .map(|(a, b)| equality_formula(Term::var(a), Term::var(b)))
+                .collect();
+            let lhs = Term::app(name.clone(), xs.iter().map(Term::var).collect());
+            let rhs = Term::app(name.clone(), ys.iter().map(Term::var).collect());
+            out.push(Formula::Forall(
+                vars,
+                Box::new(Formula::Implies(
+                    Box::new(conjoin(premises)),
+                    Box::new(equality_formula(lhs, rhs)),
+                )),
+            ));
+        }
+
+        for (name, &arity) in &self.predicates {
+            if name == "=" || arity == 0 {
+                continue;
+            }
+            let xs: Vec<String> = (0..arity).map(|i| format!("eq_px{i}")).collect();
+            let ys: Vec<String> = (0..arity).map(|i| format!("eq_py{i}")).collect();
+            let mut vars = xs.clone();
+            vars.extend(ys.iter().cloned());
+            let mut premises: Vec<Formula> = xs
+                .iter()
+                .zip(&ys)
+                .map(|(a, b)| equality_formula(Term::var(a), Term::var(b)))
+                .collect();
+            premises.push(Formula::Atom(Atom::new(
+                name.clone(),
+                xs.iter().map(Term::var).collect(),
+            )));
+            out.push(Formula::Forall(
+                vars,
+                Box::new(Formula::Implies(
+                    Box::new(conjoin(premises)),
+                    Box::new(Formula::Atom(Atom::new(
+                        name.clone(),
+                        ys.iter().map(Term::var).collect(),
+                    ))),
+                )),
+            ));
+        }
+        out
+    }
+
     fn new() -> Self {
         Signature {
             predicates: BTreeMap::new(),
@@ -189,6 +296,7 @@ enum Tok {
     Exists,
     True,
     False,
+    Eq,
 }
 
 fn lex(input: &str) -> Result<Vec<(usize, Tok)>, FolError> {
@@ -219,6 +327,10 @@ fn lex(input: &str) -> Result<Vec<(usize, Tok)>, FolError> {
             }
             ',' => {
                 out.push((start, Tok::Comma));
+                i += 1;
+            }
+            '=' => {
+                out.push((start, Tok::Eq));
                 i += 1;
             }
             '.' => {
@@ -279,9 +391,7 @@ fn lex(input: &str) -> Result<Vec<(usize, Tok)>, FolError> {
             _ => {
                 return Err(parse_err(
                     start,
-                    format!(
-                    "unexpected character {c:?} (equality and arithmetic are not in this fragment)"
-                ),
+                    format!("unexpected character {c:?} (arithmetic is not in this fragment)"),
                 ))
             }
         }
@@ -407,7 +517,17 @@ impl Parser {
                 self.expect(&Tok::RParen)?;
                 Ok(f)
             }
-            Some(Tok::Word(name)) => self.atom_after_name(name, bound),
+            Some(Tok::Word(name)) => {
+                let left = self.atom_after_name(name, bound)?;
+                if matches!(self.peek(), Some(Tok::Eq)) {
+                    self.bump();
+                    let lhs = Self::atom_as_term(left, bound)?;
+                    let rhs = self.term(bound)?;
+                    Ok(Formula::Atom(Atom::new("=", vec![lhs, rhs])))
+                } else {
+                    Ok(left)
+                }
+            }
             Some(t) => Err(parse_err(
                 self.offset(),
                 format!("expected a formula, found {t:?}"),
@@ -438,6 +558,28 @@ impl Parser {
         } else {
             Formula::Exists(vars, Box::new(body))
         })
+    }
+
+    fn atom_as_term(atom: Formula, bound: &BTreeSet<String>) -> Result<Term, FolError> {
+        let Formula::Atom(atom) = atom else {
+            return Err(FolError::Message(
+                "internal parser error: expected an atom".into(),
+            ));
+        };
+        if atom.args.is_empty() {
+            if bound.contains(&atom.predicate) {
+                Ok(Term::var(atom.predicate))
+            } else {
+                Ok(Term::constant(atom.predicate))
+            }
+        } else if bound.contains(&atom.predicate) {
+            Err(FolError::Message(format!(
+                "variable {} cannot be used as a function",
+                atom.predicate
+            )))
+        } else {
+            Ok(Term::app(atom.predicate, atom.args))
+        }
     }
 
     fn atom_after_name(
@@ -486,6 +628,258 @@ impl Parser {
             Ok(Term::constant(name))
         }
     }
+}
+
+fn is_ground(term: &Term) -> bool {
+    match term {
+        Term::Var(_) => false,
+        Term::Const(_) => true,
+        Term::App(_, args) => args.iter().all(is_ground),
+    }
+}
+
+fn collect_ground_terms(formula: &Formula, out: &mut BTreeSet<Term>) {
+    match formula {
+        Formula::Atom(atom) => {
+            for arg in &atom.args {
+                collect_ground_terms_in_term(arg, out);
+            }
+        }
+        Formula::Not(x) => collect_ground_terms(x, out),
+        Formula::And(xs) | Formula::Or(xs) => {
+            for x in xs {
+                collect_ground_terms(x, out);
+            }
+        }
+        Formula::Implies(a, b) | Formula::Iff(a, b) => {
+            collect_ground_terms(a, out);
+            collect_ground_terms(b, out);
+        }
+        Formula::Forall(_, x) | Formula::Exists(_, x) => collect_ground_terms(x, out),
+        Formula::True | Formula::False => {}
+    }
+}
+
+fn collect_ground_terms_in_term(term: &Term, out: &mut BTreeSet<Term>) {
+    if is_ground(term) {
+        out.insert(term.clone());
+    }
+    if let Term::App(_, args) = term {
+        for arg in args {
+            collect_ground_terms_in_term(arg, out);
+        }
+    }
+}
+
+fn collect_equality_atoms(formula: &Formula, out: &mut Vec<Atom>) {
+    match formula {
+        Formula::Atom(atom) => {
+            if atom.predicate == "=" {
+                out.push(atom.clone());
+            }
+        }
+        Formula::Not(x) => collect_equality_atoms(x, out),
+        Formula::And(xs) | Formula::Or(xs) => {
+            for x in xs {
+                collect_equality_atoms(x, out);
+            }
+        }
+        Formula::Implies(a, b) | Formula::Iff(a, b) => {
+            collect_equality_atoms(a, out);
+            collect_equality_atoms(b, out);
+        }
+        Formula::Forall(_, x) | Formula::Exists(_, x) => collect_equality_atoms(x, out),
+        Formula::True | Formula::False => {}
+    }
+}
+
+fn rewrite_term(term: &Term, canon: &BTreeMap<Term, Term>) -> Term {
+    if let Some(c) = canon.get(term) {
+        return c.clone();
+    }
+    match term {
+        Term::Var(_) | Term::Const(_) => term.clone(),
+        Term::App(f, args) => Term::App(
+            f.clone(),
+            args.iter().map(|a| rewrite_term(a, canon)).collect(),
+        ),
+    }
+}
+
+fn rewrite_formula(formula: &Formula, canon: &BTreeMap<Term, Term>) -> Formula {
+    match formula {
+        Formula::Atom(atom) => {
+            let args: Vec<Term> = atom.args.iter().map(|t| rewrite_term(t, canon)).collect();
+            if atom.predicate == "=" && args.len() == 2 && args[0] == args[1] {
+                Formula::True
+            } else {
+                Formula::Atom(Atom::new(atom.predicate.clone(), args))
+            }
+        }
+        Formula::Not(x) => match rewrite_formula(x, canon) {
+            Formula::True => Formula::False,
+            Formula::False => Formula::True,
+            other => Formula::Not(Box::new(other)),
+        },
+        Formula::And(xs) => Formula::And(xs.iter().map(|x| rewrite_formula(x, canon)).collect()),
+        Formula::Or(xs) => Formula::Or(xs.iter().map(|x| rewrite_formula(x, canon)).collect()),
+        Formula::Implies(a, b) => Formula::Implies(
+            Box::new(rewrite_formula(a, canon)),
+            Box::new(rewrite_formula(b, canon)),
+        ),
+        Formula::Iff(a, b) => Formula::Iff(
+            Box::new(rewrite_formula(a, canon)),
+            Box::new(rewrite_formula(b, canon)),
+        ),
+        Formula::Forall(vars, x) => {
+            Formula::Forall(vars.clone(), Box::new(rewrite_formula(x, canon)))
+        }
+        Formula::Exists(vars, x) => {
+            Formula::Exists(vars.clone(), Box::new(rewrite_formula(x, canon)))
+        }
+        Formula::True | Formula::False => formula.clone(),
+    }
+}
+
+#[derive(Default)]
+struct UnionFind {
+    parent: Vec<usize>,
+    rank: Vec<u8>,
+}
+
+impl UnionFind {
+    fn add(&mut self) -> usize {
+        let id = self.parent.len();
+        self.parent.push(id);
+        self.rank.push(0);
+        id
+    }
+
+    fn find(&mut self, mut x: usize) -> usize {
+        while self.parent[x] != x {
+            self.parent[x] = self.parent[self.parent[x]];
+            x = self.parent[x];
+        }
+        x
+    }
+
+    fn union(&mut self, a: usize, b: usize) -> bool {
+        let (mut a, mut b) = (self.find(a), self.find(b));
+        if a == b {
+            return false;
+        }
+        if self.rank[a] < self.rank[b] {
+            std::mem::swap(&mut a, &mut b);
+        }
+        self.parent[b] = a;
+        if self.rank[a] == self.rank[b] {
+            self.rank[a] += 1;
+        }
+        true
+    }
+}
+
+/// Normalise ground equality by congruence closure.
+///
+/// This is deliberately narrow: every equality atom must be ground, and
+/// equality may appear in the goal but in axioms only as a positive unit
+/// `a = b.`. Under those conditions, rewriting with the unit equalities and
+/// computing congruence closure is sound and avoids the infinite saturation
+/// that the general equality axioms can cause. Anything else returns `None`
+/// and uses [`Signature::equality_axioms`] instead.
+pub fn normalize_ground_equality(problem: &FolProblem) -> Option<FolProblem> {
+    let mut all_equalities = Vec::new();
+    for axiom in &problem.axioms {
+        collect_equality_atoms(axiom, &mut all_equalities);
+    }
+    collect_equality_atoms(&problem.goal, &mut all_equalities);
+    if all_equalities.is_empty() || all_equalities.iter().any(|a| !a.args.iter().all(is_ground)) {
+        return None;
+    }
+
+    let mut units = Vec::new();
+    for axiom in &problem.axioms {
+        match axiom {
+            Formula::Atom(a) if a.predicate == "=" && a.args.len() == 2 => {
+                units.push((a.args[0].clone(), a.args[1].clone()));
+            }
+            other => {
+                let mut nested = Vec::new();
+                collect_equality_atoms(other, &mut nested);
+                if !nested.is_empty() {
+                    return None;
+                }
+            }
+        }
+    }
+
+    let mut terms = BTreeSet::new();
+    for axiom in &problem.axioms {
+        collect_ground_terms(axiom, &mut terms);
+    }
+    collect_ground_terms(&problem.goal, &mut terms);
+    for (a, b) in &units {
+        terms.insert(a.clone());
+        terms.insert(b.clone());
+    }
+
+    let mut ids = BTreeMap::new();
+    let mut uf = UnionFind::default();
+    for term in &terms {
+        ids.insert(term.clone(), uf.add());
+    }
+    for (a, b) in &units {
+        if let (Some(&ia), Some(&ib)) = (ids.get(a), ids.get(b)) {
+            uf.union(ia, ib);
+        }
+    }
+
+    loop {
+        let mut classes: BTreeMap<(String, Vec<usize>), usize> = BTreeMap::new();
+        let mut changed = false;
+        for (term, &id) in &ids {
+            if let Term::App(f, args) = term {
+                let key = (
+                    f.clone(),
+                    args.iter().map(|a| uf.find(ids[a])).collect::<Vec<_>>(),
+                );
+                match classes.get(&key) {
+                    Some(&other) => changed |= uf.union(id, other),
+                    None => {
+                        classes.insert(key, id);
+                    }
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+
+    let mut groups: BTreeMap<usize, Vec<Term>> = BTreeMap::new();
+    for (term, &id) in &ids {
+        groups.entry(uf.find(id)).or_default().push(term.clone());
+    }
+    let mut canon = BTreeMap::new();
+    for group in groups.values() {
+        let representative = group.iter().min().cloned().expect("non-empty group");
+        for term in group {
+            canon.insert(term.clone(), representative.clone());
+        }
+    }
+
+    let axioms = problem
+        .axioms
+        .iter()
+        .map(|a| rewrite_formula(a, &canon))
+        .filter(|a| *a != Formula::True)
+        .collect();
+    let goal = rewrite_formula(&problem.goal, &canon);
+    Some(FolProblem {
+        axioms,
+        goal,
+        signature: problem.signature.clone(),
+    })
 }
 
 /// Parse a complete problem. Declarations may appear before or after formulas.
@@ -637,8 +1031,52 @@ mod tests {
     }
 
     #[test]
-    fn equality_is_rejected_explicitly() {
-        let e = parse_problem("axiom a = b. goal P(a).").unwrap_err();
-        assert!(format!("{e}").contains("equality"));
+    fn equality_is_parsed_as_a_binary_atom() {
+        let p = parse_problem("axiom a = b. goal P(a).").unwrap();
+        assert_eq!(p.signature.predicates.get("="), Some(&2));
+        match &p.axioms[0] {
+            Formula::Atom(a) => {
+                assert_eq!(a.predicate, "=");
+                assert_eq!(a.args.len(), 2);
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ground_equality_normalisation_rewrites_congruent_terms() {
+        let p = parse_problem("axiom a = b. axiom f(a) = c. goal f(b) = c.").unwrap();
+        let n = normalize_ground_equality(&p).expect("ground equality");
+        assert_eq!(n.goal, Formula::True);
+        assert!(n.axioms.is_empty());
+    }
+
+    #[test]
+    fn non_ground_equality_uses_axioms() {
+        let p = parse_problem("axiom forall x. x = f(x). goal f(a) = a.").unwrap();
+        assert!(normalize_ground_equality(&p).is_none());
+        assert!(!p.signature.equality_axioms().is_empty());
+    }
+
+    #[test]
+    fn conditional_equality_uses_axioms() {
+        let p = parse_problem("axiom P(a) -> a = b. goal b = a.").unwrap();
+        assert!(normalize_ground_equality(&p).is_none());
+    }
+
+    #[test]
+    fn equality_terms_respect_quantifier_scope() {
+        let f = parse_formula("forall x. x = f(x)").unwrap();
+        match f {
+            Formula::Forall(_, body) => match *body {
+                Formula::Atom(a) => {
+                    assert_eq!(a.predicate, "=");
+                    assert_eq!(a.args[0], Term::var("x"));
+                    assert_eq!(a.args[1], Term::app("f", vec![Term::var("x")]));
+                }
+                other => panic!("unexpected {other:?}"),
+            },
+            other => panic!("unexpected {other:?}"),
+        }
     }
 }

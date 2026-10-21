@@ -138,21 +138,28 @@ Formulas support `true`, `false`, `not`/`~`/`!`, `and`/`&`, `or`/`|`, `->`,
 are fixed by declaration or first use. Variables are exactly those bound by a
 quantifier; an unbound identifier used as a term is a constant.
 
-No equality, sorts, arithmetic, higher-order constructs, or type declarations.
-`a = b` is rejected as unsupported rather than interpreted.
+Infix equality `t = u` is available over terms. If every equality atom is
+ground and the axioms contain equality only as positive units `a = b.`, the
+prover normalises the problem by congruence closure. Otherwise it adds the
+standard reflexivity, symmetry, transitivity, and congruence axioms. There are
+no sorts, arithmetic, higher-order constructs, or type declarations, and there
+is no superposition/paramodulation.
 
 ### 4.2 Calculus
 
-1. Negate the goal and take the union with the axioms.
-2. Eliminate `<->`, push negation inward to NNF, rename bound variables to
+1. If the equality fragment is ground with positive unit axioms, compute
+   congruence closure and rewrite all ground terms by their representative.
+   Otherwise add equality axioms for the signature.
+2. Negate the goal and take the union with the axioms.
+3. Eliminate `<->`, push negation inward to NNF, rename bound variables to
    avoid capture.
-3. Skolemise existentials with deterministic fresh function symbols/constants.
-4. Distribute to CNF; clauses are normalised by sorting and deduplicating
+4. Skolemise existentials with deterministic fresh function symbols/constants.
+5. Distribute to CNF; clauses are normalised by sorting and deduplicating
    literals.
-5. Run given-clause resolution with factoring under caps:
+6. Run given-clause resolution with factoring under caps:
    `max_clauses = 4096`, `max_selected = 2048`, `max_generated = 8192`, plus
    the caller's step budget.
-6. On the empty clause, serialise the resolution proof and check it with the
+7. On the empty clause, serialise the resolution proof and check it with the
    trusted kernel.
 
 A refutation is a proof that the negated goal plus axioms are unsatisfiable,
@@ -165,7 +172,7 @@ hence the goal follows. `Proved` is emitted only after the kernel check passes.
   **not** mean the goal is invalid; validity is undecidable and the search is
   bounded.
 - `ResourceLimit`: a clause, selection, generation, or step cap stopped work.
-- `Unsupported`: equality, arithmetic, sorts, or another excluded construct.
+- `Unsupported`: arithmetic, sorts, or another excluded construct.
 - `Error`: malformed input or an internal inconsistency.
 - `Refuted`: never emitted. There is no model/countermodel construction.
 

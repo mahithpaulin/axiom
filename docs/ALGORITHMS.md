@@ -185,17 +185,19 @@ Implemented in this repository:
 * **V2 representations** (`src/repr.rs`, `src/choose.rs`): a deterministic
   chooser over the implemented puzzle/plan paths.
 * **v4 engines** (`crates/`): finite ASP with independent model validation,
-  bounded FOL resolution with a trusted kernel, untyped STRIPS A*/BFS planning,
-  a verifying router, and one checked ASP-to-planning bridge. Their algorithms are in `docs/v4/SEMANTICS.md`.
+  bounded FOL resolution with a trusted kernel (ground equality by congruence
+  closure, otherwise equality axioms), untyped STRIPS A*/BFS planning, a
+  verifying router, and one checked ASP-to-planning bridge. Their algorithms are
+  in `docs/v4/SEMANTICS.md`.
 
 Not implemented:
 
 * general linear integer/real arithmetic, arrays, bitvectors, strings;
 * incremental theory solving / push-pop / assumptions;
 * SMT-LIB or TPTP parsing;
-* equality in the FOL prover;
+* FOL superposition/paramodulation (equality is handled by normalization or axioms);
 * provenance semirings, magic sets, join-order planning, parallel evaluation;
 * ASP aggregates, cardinality bounds, optimisation, and function symbols;
 * action costs and typed PDDL (an admissible `h_max` heuristic is implemented);
-* broad external-solver differential benchmarks (a 12-fixture harness exists);
+* broad external-solver differential benchmarks (a 14-fixture harness exists);
 * any neural component.

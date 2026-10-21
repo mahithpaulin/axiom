@@ -388,7 +388,7 @@ details and evidence are in `docs/v4/CAPABILITY_MATRIX.md` and
 | Constraint propagation with explanations | **yes** | finite-domain CSP/puzzles |
 | Search: A*, IDA*, alpha-beta, Dijkstra | **yes** | explicit graphs/trees, bounded |
 | ASP: grounding, choice rules, stable models | **yes** | finite universe, 22-atom cap |
-| FOL resolution with a trusted kernel | **yes** | bounded; no equality; never `Refuted` |
+| FOL resolution with a trusted kernel | **yes** | bounded; ground equality normalization or non-ground equality axioms; never `Refuted` |
 | Untyped STRIPS planning | **yes** | A* `h_max` / BFS; no costs/typed PDDL |
 | Strategy selection / portfolio | partial | V2 chooser; router dispatches by kind |
 | SMT-LIB / TPTP | no | not implemented |
@@ -562,7 +562,7 @@ unindexed; the trigger for a third level is in `docs/ROADMAP.md` with DD-0006.
 | B4 | `backward_only` heads | scope | contributes to A1/A2 | large |
 | B5 | backward fragment restrictions | scope | contributes to A1 | medium |
 | B6 | no negation in backward mode | scope | contributes to A1 | large |
-| B7 | scoped fragments: no general arithmetic, incremental theory, ASP aggregates, FOL equality, or external parity | scope | no | large |
+| B7 | scoped fragments: no general arithmetic, incremental theory, ASP aggregates, FOL superposition, or external parity | scope | no | large |
 | B8 | root IR serialisation absent (`axiom-ir` is separate) | scope | no | medium |
 | C1 | join scaled n³ (FIXED: second index, slope 2.00, 0 unbound) | performance | no | done |
 | C2 | 324 B/fact vs 20 B payload (was 248; +76 for the 95× speedup) | memory | no | medium, or use `ProofMode::Off` (197) |

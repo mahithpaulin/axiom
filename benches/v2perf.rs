@@ -23,7 +23,7 @@ fn main() {
     b.note("PERF lines: name wall_ms ops (parsed by perf.yml)");
 
     // 1. Classic sudoku through CSP.
-    let mut perf = |name: &str, wall: f64, ops: u64| {
+    let perf = |name: &str, wall: f64, ops: u64| {
         println!("PERF {name} wall={wall:.2} ops={ops}");
     };
     b.run_once("csp_sudoku", |_| {
