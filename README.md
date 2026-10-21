@@ -101,11 +101,12 @@ relation are trusted tested code. See `docs/v4/VERIFICATION.md`.
 
 ## Current verification status
 
-GitHub Actions is authoritative; the Android/Termux development device is not
-used for builds. Run `39592092838` on branch `v4` passed all 10 jobs:
+GitHub Actions is authoritative. The Android/Termux device can run local
+checks and release builds, but is not a CI substitute. Run `39596401907` on
+branch `v4` passed all 10 jobs:
 
-- 231 library/integration tests, 0 failed, 0 ignored;
-- 6 doc tests;
+- 243 library/integration tests, 0 failed, 0 ignored;
+- 7 doc tests;
 - workspace `clippy -D warnings`, `fmt --check`, examples, and known-defects
   gates;
 - existing kernel, SAT, theory, and scaling probes.

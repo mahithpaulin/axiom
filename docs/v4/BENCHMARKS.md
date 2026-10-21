@@ -104,3 +104,22 @@ The external harness exists, but these are still not done:
 
 Until these exist, v4 claims are functional: what each fragment decides, with
 what evidence, and where it stops.
+
+## 8. External differential round 1
+
+Run `39596516261` (`external differential benchmarks`, 2026-10-21) used commit
+`65ea4db` and the 12-fixture harness. Results:
+
+- 12 cases total;
+- 8 matched an independent oracle;
+- 0 mismatches;
+- 4 skipped because the Ubuntu apt repositories did not provide Soufflé or
+  Vampire. The skipped cases were three Datalog and one FOL case.
+
+Matched: two Z3 SAT cases, five clingo ASP cases, and one Fast Downward planning
+case. Axiom's answers also matched the declared expected answer in all 12 cases,
+including the skipped ones.
+
+This is a functional smoke test, not a conformance or performance result. The
+workflow now installs Soufflé 2.5 and Vampire 5.1.0 from pinned upstream release
+assets for later rounds.

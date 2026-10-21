@@ -215,6 +215,7 @@ cargo clippy --workspace --lib --tests -- -D warnings
 cargo fmt --all -- --check
 ```
 
-On the Android/Termux development device these are not run locally; GitHub
-Actions is the authoritative environment. See `docs/v4/BENCHMARKS.md` for the
-CI jobs and `docs/v4/RELEASE_REPORT.md` for the run used for the release.
+GitHub Actions is the authoritative environment. Local Android/Termux runs are
+a developer convenience and can execute the same commands, including release
+builds, but are not a CI substitute. See `docs/v4/BENCHMARKS.md` for the CI jobs
+and `docs/v4/RELEASE_REPORT.md` for the release runs.
