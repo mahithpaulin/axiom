@@ -31,8 +31,7 @@ pub mod syntax;
 
 use axiom::Budget;
 use axiom_core::{
-    Capabilities, Engine, Evidence, Guarantee, Outcome, Problem, ProblemKind, Stats, Verdict,
-    VerifyError,
+    Capabilities, Evidence, Guarantee, Outcome, ProblemKind, Stats, Verdict, VerifyError,
 };
 use ground::{GAtom, GroundProgram, MAX_UNIVERSE};
 use stable::{EnumError, Enumeration};

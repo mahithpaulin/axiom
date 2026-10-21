@@ -395,8 +395,8 @@ mod tests {
     #[test]
     fn ground_universe_is_bounded() {
         let mut src = String::from("p(a). ");
-        for _ in 0..30 {
-            src.push_str("q(a). ");
+        for i in 0..30 {
+            src.push_str(&format!("q(c{i}). "));
         }
         let p = syntax::parse(&src).unwrap();
         assert!(ground(&p, &mut Budget::steps(1_000_000)).is_err());

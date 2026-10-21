@@ -1,0 +1,11 @@
+[package]
+name = "axiom-proof"
+version = "0.2.0"
+edition = "2021"
+rust-version = "1.75"
+description = "Axiom v4 trusted proof kernel: STLC types and first-order resolution checking."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/mahithpaulin/axiom"
+
+[dependencies]
+axiom-ir = { path = "../axiom-ir" }

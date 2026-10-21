@@ -3,6 +3,8 @@ members = [
     "crates/axiom-ir",
     "crates/axiom-core",
     "crates/axiom-asp",
+    "crates/axiom-proof",
+    "crates/axiom-prover",
 ]
 resolver = "2"
 

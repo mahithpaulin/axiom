@@ -414,10 +414,10 @@ impl Parser {
                         ))
                     }
                 };
-                let arity = match self.bump() {
+                let arity: usize = match self.bump() {
                     Some(Tok::Slash) => match self.bump() {
                         Some(Tok::Number(n)) => n
-                            .parse()
+                            .parse::<usize>()
                             .map_err(|_| ParseError::new(self.offset(), "invalid #show arity"))?,
                         other => {
                             return Err(ParseError::new(
