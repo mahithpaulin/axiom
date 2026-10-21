@@ -20,9 +20,7 @@
 //! ```
 
 use axiom::Budget;
-use axiom_core::{
-    EngineRegistry, Outcome, Problem, ProblemKind, RouteError, RoutedOutcome, Verdict,
-};
+use axiom_core::{EngineRegistry, Problem, RouteError, RoutedOutcome};
 use std::fmt;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
