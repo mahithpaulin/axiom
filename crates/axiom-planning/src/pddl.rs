@@ -40,13 +40,7 @@ impl fmt::Display for FAtom {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Arg {
-    Var(String),
-    Const(String),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PLiteral {
     pub positive: bool,
     pub atom: FAtom,
@@ -527,12 +521,14 @@ pub fn parse_task(domain_src: &str, problem_src: &str) -> Result<PlanningTask, P
             }
         }
     }
+    let init = problem.init.clone();
+    let goal = problem.goal.clone();
     Ok(PlanningTask {
         domain,
         problem,
         objects,
-        init: problem.init.clone(),
-        goal: problem.goal.clone(),
+        init,
+        goal,
     })
 }
 

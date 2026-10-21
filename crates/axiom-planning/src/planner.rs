@@ -131,9 +131,7 @@ pub fn ground_actions(task: &PlanningTask) -> Result<Vec<GroundAction>, String> 
             out: &mut Vec<GroundAction>,
         ) -> Result<(), String> {
             if out.len() > MAX_GROUND_ACTIONS {
-                return Err(format!(
-                    "grounding exceeds {MAX_GROUND_ACTIONS} actions"
-                ));
+                return Err(format!("grounding exceeds {MAX_GROUND_ACTIONS} actions"));
             }
             if n == params.len() {
                 let a = ground_action(task, action_index, subst)
@@ -148,15 +146,7 @@ pub fn ground_actions(task: &PlanningTask) -> Result<Vec<GroundAction>, String> 
             subst.remove(&params[n]);
             Ok(())
         }
-        go(
-            task,
-            i,
-            &action.params,
-            0,
-            &objects,
-            &mut subst,
-            &mut out,
-        )?;
+        go(task, i, &action.params, 0, &objects, &mut subst, &mut out)?;
     }
     out.sort();
     out.dedup();
@@ -378,11 +368,7 @@ mod tests {
             panic!("no plan: {r:?}");
         };
         assert_eq!(plan.actions.len(), 1);
-        validate_actions(
-            &task,
-            &[("move".into(), vec!["a".into(), "b".into()])],
-        )
-        .unwrap();
+        validate_actions(&task, &[("move".into(), vec!["a".into(), "b".into()])]).unwrap();
     }
 
     #[test]
@@ -403,10 +389,6 @@ mod tests {
     #[test]
     fn invalid_plan_is_rejected() {
         let task = parse_task(DOMAIN, PROBLEM).unwrap();
-        assert!(validate_actions(
-            &task,
-            &[("move".into(), vec!["b".into(), "a".into()])]
-        )
-        .is_err());
+        assert!(validate_actions(&task, &[("move".into(), vec!["b".into(), "a".into()])]).is_err());
     }
 }

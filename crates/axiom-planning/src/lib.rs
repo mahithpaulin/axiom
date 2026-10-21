@@ -100,11 +100,7 @@ impl Engine for PlanningEngine {
                     result.expanded,
                     planner::plan_text(&plan)
                 );
-                Outcome::definite(
-                    Verdict::Found,
-                    Evidence::new(PLAN_KIND, payload),
-                    stats,
-                )
+                Outcome::definite(Verdict::Found, Evidence::new(PLAN_KIND, payload), stats)
             }
             PlanStatus::Impossible => {
                 let payload = format!(
@@ -131,12 +127,8 @@ impl Engine for PlanningEngine {
             return Ok(());
         }
         let task = pddl::parse_task(
-            Self::source(problem)
-                .map_err(VerifyError::Malformed)?
-                .0,
-            Self::source(problem)
-                .map_err(VerifyError::Malformed)?
-                .1,
+            Self::source(problem).map_err(VerifyError::Malformed)?.0,
+            Self::source(problem).map_err(VerifyError::Malformed)?.1,
         )
         .map_err(|e| VerifyError::Malformed(e.to_string()))?;
         let evidence = outcome
@@ -146,7 +138,9 @@ impl Engine for PlanningEngine {
         match outcome.verdict {
             Verdict::Found => {
                 if evidence.kind != PLAN_KIND {
-                    return Err(VerifyError::InvalidEvidence("wrong plan evidence kind".into()));
+                    return Err(VerifyError::InvalidEvidence(
+                        "wrong plan evidence kind".into(),
+                    ));
                 }
                 let fields = fields(&evidence.payload)?;
                 let length: usize = fields
@@ -157,16 +151,15 @@ impl Engine for PlanningEngine {
                 let text = fields
                     .get("plan")
                     .ok_or_else(|| VerifyError::InvalidEvidence("missing plan".into()))?;
-                let actions = planner::parse_plan_text(text)
-                    .map_err(|e| VerifyError::InvalidEvidence(e))?;
+                let actions =
+                    planner::parse_plan_text(text).map_err(|e| VerifyError::InvalidEvidence(e))?;
                 if actions.len() != length {
                     return Err(VerifyError::Mismatch {
                         expected: length.to_string(),
                         found: actions.len().to_string(),
                     });
                 }
-                planner::validate_actions(&task, &actions)
-                    .map_err(VerifyError::InvalidEvidence)?;
+                planner::validate_actions(&task, &actions).map_err(VerifyError::InvalidEvidence)?;
                 Ok(())
             }
             Verdict::Impossible => {
@@ -200,9 +193,7 @@ fn fields(payload: &str) -> Result<std::collections::BTreeMap<&str, &str>, Verif
             .split_once('=')
             .ok_or_else(|| VerifyError::InvalidEvidence(format!("bad field {f:?}")))?;
         if out.insert(k, v).is_some() {
-            return Err(VerifyError::InvalidEvidence(format!(
-                "duplicate field {k}"
-            )));
+            return Err(VerifyError::InvalidEvidence(format!("duplicate field {k}")));
         }
     }
     Ok(out)

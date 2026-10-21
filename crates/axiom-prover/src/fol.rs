@@ -31,25 +31,6 @@ pub enum Formula {
     Exists(Vec<String>, Box<Formula>),
 }
 
-impl Formula {
-    fn from_binary(op: BinOp, left: Formula, right: Formula) -> Self {
-        match op {
-            BinOp::And => Formula::And(vec![left, right]),
-            BinOp::Or => Formula::Or(vec![left, right]),
-            BinOp::Implies => Formula::Implies(Box::new(left), Box::new(right)),
-            BinOp::Iff => Formula::Iff(Box::new(left), Box::new(right)),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum BinOp {
-    And,
-    Or,
-    Implies,
-    Iff,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Signature {
     pub predicates: BTreeMap<String, usize>,
@@ -372,7 +353,7 @@ impl Parser {
         while matches!(self.peek(), Some(Tok::Iff)) {
             self.bump();
             let right = self.implies(bound)?;
-            left = Formula::from_binary(BinOp::Iff, left, right);
+            left = Formula::Iff(Box::new(left), Box::new(right));
         }
         Ok(left)
     }
