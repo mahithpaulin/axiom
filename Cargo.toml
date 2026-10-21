@@ -1,3 +1,10 @@
+[workspace]
+members = [
+    "crates/axiom-ir",
+    "crates/axiom-core",
+]
+resolver = "2"
+
 [package]
 name = "axiom"
 version = "0.1.0"
