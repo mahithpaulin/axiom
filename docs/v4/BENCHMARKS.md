@@ -57,8 +57,17 @@ v4 gates are correctness and verification gates, not performance rankings:
 | Existing kernel/SAT/theory suites | unchanged jobs |
 | Examples | `cargo build --examples` |
 
-No v4 engine has a throughput benchmark, a scaling study, or a comparison with
-clingo, Vampire, Fast Downward, Z3, or Soufflé. Do not infer one.
+A small differential correctness round is separate from these gates:
+
+| Harness | Command | Scope |
+|---|---|---|
+| External differential | `python3 benchmarks/external/run.py --axiom target/release/axiom-bench` | 12 fixtures against Z3, clingo, Soufflé, Fast Downward, and Vampire when installed |
+
+The workflow `.github/workflows/external-bench.yml` is manual, installs oracles
+best-effort, records skipped oracles explicitly, and uploads `results.json` and
+`results.md`. A skipped oracle is not agreement, and one fixture per family is
+not a conformance or performance result. No v4 engine has a throughput benchmark
+or scaling study, and no competitive ranking is claimed.
 
 ## 5. RSS defect
 
@@ -81,16 +90,17 @@ separate process-level probe.
 - A `ResourceLimit` is not a performance result; it is a stopped run.
 - No retries to hide noise; report the run.
 
-## 7. Planned measurement work
+## 7. Remaining measurement work
 
-Not done in v4:
+The external harness exists, but these are still not done:
 
-- external differential suites (clingo/Vampire/Fast Downward/Z3);
-- cross-engine fixtures and a conformance harness;
+- a broad external differential suite (the current suite has 12 fixtures);
+- a cross-engine conformance fixture format;
+- performance and scaling comparisons with clingo/Vampire/Fast Downward/Z3;
 - peak-RSS instrumentation;
 - proof-size and verification-time distributions for the FOL kernel;
 - ASP enumeration scaling beyond the 22-atom cap;
-- plan-search scaling and heuristic comparisons (the v4 planner is blind BFS).
+- plan-search scaling and a comparison of A* `h_max` against blind BFS.
 
 Until these exist, v4 claims are functional: what each fragment decides, with
 what evidence, and where it stops.

@@ -118,17 +118,33 @@ Found plan:
 Impossible:
 
 1. Re-parse the task.
-2. Re-run exhaustive BFS with a 10,000,000-step verification budget and the
-   same caps.
+2. Re-run exhaustive search (A* with `h_max`) with a 10,000,000-step
+   verification budget and the same caps.
 3. Accept only `PlanStatus::Impossible`; a found plan is a mismatch and a cap
    is a verification resource limit.
 
 A tampered plan test moves the item in the wrong direction and is rejected.
 
 Limitations: replay and search share the transition implementation. `Impossible`
-is only as good as the grounding and cap accounting.
+is only as good as the grounding, heuristic, and cap accounting. The heuristic is
+admissible: it ignores negative preconditions and delete effects, so it can only
+underestimate the true remaining cost.
 
-### 3.5 Router
+### 3.5 Bridge
+
+`crates/axiom-bridge/src/lib.rs`
+
+`BridgeOutcome::verify` recomputes the entire pipeline from the request, requires
+the same selected model index, injected/ignored atom sets, and translated
+`PlanningTask`, and requires identical planning verdict and evidence. The
+planning stage itself replays the plan against the translated task. Tests cover a
+successful injection, an ignored undeclared predicate, an arity mismatch, a
+missing model, and a changed-request verification failure.
+
+Limitations: both stages share their own engines' verification code; the bridge
+does not independently prove that the ASP model or PDDL translation is correct.
+
+### 3.6 Router
 
 `crates/axiom-router/src/lib.rs`
 
@@ -167,14 +183,20 @@ These are part of the acceptance criteria:
   `unsat_constraint_is_impossible_only_after_complete_enumeration`,
   `positive_loop_does_not_support_its_head`.
 - `crates/axiom-planning` `tampered_plan_is_rejected`,
-  `proves_impossibility_by_exhaustion`, `typed_input_is_unsupported`.
+  `proves_impossibility_by_exhaustion`, `typed_input_is_unsupported`,
+  `astar_and_bfs_return_shortest_plans`,
+  `astar_respects_negative_preconditions`.
+- `crates/axiom-bridge` `stable_model_supplies_planning_init`,
+  `undeclared_predicates_are_ignored`, `arity_mismatch_is_rejected`,
+  `missing_model_is_rejected`, `verification_detects_a_changed_request`.
 - `crates/axiom-router` `unknown_kind_is_an_explicit_route_error`,
   `malformed_input_is_not_a_found_verdict`.
 
 ## 6. What is not verified
 
-- No external cross-check against clingo, Vampire, Z3, Soufflé, or Fast
-  Downward. Those names were used for scope review, not as test oracles.
+- The external differential harness is a small functional cross-check, not a
+  conformance proof. It reports missing oracles as skipped and cannot establish
+  agreement when an oracle is absent.
 - No proof of the CNF transformation, grounding, stable-model test, or plan
   transition relation.
 - No proof that the step budget is enforced on every allocation path.

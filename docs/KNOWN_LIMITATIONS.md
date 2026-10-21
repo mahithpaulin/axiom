@@ -295,17 +295,17 @@ now tested only after the positive join completes. Regression:
 `tests/soundness.rs::negation_waits_for_later_positive_bindings`, which requires
 `p(a,b)` and `p(b,b)`.
 
-**Remaining limitation.** A negated literal must still become fully ground
-before it can be evaluated. If no positive literal can bind its variables, the
-derivation is blocked. The engine does not reject every unsafe program, so an
-unsafe program is incomplete rather than reinterpreted. Programs are expected
-to be safe: every variable in a negated literal should occur in a positive body
-literal.
+**Remaining limitation (updated).** Forward rules now pass a safety check:
+every head variable and every variable in a negated literal must be bound by a
+positive body literal. Unsafe forward rules are rejected as `UnsafeRule` rather
+than silently deriving an incomplete closure. `backward_only` function-head
+rules are exempt from the head check and can still decline on non-ground
+negation.
 
-**What would remove the remaining limitation.** A safety check at parse time
-that rejects unsafe rules, or an anti-join/tabling strategy that handles
-non-ground negation explicitly. The v4 Datalog adapter documents the current
-behavior rather than claiming rejection.
+**What would remove the remaining limitation.** An anti-join/tabling strategy
+that handles non-ground negation explicitly for `backward_only` rules. The v4
+Datalog adapter now exposes the rejection instead of documenting silent
+incompleteness.
 
 ### B4. Function symbols in rule heads are `backward_only`
 
@@ -389,9 +389,10 @@ details and evidence are in `docs/v4/CAPABILITY_MATRIX.md` and
 | Search: A*, IDA*, alpha-beta, Dijkstra | **yes** | explicit graphs/trees, bounded |
 | ASP: grounding, choice rules, stable models | **yes** | finite universe, 22-atom cap |
 | FOL resolution with a trusted kernel | **yes** | bounded; no equality; never `Refuted` |
-| Untyped STRIPS planning | **yes** | BFS; no costs/heuristics |
+| Untyped STRIPS planning | **yes** | A* `h_max` / BFS; no costs/typed PDDL |
 | Strategy selection / portfolio | partial | V2 chooser; router dispatches by kind |
-| SMT-LIB / TPTP / external solver comparison | no | not implemented |
+| SMT-LIB / TPTP | no | not implemented |
+| External differential comparison | partial | small manual harness; no conformance claim |
 | Neural components | no | nothing in the crate is a model |
 
 **Cost.** The platform is a set of scoped fragments, not a general prover. Every

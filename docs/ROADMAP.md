@@ -95,9 +95,10 @@ No external ranking; these are regression and boundary measurements.
 ### 3.3 Planning
 
 - typed PDDL, if the representation can stay honest;
-- action costs and A*/Dijkstra with an admissible heuristic;
+- action costs and cost-aware A*/Dijkstra (an admissible unit-cost `h_max`
+  heuristic is implemented);
 - standard benchmark instances;
-- keep `Impossible` restricted to exhaustive BFS.
+- keep `Impossible` restricted to exhaustive search.
 
 ### 3.4 Root theory engine
 
@@ -116,8 +117,8 @@ explicit decision to leave backward mode as a narrow escape hatch.
 - CI the declared MSRV (`rust-version = "1.75"`) or raise it;
 - a cross-engine conformance fixture format;
 - a stable evidence schema with versioning, if evidence is ever exported;
-- cross-domain composition only after a semantics-preserving translation exists
-  (for example, Datalog-derived constraints to the theory engine).
+- broader cross-domain composition only after a semantics-preserving
+  translation exists (one checked ASP-to-planning pipeline is implemented).
 
 ## 5. Deliberately not planned
 

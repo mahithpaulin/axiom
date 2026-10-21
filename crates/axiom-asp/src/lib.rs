@@ -118,6 +118,30 @@ impl AspEngine {
             .with("stable_checks", e.stable_checks)
             .with("models", e.models.len() as u64)
     }
+
+    /// Decode and re-verify the stable models carried by an ASP outcome.
+    ///
+    /// This is the supported boundary for cross-engine pipelines: callers get
+    /// structured [`GAtom`]s only after the evidence has been checked against a
+    /// fresh grounding and enumeration.
+    pub fn models(
+        &self,
+        problem: &Problem,
+        outcome: &Outcome,
+    ) -> Result<Vec<BTreeSet<GAtom>>, VerifyError> {
+        let evidence = outcome
+            .evidence
+            .as_ref()
+            .ok_or(VerifyError::MissingEvidence)?;
+        if evidence.kind != "axiom-asp-models" {
+            return Err(VerifyError::InvalidEvidence(format!(
+                "unexpected evidence kind {}",
+                evidence.kind
+            )));
+        }
+        Engine::verify(self, problem, outcome)?;
+        Ok(parse_evidence(&evidence.payload)?.models)
+    }
 }
 
 fn parse_gatom(s: &str) -> Option<GAtom> {
@@ -384,5 +408,18 @@ mod tests {
     fn malformed_source_is_an_error() {
         let o = solve("p(X) :- not q(X).", 0);
         assert_eq!(o.verdict, Verdict::Unsupported);
+    }
+
+    #[test]
+    fn models_decode_only_after_verification() {
+        let p = Problem::asp("{ p }. { q }.", 0);
+        let mut e = AspEngine::new();
+        let out = e.solve(&p, &mut Budget::steps(1_000_000));
+        let models = e.models(&p, &out).unwrap();
+        assert_eq!(models.len(), 4);
+        assert!(models.iter().any(|m| m.len() == 2));
+        let mut bad = out;
+        bad.evidence = Some(Evidence::new("axiom-asp-models", "count=0;models="));
+        assert!(e.models(&p, &bad).is_err());
     }
 }

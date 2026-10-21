@@ -1,3 +1,6 @@
 /target
 *.bench
 Cargo.lock
+/artifacts/
+/benchmarks/external/out/
+__pycache__/

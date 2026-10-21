@@ -11,11 +11,13 @@ source problem
    ├── Datalog ────── least model, proofs, SAT/Theory/CSP root engine
    ├── ASP ────────── finite grounding, stable models, model validation
    ├── FOL ────────── CNF, bounded resolution, kernel-checked refutations
-   └── Planning ───── untyped STRIPS, BFS, plan replay
+   └── Planning ───── untyped STRIPS, A*/BFS, plan replay
              │
         axiom-core contract
              │
         axiom-router (dispatch + verify)
+             │
+        axiom-bridge (validated ASP -> planning)
 ```
 
 ## Quick start
@@ -67,17 +69,17 @@ assert_eq!(out.outcome.verdict, axiom_core::Verdict::Found);
 
 | Engine | Fragment | A definite answer means |
 |---|---|---|
-| Datalog (`axiom-core`) | stratified Datalog, finite terms, ground-safe negation | least-model derivation or completed absence |
+| Datalog (`axiom-core`) | stratified Datalog, finite terms, safe forward rules | least-model derivation or completed absence |
 | SAT (`axiom::sat`) | propositional CNF | model checked by satisfaction; UNSAT by RUP |
 | CDCL(T) (`axiom::theory`) | integer difference logic + equality/congruence | checked model or replayed theory lemmas |
 | ASP (`axiom-asp`) | normal/choice rules, constraints, finite Herbrand grounding | each listed model passes the stable-model test |
 | FOL (`axiom-prover`) | quantifiers, predicates, functions; no equality/arithmetic | kernel-checked empty clause |
-| Planning (`axiom-planning`) | untyped STRIPS, negative preconditions | replayable shortest plan, or exhausted state space |
+| Planning (`axiom-planning`) | untyped STRIPS, negative preconditions, A* h_max | replayable shortest plan, or exhausted state space |
 | STLC (`axiom-proof::stlc`) | simply typed lambda calculus | inferred type accepted by the checker |
 
 Scoped limits are intentional. FOL saturation is `Unknown`, never `Refuted`.
 ASP returns `Impossible` only for a complete zero-model enumeration. Planning
-returns `Impossible` only after exhaustive BFS. A resource cap is
+returns `Impossible` only after exhaustive search. A resource cap is
 `ResourceLimit`, not a negative answer.
 
 ## The honesty contract
@@ -108,8 +110,10 @@ used for builds. Run `39592092838` on branch `v4` passed all 10 jobs:
   gates;
 - existing kernel, SAT, theory, and scaling probes.
 
-The B3 negation scheduling bug is fixed with a regression test. Details and
-run IDs are in `docs/v4/RELEASE_REPORT.md`.
+The B3 negation scheduling bug is fixed with a regression test. Forward rules
+whose head or negated body variables are not bound by a positive body literal
+are now rejected as unsafe; `backward_only` function-head rules retain their
+separate contract. Details and run IDs are in `docs/v4/RELEASE_REPORT.md`.
 
 ## Repository layout
 
@@ -123,6 +127,9 @@ run IDs are in `docs/v4/RELEASE_REPORT.md`.
 | `crates/axiom-prover/` | FOL parser, CNF, bounded resolution |
 | `crates/axiom-planning/` | untyped STRIPS planner and validator |
 | `crates/axiom-router/` | standard engine bundle |
+| `crates/axiom-bridge/` | checked ASP-to-planning composition |
+| `crates/axiom-bench/` | benchmark process driver |
+| `benchmarks/external/` | differential oracle harness and workflow output |
 | `tests/` | root integration, soundness, SAT, theory, V2 tests |
 | `docs/v4/` | architecture, semantics, verification, benchmarks, limits |
 
@@ -139,8 +146,10 @@ measurements (baseline `docs/v4/BASELINE.md`):
 
 The `rss kB` column in kernel output is sampled after the solver is dropped and
 is **not** peak memory (`src/bench.rs:206-258`, F-03). Do not use it as a
-baseline. v4 adds no competitive benchmark claim against clingo, Vampire,
-Fast Downward, Z3, or Soufflé.
+baseline. A differential harness now exists (`benchmarks/external/` and the
+`external differential benchmarks` workflow); it records oracle availability
+and mismatches rather than assuming agreement. No competitive performance claim
+is made until that round has run and been reported.
 
 ## Documentation
 

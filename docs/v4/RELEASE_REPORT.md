@@ -102,3 +102,25 @@ test, and the router domain sweep.
 - root theory allocation blow-up (`rdl_chain_sat`).
 
 Nothing in this report should be read as a promise that those are complete.
+
+## 8. Post-release development after `d606aab`
+
+The branch now also contains the next improvement round. This section is
+separate from the release evidence above:
+
+- planning uses A* with an admissible delete-relaxation `h_max` heuristic by
+  default, while `planner::plan` keeps breadth-first order for compatibility.
+  Both searches preserve the shortest-plan guarantee;
+- forward Datalog rules are checked for safety and unsafe rules are rejected as
+  `ProgramError::UnsafeRule`;
+- `AspEngine::models` exposes validated, structured stable models;
+- `axiom-bridge` adds a checked ASP-to-planning pipeline;
+- `axiom-bench` and `benchmarks/external/run.py` provide a small differential
+  correctness round, run manually by `.github/workflows/external-bench.yml`;
+- documentation is updated for these changes.
+
+Local validation on the development device: `cargo fmt --check`, workspace
+`clippy -D warnings`, 243 library/integration tests, and 7 doc tests pass. A port
+of these changes is recorded in the CI run after this section was committed.
+The release statements in sections 4 and 7 describe `d606aab`; this section
+supersedes them for the new work.

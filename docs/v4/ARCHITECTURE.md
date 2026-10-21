@@ -33,12 +33,14 @@ source text / domain input
         │
         ├── axiom-asp ───────── finite grounding + stable-model enumeration
         ├── axiom-prover ────── FOL parse → NNF/Skolem → CNF → resolution
-        ├── axiom-planning ──── untyped STRIPS → grounding → BFS → plan replay
+        ├── axiom-planning ──── untyped STRIPS → grounding → A* / BFS → plan replay
         └── proof kernel ────── axiom-proof: resolution and STLC checks
                     │
               axiom-core contract + EngineRegistry
                     │
               axiom-router (standard bundle)
+                    │
+              axiom-bridge (checked ASP model → planning init)
 ```
 
 The arrows are dependencies, not data flow through a shared semantic IR. Each
@@ -56,8 +58,10 @@ differences that the verifier must preserve.
 | `axiom-asp` | ASP syntax, finite grounding, stable-model search and validation | `axiom`, `axiom-core` |
 | `axiom-proof` | Trusted resolution kernel and STLC type checker | `axiom-ir` |
 | `axiom-prover` | FOL syntax, CNF, bounded resolution, FOL engine/verifier | `axiom-ir`, `axiom-proof`, `axiom-core` |
-| `axiom-planning` | Untyped STRIPS PDDL, grounding, BFS planner, validator | `axiom`, `axiom-ir`, `axiom-core` |
+| `axiom-planning` | Untyped STRIPS PDDL, grounding, A* `h_max` / BFS planner, validator | `axiom`, `axiom-ir`, `axiom-core` |
 | `axiom-router` | Standard engine bundle and verified routing | all four engines |
+| `axiom-bridge` | Checked ASP→planning composition and task translation | `axiom-core`, `axiom-asp`, `axiom-planning` |
+| `axiom-bench` | One-fixture process driver for external differential runs | core, ASP, prover, planning |
 
 The root crate is still zero-dependency. Workspace crates use path
 dependencies only; `Cargo.lock` remains gitignored as before.
@@ -108,9 +112,25 @@ input clause in the proof to occur there.
 ### Planning
 
 `Problem::planning(domain, problem)` is parsed as untyped STRIPS, grounded over
-objects and constants, and searched with BFS. A plan is an action sequence.
+objects and constants, and searched with A* using an admissible delete-relaxation `h_max` heuristic. `planner::plan` retains breadth-first order for direct callers. A plan is an action sequence.
 Verification replays the plan from the initial state. `Impossible` verification
 re-runs the exhaustive search; a cap hit is never treated as impossibility.
+
+### Bridge
+
+`crates/axiom-bridge/src/lib.rs`
+
+`AspPlanningRequest` runs the ASP engine, verifies the enumeration evidence,
+decodes the selected stable model, filters it to predicates declared by the PDDL
+domain, rejects shared predicates with the wrong arity or unknown objects, and
+adds the remaining atoms to the planning task's initial state. The planning
+result is then verified against that exact translated task. `BridgeOutcome`
+keeps both stage outcomes and the translated task; `verify` recomputes the whole
+pipeline and compares the translation and planning evidence.
+
+This is a data-level composition, not a proof that the original planning task
+without the ASP facts is solvable or impossible. It is also not a proof that the
+selected ASP model is unique.
 
 ## 6. Verdict semantics
 
@@ -129,7 +149,7 @@ re-runs the exhaustive search; a cap hit is never treated as impossibility.
 negative answers. The FOL prover never emits `Refuted`; absence of a found
 refutation is not a countermodel. ASP emits `Impossible` only when enumeration
 was complete and found zero stable models. Planning emits `Impossible` only
-after exhaustive BFS within caps.
+after exhaustive search within caps.
 
 ## 7. Trust boundaries
 
@@ -139,8 +159,9 @@ after exhaustive BFS within caps.
 | CNF/Skolem transformation | Prover-side | Tested, not formally verified; input clauses are checked against it |
 | Root Datalog solver | Trusted implementation | Verifier re-executes the same code; proofs are replayed |
 | ASP stable-model test | Trusted implementation | Same routine used by search and validation; negative tests exist |
-| Plan replay | Trusted implementation | Re-executes the transition relation independently of BFS |
+| Plan replay | Trusted implementation | Re-executes the transition relation independently of search |
 | Router | Thin | Only dispatches and calls each engine's own verifier |
+| Bridge | Thin translation | Both stage outcomes are re-verified; the translated task must recur identically |
 
 No component claims formal verification. The kernel is a small independent
 checker, not a proof of the Rust compiler, parser, or CNF converter.
@@ -160,9 +181,10 @@ verification is returned as `RouterError::Verification`, never downgraded to an
 inconclusive verdict. `solve_all` shares one budget and stops at the first
 routing or verification error.
 
-The router has no evidence translation and no cross-domain composition beyond
-dispatching. A Datalog result cannot yet be fed into the SMT engine as a
-constraint, and an ASP model cannot be filtered by a theory solver.
+The router itself has no evidence translation. The separate `axiom-bridge`
+crate performs one checked composition: a verified ASP stable model can supply
+extra planning initial facts. A Datalog result still cannot be fed into the SMT
+engine as a constraint, and an ASP model cannot be filtered by a theory solver.
 
 ## 9. Determinism
 

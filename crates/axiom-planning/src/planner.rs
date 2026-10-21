@@ -1,12 +1,16 @@
-//! Grounding, deterministic breadth-first search, and plan validation.
+//! Grounding, deterministic search, and plan validation.
 //!
-//! BFS makes plans shortest in number of actions. The search is exhaustive up to
-//! explicit state/action caps; exhaustion therefore licenses `Impossible`, while
-//! a cap hit is only `ResourceLimit`.
+//! Two search orders are available. Breadth-first search guarantees a plan with
+//! the fewest actions. A* with the admissible delete-relaxation `h_max`
+//! heuristic usually expands fewer states while preserving the same
+//! shortest-plan guarantee. Both searches are exhaustive up to explicit
+//! state/action caps; exhaustion therefore licenses `Impossible`, while a cap
+//! hit is only `ResourceLimit`.
 
 use crate::pddl::{FAtom, PLiteral, PlanningTask};
 use axiom::Budget;
-use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+use std::cmp::Reverse;
+use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, VecDeque};
 
 pub const MAX_GROUND_ACTIONS: usize = 100_000;
 
@@ -58,6 +62,16 @@ impl Default for Limits {
             max_expanded: 100_000,
         }
     }
+}
+
+/// Search order. `AStar` uses an admissible relaxation heuristic and therefore
+/// still returns a shortest plan; switch to `BreadthFirst` to reproduce the
+/// historical expansion order exactly.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Search {
+    BreadthFirst,
+    #[default]
+    AStar,
 }
 
 fn subst_atom(atom: &FAtom, subst: &BTreeMap<String, String>) -> Option<FAtom> {
@@ -179,6 +193,22 @@ fn goal_reached(goal: &[PLiteral], state: &BTreeSet<FAtom>) -> bool {
 }
 
 pub fn plan(task: &PlanningTask, budget: &mut Budget, limits: Limits) -> PlanResult {
+    plan_with(task, budget, limits, Search::BreadthFirst)
+}
+
+pub fn plan_with(
+    task: &PlanningTask,
+    budget: &mut Budget,
+    limits: Limits,
+    search: Search,
+) -> PlanResult {
+    match search {
+        Search::BreadthFirst => plan_bfs(task, budget, limits),
+        Search::AStar => plan_astar(task, budget, limits),
+    }
+}
+
+fn plan_bfs(task: &PlanningTask, budget: &mut Budget, limits: Limits) -> PlanResult {
     let actions = match ground_actions(task) {
         Ok(a) => a,
         Err(m) => {
@@ -267,6 +297,176 @@ pub fn plan(task: &PlanningTask, budget: &mut Budget, limits: Limits) -> PlanRes
         status: PlanStatus::Impossible,
         expanded,
         states: parent.len(),
+        ground_actions: actions.len(),
+    }
+}
+
+/// Admissible delete-relaxation heuristic: the maximum cost of any positive
+/// goal fact in the relaxed planning graph. Negative preconditions and delete
+/// effects are ignored, which only makes the relaxed problem easier. `None`
+/// means at least one positive goal is unreachable even in that easier problem,
+/// so it is unreachable in the real task as well.
+fn h_max(task: &PlanningTask, actions: &[GroundAction], state: &BTreeSet<FAtom>) -> Option<u64> {
+    let positive_goals: Vec<&FAtom> = task
+        .goal
+        .iter()
+        .filter(|l| l.positive)
+        .map(|l| &l.atom)
+        .collect();
+    if positive_goals.is_empty() {
+        return Some(0);
+    }
+
+    let mut costs: BTreeMap<FAtom, u64> = state.iter().cloned().map(|a| (a, 0)).collect();
+    let mut scheduled = vec![false; actions.len()];
+    let mut queue: BinaryHeap<Reverse<(u64, usize)>> = BinaryHeap::new();
+
+    loop {
+        for (i, action) in actions.iter().enumerate() {
+            if scheduled[i] {
+                continue;
+            }
+            let mut ready = true;
+            let mut cost = 0u64;
+            for lit in &action.preconditions {
+                if !lit.positive {
+                    continue;
+                }
+                match costs.get(&lit.atom) {
+                    Some(&c) => cost = cost.max(c),
+                    None => {
+                        ready = false;
+                        break;
+                    }
+                }
+            }
+            if ready {
+                scheduled[i] = true;
+                queue.push(Reverse((cost.saturating_add(1), i)));
+            }
+        }
+        let Some(Reverse((cost, i))) = queue.pop() else {
+            break;
+        };
+        for add in &actions[i].adds {
+            costs.entry(add.clone()).or_insert(cost);
+        }
+    }
+
+    let mut h = 0u64;
+    for goal in positive_goals {
+        h = h.max(*costs.get(goal)?);
+    }
+    Some(h)
+}
+
+fn plan_astar(task: &PlanningTask, budget: &mut Budget, limits: Limits) -> PlanResult {
+    let actions = match ground_actions(task) {
+        Ok(a) => a,
+        Err(m) => {
+            return PlanResult {
+                status: PlanStatus::Limit(m),
+                expanded: 0,
+                states: 0,
+                ground_actions: 0,
+            }
+        }
+    };
+    let initial = task.init.clone();
+    if goal_reached(&task.goal, &initial) {
+        return PlanResult {
+            status: PlanStatus::Found(Plan {
+                actions: Vec::new(),
+            }),
+            expanded: 0,
+            states: 1,
+            ground_actions: actions.len(),
+        };
+    }
+    let Some(h0) = h_max(task, &actions, &initial) else {
+        return PlanResult {
+            status: PlanStatus::Impossible,
+            expanded: 0,
+            states: 1,
+            ground_actions: actions.len(),
+        };
+    };
+
+    let mut best: HashMap<BTreeSet<FAtom>, u64> = HashMap::new();
+    best.insert(initial.clone(), 0);
+    let mut parent: HashMap<BTreeSet<FAtom>, (BTreeSet<FAtom>, usize)> = HashMap::new();
+    let mut queue: BinaryHeap<Reverse<(u64, u64, BTreeSet<FAtom>)>> = BinaryHeap::new();
+    queue.push(Reverse((h0, 0, initial)));
+    let mut expanded = 0u64;
+
+    while let Some(Reverse((_f, g, state))) = queue.pop() {
+        if best.get(&state).copied() != Some(g) {
+            continue;
+        }
+        if expanded as usize >= limits.max_expanded {
+            return PlanResult {
+                status: PlanStatus::Limit(format!(
+                    "expanded-state cap {} reached",
+                    limits.max_expanded
+                )),
+                expanded,
+                states: best.len(),
+                ground_actions: actions.len(),
+            };
+        }
+        if budget.charge(1).is_err() {
+            return PlanResult {
+                status: PlanStatus::Limit("planning budget exhausted".into()),
+                expanded,
+                states: best.len(),
+                ground_actions: actions.len(),
+            };
+        }
+        expanded += 1;
+        if goal_reached(&task.goal, &state) {
+            let mut plan = Vec::new();
+            let mut cur = &state;
+            while let Some((prev, idx)) = parent.get(cur) {
+                plan.push(actions[*idx].clone());
+                cur = prev;
+            }
+            plan.reverse();
+            return PlanResult {
+                status: PlanStatus::Found(Plan { actions: plan }),
+                expanded,
+                states: best.len(),
+                ground_actions: actions.len(),
+            };
+        }
+        for (idx, action) in actions.iter().enumerate() {
+            if !applicable(action, &state) {
+                continue;
+            }
+            let next = apply_action(action, &state);
+            let next_g = g.saturating_add(1);
+            if best.get(&next).is_some_and(|&old| next_g >= old) {
+                continue;
+            }
+            let Some(h) = h_max(task, &actions, &next) else {
+                continue;
+            };
+            if !best.contains_key(&next) && best.len() >= limits.max_states {
+                return PlanResult {
+                    status: PlanStatus::Limit(format!("state cap {} reached", limits.max_states)),
+                    expanded,
+                    states: best.len(),
+                    ground_actions: actions.len(),
+                };
+            }
+            best.insert(next.clone(), next_g);
+            parent.insert(next.clone(), (state.clone(), idx));
+            queue.push(Reverse((next_g.saturating_add(h), next_g, next)));
+        }
+    }
+    PlanResult {
+        status: PlanStatus::Impossible,
+        expanded,
+        states: best.len(),
         ground_actions: actions.len(),
     }
 }
@@ -390,5 +590,49 @@ mod tests {
     fn invalid_plan_is_rejected() {
         let task = parse_task(DOMAIN, PROBLEM).unwrap();
         assert!(validate_actions(&task, &[("move".into(), vec!["b".into(), "a".into()])]).is_err());
+    }
+
+    #[test]
+    fn astar_and_bfs_return_shortest_plans() {
+        let problem = r#"
+            (define (problem p)
+              (:domain move)
+              (:objects a b c d)
+              (:init (at item a) (connected a b) (connected b c) (connected c d))
+              (:goal (at item d)))
+        "#;
+        let task = parse_task(DOMAIN, problem).unwrap();
+        let mut b = Budget::steps(1_000_000);
+        let bfs = plan(&task, &mut b, Limits::default());
+        let astar = plan_with(&task, &mut b, Limits::default(), Search::AStar);
+        let PlanStatus::Found(bfs_plan) = bfs.status else {
+            panic!("BFS failed: {bfs:?}");
+        };
+        let PlanStatus::Found(astar_plan) = astar.status else {
+            panic!("A* failed: {astar:?}");
+        };
+        assert_eq!(bfs_plan.actions.len(), 3);
+        assert_eq!(astar_plan.actions.len(), bfs_plan.actions.len());
+        validate_actions(&task, &[("move".into(), vec!["a".into(), "b".into()])]).unwrap_err();
+    }
+
+    #[test]
+    fn astar_respects_negative_preconditions() {
+        let domain = r#"
+            (define (domain neg)
+              (:predicates (at ?x) (blocked ?x) (done))
+              (:action go
+                :parameters (?x)
+                :precondition (and (at ?x) (not (blocked ?x)))
+                :effect (done)))
+        "#;
+        let problem = r#"
+            (define (problem p) (:domain neg) (:objects a)
+              (:init (at a) (blocked a)) (:goal (done)))
+        "#;
+        let task = parse_task(domain, problem).unwrap();
+        let mut b = Budget::steps(1_000_000);
+        let out = plan_with(&task, &mut b, Limits::default(), Search::AStar);
+        assert_eq!(out.status, PlanStatus::Impossible);
     }
 }

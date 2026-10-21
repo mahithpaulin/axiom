@@ -198,12 +198,14 @@ ground actions are allowed; beyond that is `ResourceLimit`.
 
 ### 5.3 Search and verdicts
 
-Breadth-first search over states gives a shortest plan in number of actions
-(unit action cost). Caps: 50,000 stored states and 100,000 expansions.
+The engine uses A* with the admissible delete-relaxation `h_max` heuristic by
+default; `planner::plan` selects breadth-first order for compatibility. Both
+orders enumerate states in nondecreasing plan length (unit action cost) and
+return a shortest plan. Caps: 50,000 stored states and 100,000 expansions.
 
 - `Found`: a plan reaches the goal. Verification replays the exact action
   sequence.
-- `Impossible`: BFS exhausted the reachable state space without a plan.
+- `Impossible`: search exhausted the reachable state space without a plan.
   Verification re-runs the exhaustive search.
 - `ResourceLimit`: a cap or the step budget stopped the search. This is not
   impossibility.
@@ -224,9 +226,19 @@ merge semantics. A precise answer from the router is exactly the answer of the
 selected engine plus a successful call to that engine's verifier. Routing
 failures and verification failures are errors.
 
-The router does not translate evidence between domains. Cross-domain
-composition (for example, feeding a Datalog closure into a theory solver) is not
-implemented.
+The router does not translate evidence itself. One separate pipeline,
+`axiom-bridge`, composes ASP and planning:
+
+1. enumerate and verify the ASP outcome, then decode the selected stable model;
+2. drop atoms whose predicate is not declared by the PDDL domain, and reject a
+   shared predicate with the wrong arity or an unknown object;
+3. add the remaining atoms to the task's initial state;
+4. solve the translated task and replay the plan against it.
+
+`Found` therefore means a plan exists for the combined initial state. It does
+not assert anything about the planning task without the ASP facts, nor that the
+selected stable model is unique. Other cross-domain compositions, including
+Datalog-to-theory and ASP-to-SMT filtering, are not implemented.
 
 ## 8. Resource-limit semantics
 

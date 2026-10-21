@@ -1,8 +1,9 @@
 //! Axiom v4 STRIPS planning engine.
 //!
-//! The planner grounds a finite untyped STRIPS task and runs deterministic BFS.
-//! A found plan is serialised as an action sequence and independently replayed by
-//! [`planner::validate_actions`]. Exhausting the finite reachable state space is
+//! The planner grounds a finite untyped STRIPS task and runs deterministic A*
+//! with an admissible delete-relaxation heuristic (BFS is retained by
+//! [`planner::plan`]). A found plan is serialised as an action sequence and
+//! independently replayed by [`planner::validate_actions`]. Exhausting the finite reachable state space is
 //! the only route to `Impossible`; every cap hit is `ResourceLimit`.
 //!
 //! # Example
@@ -36,7 +37,7 @@ use std::time::Instant;
 
 pub use axiom_core::{Engine, Problem};
 pub use pddl::{PddlError, PlanningTask};
-pub use planner::{GroundAction, Plan, PlanResult, PlanStatus};
+pub use planner::{GroundAction, Plan, PlanResult, PlanStatus, Search};
 
 const PLAN_KIND: &str = "axiom-plan";
 const EXHAUSTED_KIND: &str = "axiom-plan-exhausted";
@@ -65,28 +66,12 @@ impl PlanningEngine {
             PddlError::Malformed(m) => Outcome::error(m),
         })
     }
-}
 
-impl Engine for PlanningEngine {
-    fn capabilities(&self) -> Capabilities {
-        Capabilities::new("axiom-strips-bfs", env!("CARGO_PKG_VERSION"))
-            .handles(ProblemKind::Planning)
-            .fragment("untyped finite STRIPS")
-            .fragment("negative preconditions and delete effects")
-            .guarantee(Guarantee::Sound)
-            .guarantee(Guarantee::Deterministic)
-            .guarantee(Guarantee::EvidenceChecked)
-            .limit("no typing, equality, numeric fluents, conditional effects, or costs")
-            .limit("grounding, state, and expansion caps")
-    }
-
-    fn solve(&mut self, problem: &Problem, budget: &mut Budget) -> Outcome {
+    /// Solve an already parsed task. This is the entry point used by
+    /// cross-domain pipelines that construct a task from validated facts.
+    pub fn solve_task(&self, task: &PlanningTask, budget: &mut Budget) -> Outcome {
         let start = Instant::now();
-        let task = match self.task(problem) {
-            Ok(t) => t,
-            Err(o) => return o,
-        };
-        let result = planner::plan(&task, budget, planner::Limits::default());
+        let result = planner::plan_with(task, budget, planner::Limits::default(), Search::AStar);
         let stats = Stats::new(budget.spent(), start.elapsed().as_millis() as u64)
             .with("expanded", result.expanded)
             .with("states", result.states as u64)
@@ -117,7 +102,8 @@ impl Engine for PlanningEngine {
         }
     }
 
-    fn verify(&self, problem: &Problem, outcome: &Outcome) -> Result<(), VerifyError> {
+    /// Verify an outcome against the exact task that produced it.
+    pub fn verify_task(&self, task: &PlanningTask, outcome: &Outcome) -> Result<(), VerifyError> {
         if !outcome.verdict.is_definite() {
             if outcome.evidence.is_some() {
                 return Err(VerifyError::InvalidEvidence(
@@ -126,11 +112,6 @@ impl Engine for PlanningEngine {
             }
             return Ok(());
         }
-        let task = pddl::parse_task(
-            Self::source(problem).map_err(VerifyError::Malformed)?.0,
-            Self::source(problem).map_err(VerifyError::Malformed)?.1,
-        )
-        .map_err(|e| VerifyError::Malformed(e.to_string()))?;
         let evidence = outcome
             .evidence
             .as_ref()
@@ -159,7 +140,7 @@ impl Engine for PlanningEngine {
                         found: actions.len().to_string(),
                     });
                 }
-                planner::validate_actions(&task, &actions).map_err(VerifyError::InvalidEvidence)?;
+                planner::validate_actions(task, &actions).map_err(VerifyError::InvalidEvidence)?;
                 Ok(())
             }
             Verdict::Impossible => {
@@ -169,7 +150,12 @@ impl Engine for PlanningEngine {
                     ));
                 }
                 let mut budget = Budget::steps(VERIFY_STEPS);
-                let again = planner::plan(&task, &mut budget, planner::Limits::default());
+                let again = planner::plan_with(
+                    task,
+                    &mut budget,
+                    planner::Limits::default(),
+                    Search::AStar,
+                );
                 match again.status {
                     PlanStatus::Impossible => Ok(()),
                     PlanStatus::Limit(m) => Err(VerifyError::ResourceLimit(m)),
@@ -183,6 +169,38 @@ impl Engine for PlanningEngine {
                 "planning engine only produces Found and Impossible".into(),
             )),
         }
+    }
+}
+
+impl Engine for PlanningEngine {
+    fn capabilities(&self) -> Capabilities {
+        Capabilities::new("axiom-strips-astar", env!("CARGO_PKG_VERSION"))
+            .handles(ProblemKind::Planning)
+            .fragment("untyped finite STRIPS")
+            .fragment("negative preconditions and delete effects")
+            .fragment("admissible delete-relaxation h_max search")
+            .guarantee(Guarantee::Sound)
+            .guarantee(Guarantee::Deterministic)
+            .guarantee(Guarantee::EvidenceChecked)
+            .limit("no typing, equality, numeric fluents, conditional effects, or costs")
+            .limit("grounding, state, and expansion caps")
+    }
+
+    fn solve(&mut self, problem: &Problem, budget: &mut Budget) -> Outcome {
+        let task = match self.task(problem) {
+            Ok(t) => t,
+            Err(o) => return o,
+        };
+        self.solve_task(&task, budget)
+    }
+
+    fn verify(&self, problem: &Problem, outcome: &Outcome) -> Result<(), VerifyError> {
+        let task = pddl::parse_task(
+            Self::source(problem).map_err(VerifyError::Malformed)?.0,
+            Self::source(problem).map_err(VerifyError::Malformed)?.1,
+        )
+        .map_err(|e| VerifyError::Malformed(e.to_string()))?;
+        self.verify_task(&task, outcome)
     }
 }
 

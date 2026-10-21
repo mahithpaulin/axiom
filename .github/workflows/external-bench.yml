@@ -1,0 +1,62 @@
+name: external differential benchmarks
+
+# This is a benchmark round, not a correctness gate. A missing external oracle
+# is reported as skipped; a disagreement is a hard failure.
+on:
+  workflow_dispatch:
+    inputs:
+      allow_missing_oracles:
+        description: "Succeed when an oracle is unavailable (still fail on mismatches)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  differential:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install independent oracle frontends
+        continue-on-error: true
+        run: |
+          python3 -m pip install --user z3-solver clingo
+          sudo apt-get update
+          sudo apt-get install -y souffle z3 cmake g++ make || true
+          sudo apt-get install -y vampire || true
+
+      - name: Build Fast Downward (best effort)
+        continue-on-error: true
+        run: |
+          git clone --depth 1 https://github.com/aibasel/downward.git /tmp/downward
+          cd /tmp/downward
+          python3 build.py
+
+      - name: Build Axiom benchmark driver
+        run: cargo build --release -p axiom-bench
+
+      - name: Run one differential round
+        env:
+          FAST_DOWNWARD: /tmp/downward/fast-downward.py
+        run: |
+          FLAGS=""
+          if [ "${{ inputs.allow_missing_oracles }}" = "true" ]; then FLAGS="--allow-missing-oracles"; fi
+          python3 benchmarks/external/run.py \
+            --axiom target/release/axiom-bench \
+            --out artifacts \
+            $FLAGS
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: external-bench-results
+          path: artifacts/
+          if-no-files-found: warn

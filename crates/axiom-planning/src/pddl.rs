@@ -541,6 +541,46 @@ pub struct PlanningTask {
     pub goal: Vec<PLiteral>,
 }
 
+impl PlanningTask {
+    /// Validate a ground atom against this task's declared predicates and
+    /// objects. Used before a foreign engine's facts are admitted into `:init`.
+    pub fn validate_fact(&self, fact: &FAtom) -> Result<(), String> {
+        let arity =
+            self.domain.predicates.get(&fact.predicate).ok_or_else(|| {
+                format!("predicate {} is not declared by the domain", fact.predicate)
+            })?;
+        if *arity != fact.args.len() {
+            return Err(format!(
+                "predicate {} has arity {arity}, but the fact has {} arguments",
+                fact.predicate,
+                fact.args.len()
+            ));
+        }
+        for arg in &fact.args {
+            if arg.starts_with('?') || !self.objects.contains(arg) {
+                return Err(format!("unknown object {arg} in {fact}"));
+            }
+        }
+        Ok(())
+    }
+
+    /// Return a task whose initial state is the union of the current one and
+    /// `extra`. Every extra atom must be a legal ground atom of this task.
+    pub fn with_added_init(
+        &self,
+        extra: impl IntoIterator<Item = FAtom>,
+    ) -> Result<PlanningTask, String> {
+        let mut init = self.init.clone();
+        for fact in extra {
+            self.validate_fact(&fact)?;
+            init.insert(fact);
+        }
+        let mut next = self.clone();
+        next.init = init;
+        Ok(next)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

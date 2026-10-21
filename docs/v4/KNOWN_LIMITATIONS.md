@@ -5,9 +5,12 @@ This is the unflattering list. If a capability is not here, check
 
 ## 1. Cross-cutting
 
-- **No external differential testing.** ASP, FOL, planning, and the proof kernel
-  are not compared against clingo, Vampire, Fast Downward, Lean, or any
-  independent implementation.
+- **External differential testing is new and narrow.** The
+  `external differential benchmarks` workflow runs small SAT, ASP, Datalog,
+  planning, and FOL fixtures against Z3, clingo, Soufflé, Fast Downward, and
+  Vampire when those oracles are installed. It is not a conformance suite, an
+  exhaustive benchmark corpus, or a performance claim. Missing oracles are
+  reported as skipped, not as agreement.
 - **No formal verification.** “Verified” means the outcome was re-checked by a
   Rust function. It does not mean a machine-checked metatheory.
 - **Shared-code verification.** Datalog replay reuses the Datalog engine; ASP
@@ -15,8 +18,10 @@ This is the unflattering list. If a capability is not here, check
   transition relation. A shared bug can pass both.
 - **Evidence is not a stable format.** Payloads are text and may change without
   a compatibility guarantee.
-- **No cross-domain composition.** The router dispatches; it does not translate
-  a Datalog result into a theory constraint or filter ASP models with SMT.
+- **Cross-domain composition is one checked pipeline.** `axiom-bridge` turns a
+  verified ASP stable model into extra PDDL initial facts, then verifies the
+  plan against the translated task. The router still only dispatches, and
+  Datalog-to-theory, SMT filtering, and evidence translation are absent.
 - **No cancellation token.** The prover checks a step budget at clause
   selection; long single steps are not pre-empted.
 - **Wall-clock budgets are not reproducible.** They are best-effort; step
@@ -30,9 +35,11 @@ This is the unflattering list. If a capability is not here, check
 ## 2. Datalog (`axiom-core::DatalogEngine`)
 
 - Stratified Datalog only; negative cycles are rejected.
-- A negated literal must become fully ground before it can be evaluated. A
-  non-ground negated literal blocks the derivation. The engine does not reject
-  every unsafe program, so unsafe inputs can be incomplete.
+- Forward rules are now checked for Datalog safety: head variables and
+  variables in negated literals must be bound by a positive body literal.
+  Unsafe forward rules are rejected at build time instead of producing an
+  incomplete closure. `backward_only` function-head rules retain the older
+  contract and can still decline on unbound negation.
 - Function symbols in rule heads are `backward_only`; they are not saturated.
 - Backward resolution accepts ground goals, positive bodies, and a depth bound
   of 64. Non-ground subgoals and negation inside `backward_only` rules decline.
@@ -87,15 +94,18 @@ This is the unflattering list. If a capability is not here, check
 
 - Untyped STRIPS only. Typing, equality, numeric fluents, conditional effects,
   quantified/disjunctive goals, costs, and durative actions are rejected.
-- No action costs: BFS minimises action count, not cost.
-- No heuristics; blind BFS. State caps are 50,000 stored states and 100,000
-  expansions; ground actions are capped at 100,000.
-- `Impossible` is only valid after exhaustive BFS within caps. A cap is
+- No action costs: search minimises action count, not cost.
+- The engine uses A* with an admissible delete-relaxation `h_max` heuristic by
+  default; `planner::plan` retains breadth-first order for direct callers.
+  State caps are 50,000 stored states and 100,000 expansions; ground actions
+  are capped at 100,000.
+- `Impossible` is only valid after exhaustive A* search within caps. A cap is
   `ResourceLimit`, never `Impossible`.
 - Plan verification replays the same transition code used by search.
 - PDDL parsing is a small S-expression subset; it is not a conformant PDDL
   parser and does not support all legal syntax for the advertised features.
-- No plan optimality certificate beyond “BFS explored in increasing depth”.
+- No plan optimality certificate beyond the admissible heuristic and exhaustive
+  search argument.
 
 ## 6. Proof kernel (`axiom-proof`)
 

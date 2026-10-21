@@ -86,7 +86,8 @@ The second clause is a **soundness** requirement, not an optimisation. Treating 
 partially instantiated `not q(X)` as satisfied would derive facts that classical
 negation does not license. The price is incompleteness for programs whose
 negations never become ground — recorded in `KNOWN_LIMITATIONS.md`. Programs are
-expected to be safe; unsafe inputs are not reinterpreted.
+expected to be safe; forward rules that violate safety are rejected at build
+time. Function-head `backward_only` rules retain the older, incomplete contract.
 
 ### 3.2 Completeness boundary
 
@@ -184,8 +185,8 @@ Implemented in this repository:
 * **V2 representations** (`src/repr.rs`, `src/choose.rs`): a deterministic
   chooser over the implemented puzzle/plan paths.
 * **v4 engines** (`crates/`): finite ASP with independent model validation,
-  bounded FOL resolution with a trusted kernel, untyped STRIPS BFS planning, and
-  a verifying router. Their algorithms are in `docs/v4/SEMANTICS.md`.
+  bounded FOL resolution with a trusted kernel, untyped STRIPS A*/BFS planning,
+  a verifying router, and one checked ASP-to-planning bridge. Their algorithms are in `docs/v4/SEMANTICS.md`.
 
 Not implemented:
 
@@ -195,6 +196,6 @@ Not implemented:
 * equality in the FOL prover;
 * provenance semirings, magic sets, join-order planning, parallel evaluation;
 * ASP aggregates, cardinality bounds, optimisation, and function symbols;
-* planning heuristics, action costs, and typed PDDL;
-* external-solver differential benchmarks;
+* action costs and typed PDDL (an admissible `h_max` heuristic is implemented);
+* broad external-solver differential benchmarks (a 12-fixture harness exists);
 * any neural component.

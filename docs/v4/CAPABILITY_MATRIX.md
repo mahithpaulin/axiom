@@ -28,9 +28,9 @@ capability is not upgraded from Partial/Planned because a document claims it.
 | 4. ASP (clingo reference) | implemented finite fragment with model validation |
 | 5. First-order proving (Vampire reference) | implemented bounded resolution; no equality, no `Refuted` |
 | 6. Trusted proof kernel (Lean 4 reference) | small resolution kernel + STLC checker; not formally verified |
-| 7. Planning / heuristic search (Fast Downward reference) | root StateGraph plus untyped STRIPS BFS |
-| 8. v4 common infrastructure | implemented `Engine`/evidence/registry contract |
-| 9. Cross-domain router | implemented dispatch + per-engine verification |
+| 7. Planning / heuristic search (Fast Downward reference) | untyped STRIPS with A* `h_max`; root StateGraph retained |
+| 8. v4 common infrastructure | implemented `Engine`/evidence/registry contract; external harness added |
+| 9. Cross-domain router | implemented dispatch + per-engine verification; one checked ASP→planning bridge |
 
 Counts were removed because they invited scorekeeping. Several “implemented”
 rows are narrow fragments with explicit boundaries.
@@ -45,7 +45,7 @@ rows are narrow fragments with explicit boundaries.
 | Datalog facts, rules, positive recursion | Implemented | `src/solver_fwd.rs:438`, `src/program.rs`; `tests/soundness.rs`, `tests/v2.rs` | Least model over the finite positive fragment. |
 | Semi-naive evaluation | Implemented | `src/solver_fwd.rs:438`; `diag` job (2 rounds, exact closure) | Mixed all-old/all-new delta; no per-rule variant selection. |
 | Recursive inference with function symbols in heads | Partial | `src/program.rs` `backward_only`, `src/solver_bwd.rs`; §B4/§B5 | Ground goals, positive bodies, depth 64; saturation skips these rules. |
-| Stratified negation | Partial | `src/program.rs:28-29`, `src/solver_fwd.rs:98-116`; `tests/soundness.rs::negation_waits_for_later_positive_bindings` | B3 scheduling fixed. A negated literal that never becomes ground still blocks the derivation; safe programs only. |
+| Stratified negation | Partial | `src/program.rs` safety check; `src/solver_fwd.rs:98-116`; `tests/soundness.rs::negation_waits_for_later_positive_bindings` | B3 scheduling fixed. Unsafe forward rules are rejected. `backward_only` rules keep the older incomplete-negation contract. |
 | Negation-as-failure / unstratified negation | Absent | `src/program.rs` rejects negative cycles; `docs/LANGUAGE_SPEC.md` §8 | Deliberate: a unique least model is required for `Refuted`. |
 | Efficient relations / indexing | Partial | `src/db.rs:41-44,128`; `diag` job | Hash indexes on argument positions 0 and 1 only; no cardinality-aware join order. |
 | Join ordering / query planning | Absent | `docs/ROADMAP.md` II7 | Body order is source order. |
@@ -89,7 +89,7 @@ by a DPLL(T) driver over the existing SAT core.
 | Optimization (minimize/maximize, MaxSMT) | Absent | — | Planned after the decision fragment is reliable. |
 | SMT-LIB parser / printer | Absent | — | Rust API only; no external conformance suite. |
 | Arrays, bitvectors, strings, quantifiers | Absent | — | Explicitly outside the current fragment. |
-| Differential testing against Z3 | Absent | — | Planned as a test-only oracle; no runtime dependency. |
+| Differential testing against Z3 | Partial | `benchmarks/external/run.py` (SAT fixtures) | Test-only oracle; no runtime dependency. Two pigeonhole cases only. |
 
 ---
 
@@ -97,16 +97,16 @@ by a DPLL(T) driver over the existing SAT core.
 
 | Capability | Status | Evidence | Notes / boundary |
 |---|---|---|---|
-| Semi-naive recursive evaluation | Implemented | `src/solver_fwd.rs:438`; `diag`, `tests/soundness.rs::naive_and_semi_naive_agree_on_transitive_closure` | Same algorithm family as Soufflé; not yet differential-tested. |
+| Semi-naive recursive evaluation | Implemented | `src/solver_fwd.rs:438`; `diag`, `tests/soundness.rs::naive_and_semi_naive_agree_on_transitive_closure` | Same algorithm family as Soufflé; small differential fixture added in `benchmarks/external/`. |
 | Multiple relation indexes | Partial | `src/db.rs:41-44` | Positions 0 and 1; later positions scan. |
 | Join ordering / cardinality-aware planning | Absent / Planned Stage 5 | — | Source order only. |
 | Efficient tuple storage | Partial | `src/term.rs` (16 B/node), `src/db.rs`; `memory_per_fact_probe` | 20 B IR payload/fact; ~324 B RSS/fact with proofs, ~197 B without. |
 | Duplicate suppression | Implemented | `src/db.rs` insertion path | Hash-consing plus predicate membership. |
-| Stratified negation | Partial | `src/solver_fwd.rs:98-116`; §B3 | Scheduling fixed; non-ground negation still blocks (safe programs only). |
+| Stratified negation | Partial | `src/program.rs`; `src/solver_fwd.rs:98-116` | Scheduling and safe-rule rejection fixed; backward-only rules remain outside the safe fragment. |
 | Provenance / derivation explanations | Partial | `src/proof.rs`, `src/check.rs` | Full derivation records when `ProofMode::Full`; no provenance semiring. |
 | Memory-efficient storage / peak measurement | Partial | `src/bench.rs`; F-03 | Dedicated probe is valid; per-row RSS column is post-solve and invalid. |
 | Parallel evaluation | Absent | — | Single-threaded. |
-| Soufflé differential benchmarks | Absent / Planned Stage 5 | — | Must use identical datasets and semantics; Soufflé as test oracle only. |
+| Soufflé differential benchmarks | Partial | `benchmarks/external/run.py`; `external-bench.yml` | One transitive-closure and one safe-negation fixture; not a corpus or performance claim. |
 | Magic sets / demand transformation | Absent | `docs/ROADMAP.md` II7 | Planned compiler pass. |
 | Rule subsumption / argument reordering | Absent | `docs/ROADMAP.md` II7 | Only constant folding and dead static rules exist today. |
 
@@ -168,8 +168,8 @@ by a DPLL(T) driver over the existing SAT core.
 | Finite state representation | Implemented | root `src/state.rs`; `axiom-planning` | Root graph and STRIPS state sets. |
 | Declarative actions | Implemented (STRIPS) | `crates/axiom-planning/src/pddl.rs` | Untyped STRIPS; negative preconditions/delete effects. |
 | Initial state and goals | Implemented | `pddl.rs`, `planner.rs` | Conjunctive goals only. |
-| Breadth-first baseline | Implemented | `planner::plan` | Shortest in action count. |
-| A* / heuristics | Root only | `src/search.rs` | Not wired into the STRIPS planner. |
+| Breadth-first baseline | Implemented | `planner::plan` | Shortest in action count; direct-call compatibility. |
+| A* / admissible `h_max` | Implemented | `planner::plan_with`, `h_max` | Wired into `axiom-planning`; default engine search; shortest plans. |
 | Duplicate-state detection | Implemented | `planner.rs` visited set | Deterministic. |
 | Plan reconstruction | Implemented | `Plan` action sequence | — |
 | Independent plan validation | Implemented | `validate_actions` | Replays from initial state; shares transition code. |
@@ -192,9 +192,10 @@ by a DPLL(T) driver over the existing SAT core.
 | Structured errors | Implemented | `VerifyError`, `RouteError`, `KernelError` | Per-layer, not one universal error enum. |
 | Stable evidence serialisation | Partial | text payloads | No versioned schema. |
 | Versioned internal API | Partial | workspace crate versions | No semver policy for unpublished crates. |
-| Conformance/test harness | Partial | per-crate tests + CI | No external differential suite. |
-| Benchmark suite | Partial | root benches + CI | No v4 engine performance benchmarks. |
+| Conformance/test harness | Partial | per-crate tests + CI; `benchmarks/external/` | One small differential round, not conformance. |
+| Benchmark suite | Partial | root benches + CI; `benchmarks/external/` | Differential suite exists; no scaling study yet. |
 | Cross-domain router | Implemented (dispatch) | `crates/axiom-router` | First-registered-wins; no translation. |
+| Checked ASP→planning bridge | Implemented (one pipeline) | `crates/axiom-bridge` | Selected validated model becomes extra `:init`; plan is replayed against translated task. |
 | MCP/TUI adapters | Absent on `v4` | `v3-slice-1` branch | Unmerged; not part of v4. |
 
 ---
@@ -207,9 +208,9 @@ by a DPLL(T) driver over the existing SAT core.
 | SAT + bounded planning | Root `StateGraph` lowering only | Not wired to `axiom-planning`. |
 | FOL proof checked by the trusted kernel | Implemented | `FolEngine::verify` + `check_resolution`. |
 | Planning plan replayed by a validator | Implemented | `validate_actions`. |
-| ASP model filtered by a constraint engine | Not implemented | No constraint adapter. |
+| ASP model used as planning initial facts | Implemented | `axiom-bridge`; ASP and planning evidence both checked. |
 | Router dispatches all four domains | Implemented | `Router::standard` + verification. |
-| Cross-domain evidence translation | Not implemented | Router does not translate. |
+| Cross-domain evidence translation | Partial | One typed ASP→PDDL translation; router still does not translate. |
 
 ## Additional specialist capabilities
 
