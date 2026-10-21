@@ -87,7 +87,8 @@ by a DPLL(T) driver over the existing SAT core.
 | Model construction and validation | Implemented | `src/theory.rs:1309` `verify_theory_sat` | Re-asserts the model's atoms and checks consistency. |
 | Unsat evidence | Implemented | `src/theory.rs:1152` `verify_theory_unsat`; `tests/theory.rs` | Propositional RUP plus theory-lemma replay. |
 | Optimization (minimize/maximize, MaxSMT) | Absent | — | Planned after the decision fragment is reliable. |
-| SMT-LIB parser | Implemented (subset) | `crates/axiom-smt/src/parse.rs` | `set-logic`, `declare-fun`, `declare-const`, `assert`, `check-sat`; Int/Bool sorts; quantifier-free difference logic with uninterpreted functions. No printer. |
+| SMT-LIB parser | Implemented (subset) | `crates/axiom-smt/src/parse.rs` | `set-logic`, `declare-fun`, `declare-const`, `assert`, `check-sat`, `push`, `pop`; Int/Bool sorts; quantifier-free difference logic with uninterpreted functions. No printer. |
+| SMT sessions | Implemented | `crates/axiom-smt/src/lib.rs` | One answer per `check-sat`, each with its own certificate. Every check is solved from scratch: no clause or theory-state reuse. |
 | SMT-LIB conformance | Absent | — | No external conformance suite; the differential harness checks five hand-written fixtures against Z3. |
 | Arrays, bitvectors, strings, quantifiers | Absent | — | Explicitly outside the current fragment. |
 | Differential testing against Z3 | Partial | `benchmarks/external/run.py` | Test-only oracle; no runtime dependency. Two pigeonhole SAT cases and five SMT-LIB cases. |

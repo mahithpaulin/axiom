@@ -186,7 +186,9 @@ Implemented in this repository:
   chooser over the implemented puzzle/plan paths.
 * **SMT-LIB frontend** (`crates/axiom-smt/`): a subset reader that normalises
   comparisons to differences, encodes the Boolean structure by Tseitin CNF, and
-  decides the result with the CDCL(T) driver. Not a general SMT solver.
+  decides the result with the CDCL(T) driver. `push`/`pop` scopes and several
+  `check-sat` commands are supported, each check solved from scratch. Not a
+  general SMT solver.
 * **v4 engines** (`crates/`): finite ASP with independent model validation,
   bounded FOL resolution with a trusted kernel (ground equality by congruence
   closure, otherwise equality axioms), untyped STRIPS A*/BFS planning, a

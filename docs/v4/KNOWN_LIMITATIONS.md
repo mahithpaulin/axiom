@@ -106,8 +106,9 @@ This is the unflattering list. If a capability is not here, check
 - A coefficient other than `1` or `-1`, a sum of two terms on one side of a
   comparison, and a numeral function argument are `Unsupported` rather than
   approximated.
-- `push`/`pop`, a second `check-sat`, and incremental solving are
-  `Unsupported`: the driver is single-shot per formula.
+- `push`/`pop` scopes and several `check-sat` commands per file are
+  supported, but every check is solved from scratch: no learnt clause and no
+  theory state is reused between checks, so this is not incremental solving.
 - The model reports the truth value of each theory atom. Integer values are
   not reconstructed, so `get-model` output is not a numeric assignment.
 - `Unknown` is never returned for a well-formed problem; a stopped search is

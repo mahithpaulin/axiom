@@ -41,10 +41,15 @@ and fed serialised evidence.
 `crates/axiom-smt` reads a quantifier-free difference-logic subset of
 SMT-LIB 2 and decides it over CDCL(T) with checked certificates.
 
+`push`/`pop` scopes and several `check-sat` commands per file are supported,
+but each check is solved from scratch: no learnt clause and no theory state is
+reused, so the solving is not incremental yet.
+
 Remaining work: general linear integer arithmetic (a Simplex or an
-Farkas-based decision procedure), `push`/`pop` with incremental solving, a
-printer, and an external conformance suite. Until then, a coefficient of `2`
-or a second `check-sat` is `Unsupported` rather than approximated.
+Farkas-based decision procedure), real incremental solving (assumption-based
+clause reuse with theory lemmas scoped to their assumptions), a printer, and
+an external conformance suite. Until then, a coefficient of `2` is
+`Unsupported` rather than approximated.
 
 ### 1.5 B3 residual safety
 

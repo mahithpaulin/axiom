@@ -183,7 +183,7 @@ hence the goal follows. `Proved` is emitted only after the kernel check passes.
 `Problem::smt(source)` reads an SMT-LIB 2 subset:
 
 - commands: `set-logic`, `set-info`, `set-option`, `declare-fun`,
-  `declare-const`, `assert`, `check-sat`, `get-model`, `exit`;
+  `declare-const`, `assert`, `check-sat`, `push`, `pop`, `get-model`, `exit`;
 - sorts: `Int` and `Bool`;
 - terms: numerals, declared constants, uninterpreted function application,
   `+`, `-`, `*` with a numeral coefficient of `1` or `-1`;
@@ -192,8 +192,14 @@ hence the goal follows. `Proved` is emitted only after the kernel check passes.
 
 The theory fragment is **quantifier-free difference logic with uninterpreted
 functions**: `x - y <= c`, `x = y`, `x != y` over terms. A coefficient other
-than `1` or `-1`, a sum of two terms on one side, a numeral function argument,
-`push`/`pop`, and a second `check-sat` are `Unsupported`, never approximated.
+than `1` or `-1`, a sum of two terms on one side, and a numeral function
+argument are `Unsupported`, never approximated.
+
+`push` and `pop` open and close assertion scopes. Each `check-sat` snapshots
+the assertions in scope, so a file can ask several questions and a later `pop`
+cannot change an answer that was already given. Every check is solved
+independently: no learnt clause and no theory state is carried over, so this is
+not incremental *solving* yet, only incremental *questions*.
 
 ### 5.2 Translation
 
@@ -215,12 +221,14 @@ than `1` or `-1`, a sum of two terms on one side, a numeral function argument,
 
 ### 5.3 Verdicts
 
-- `Found`: the assertion set is satisfiable. The evidence carries the SAT
-  model; the checker re-checks that the model satisfies the encoded clauses
-  and re-asserts the model's atoms in a fresh theory state.
-- `Impossible`: the assertion set is unsatisfiable. The evidence carries the
-  RUP proof and the theory lemmas; the checker replays the propositional proof
-  and every theory lemma in a fresh state.
+- `Found`: every check in the session is satisfiable. The evidence carries one
+  SAT model per check; the checker re-checks that each model satisfies the
+  encoded clauses of its own check and re-asserts its atoms in a fresh theory
+  state.
+- `Impossible`: at least one check is unsatisfiable. The evidence carries the
+  RUP proof and the theory lemmas of that check; the checker replays the
+  propositional proof and every theory lemma in a fresh state. The other
+  checks keep their own answers in the evidence.
 - `ResourceLimit`: a budget stopped the search.
 - `Unsupported`: the input is outside the declared fragment.
 - `Error`: the input could not be parsed.

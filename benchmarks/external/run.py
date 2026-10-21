@@ -138,6 +138,42 @@ def z3_smt(path: Path):
     return "unknown"
 
 
+def read_smt_script(path: Path):
+    """Read an SMT-LIB script into nested lists, keeping the term structure.
+
+    Only what the harness needs is supported: commands are read as lists, so
+    `(assert (<= x 2))` keeps its inner list and can be rendered back
+    unchanged.
+    """
+    text = path.read_text()
+    text = "\n".join(line.split(";")[0] for line in text.splitlines())
+    tokens = text.replace("(", " ( ").replace(")", " ) ").split()
+
+    def read_expr(index):
+        token = tokens[index]
+        if token != "(":
+            return token, index + 1
+        index += 1
+        items = []
+        while tokens[index] != ")":
+            item, index = read_expr(index)
+            items.append(item)
+        return items, index + 1
+
+    commands = []
+    index = 0
+    while index < len(tokens):
+        command, index = read_expr(index)
+        commands.append(command)
+    return commands
+
+
+def render_smt(node) -> str:
+    if isinstance(node, str):
+        return node
+    return "(" + " ".join(render_smt(item) for item in node) + ")"
+
+
 def z3_smt_script(path: Path):
     """Interpret a small SMT-LIB script (assert/push/pop/check-sat) with Z3.
 
@@ -148,44 +184,26 @@ def z3_smt_script(path: Path):
         import z3  # type: ignore
     except ImportError:
         return None
-    text = path.read_text()
-    text = "\n".join(line.split(";")[0] for line in text.splitlines())
-    tokens = text.replace("(", " ( ").replace(")", " ) ").split()
-    commands = []
-    index = 0
-
-    def read_expr():
-        nonlocal index
-        token = tokens[index]
-        index += 1
-        if token != "(":
-            return [token]
-        depth = 1
-        start = index
-        while depth:
-            current = tokens[index]
-            index += 1
-            if current == "(":
-                depth += 1
-            elif current == ")":
-                depth -= 1
-        return tokens[start : index - 1]
-
-    while index < len(tokens):
-        commands.append(read_expr())
     declarations = []
     solver = z3.Solver()
     answers = []
-    for command in commands:
+    for command in read_smt_script(path):
+        if not isinstance(command, list) or not command:
+            continue
         head = command[0]
         if head in ("declare-fun", "declare-const"):
-            declarations.append(" ".join(command))
+            declarations.append(render_smt(command))
         elif head == "assert":
-            source = " ".join(declarations + command)
+            source = " ".join(declarations + [render_smt(command)])
             try:
                 solver.add(z3.parse_smt2_string(source))
             except z3.Z3Exception:
-                return "error"
+                # The declarations are already in the context; a repeated
+                # declaration is not an error for the assertion itself.
+                try:
+                    solver.add(z3.parse_smt2_string(render_smt(command)))
+                except z3.Z3Exception:
+                    return "error"
         elif head == "push":
             solver.push()
         elif head == "pop":
