@@ -1,9 +1,8 @@
 # Axiom v4 — release report
 
 Status: release candidate on branch `v4`.
-Code verification run: `39591302192` at `77ca7ac`
-(2026-10-21). Documentation-only and capability-string edits after that commit
-are covered by the final CI run recorded in the PR.
+Code and documentation verification run: `39592092838` at `ae05d33`
+(2026-10-21).
 
 ## 1. What this release adds
 
@@ -28,7 +27,7 @@ available and keep their own tests and certificates.
 
 ## 2. Verification evidence
 
-Run `39591302192` (all 10 jobs successful):
+Run `39592092838` (all 10 jobs successful):
 
 | Job | Result |
 |---|---|

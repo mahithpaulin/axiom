@@ -100,7 +100,7 @@ relation are trusted tested code. See `docs/v4/VERIFICATION.md`.
 ## Current verification status
 
 GitHub Actions is authoritative; the Android/Termux development device is not
-used for builds. Run `39591302192` on branch `v4` passed all 10 jobs:
+used for builds. Run `39592092838` on branch `v4` passed all 10 jobs:
 
 - 231 library/integration tests, 0 failed, 0 ignored;
 - 6 doc tests;
