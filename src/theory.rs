@@ -1173,6 +1173,14 @@ pub fn verify_theory_unsat(
             vars: FxHashMap::default(),
         };
         let mut comb = Combination::new();
+        // Index the hypothesis terms before asserting them: congruence only
+        // merges indexed terms, so `a = b` can only contradict `f(a) != f(b)`
+        // when both function terms are already known.
+        for &h in &lem.hyps {
+            let v = h.unsigned_abs() - 1;
+            let desc = meaning.get(&v).ok_or(TheoryCheckErr::BadAtom)?;
+            index_atom_terms(&mut rb, &mut comb, desc).map_err(|_| TheoryCheckErr::BadAtom)?;
+        }
         for &h in &lem.hyps {
             let v = h.unsigned_abs() - 1;
             let desc = meaning.get(&v).ok_or(TheoryCheckErr::BadAtom)?;
@@ -1192,6 +1200,35 @@ pub fn verify_theory_unsat(
                     return Err(TheoryCheckErr::Lemma(i));
                 }
             }
+        }
+    }
+    Ok(())
+}
+
+/// Index the terms of one atom into the congruence closure.
+///
+/// Congruence only merges terms that were indexed, and both verifiers build a
+/// fresh store per check. The disequality's terms must therefore be known
+/// *before* an equality is asserted: with `a = b` and `f(a) != f(b)`, the
+/// equality is what makes the disequality false, and that step needs
+/// `f(a)` and `f(b)` in the index.
+fn index_atom_terms(
+    rb: &mut Rebuilt,
+    comb: &mut Combination,
+    desc: &AtomDesc,
+) -> Result<(), TheoryCheckErr> {
+    match desc {
+        AtomDesc::Rdl { x, y, .. } => {
+            let rx = rb.build(x)?;
+            let ry = rb.build(y)?;
+            comb.cc.add_term(&rb.store, rx);
+            comb.cc.add_term(&rb.store, ry);
+        }
+        AtomDesc::Eq(s, t) | AtomDesc::Neq(s, t) => {
+            let rs = rb.build(s)?;
+            let rt = rb.build(t)?;
+            comb.cc.add_term(&rb.store, rs);
+            comb.cc.add_term(&rb.store, rt);
         }
     }
     Ok(())
@@ -1317,6 +1354,13 @@ pub fn verify_theory_sat(model: &[i8], theory: &TheoryProof) -> bool {
         vars: FxHashMap::default(),
     };
     let mut comb = Combination::new();
+    // Index every atom's terms first, so a later equality can propagate
+    // through congruence to a disequality that is asserted before it.
+    for (_, d) in &theory.atoms {
+        if index_atom_terms(&mut rb, &mut comb, d).is_err() {
+            return false;
+        }
+    }
     for (v, d) in &theory.atoms {
         if *v as usize >= model.len() {
             return false;

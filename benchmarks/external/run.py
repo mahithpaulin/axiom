@@ -117,6 +117,26 @@ def z3_sat(path: Path):
     return str(s.check())
 
 
+def z3_smt(path: Path):
+    try:
+        import z3  # type: ignore
+    except ImportError:
+        return None
+    text = path.read_text().replace("(check-sat)", "")
+    try:
+        assertions = z3.parse_smt2_string(text)
+    except z3.Z3Exception:
+        return "error"
+    solver = z3.Solver()
+    solver.add(assertions)
+    result = solver.check()
+    if result == z3.sat:
+        return "sat"
+    if result == z3.unsat:
+        return "unsat"
+    return "unknown"
+
+
 def clingo_count(path: Path, max_models: int = 64):
     try:
         import clingo  # type: ignore
@@ -388,6 +408,75 @@ def main():
         c.match = None if c.skipped else c.axiom["answer"] == c.oracle_result == "proved"
         if c.match is False:
             print(f"MISMATCH fol/{c.name}: axiom={c.axiom['answer']} oracle={c.oracle_result}", file=sys.stderr)
+        cases.append(c)
+
+    # ---- SMT: difference logic and equality, Z3 as the oracle ------------
+    smt_work = work / "smt"
+    smt_work.mkdir()
+    smt_cases = [
+        (
+            "difference-sat",
+            "(set-logic QF_IDL)\n"
+            "(declare-fun x () Int)\n"
+            "(declare-fun y () Int)\n"
+            "(assert (<= (- y x) 3))\n"
+            "(assert (>= x 0))\n"
+            "(assert (<= x 2))\n"
+            "(check-sat)\n",
+            "found",
+        ),
+        (
+            "difference-unsat",
+            "(set-logic QF_IDL)\n"
+            "(declare-fun x () Int)\n"
+            "(assert (<= x 2))\n"
+            "(assert (>= x 5))\n"
+            "(check-sat)\n",
+            "impossible",
+        ),
+        (
+            "equality-unsat",
+            "(set-logic QF_IDL)\n"
+            "(declare-fun x () Int)\n"
+            "(assert (= x 3))\n"
+            "(assert (= x 4))\n"
+            "(check-sat)\n",
+            "impossible",
+        ),
+        (
+            "congruence-unsat",
+            "(set-logic QF_UFIDL)\n"
+            "(declare-fun f (Int) Int)\n"
+            "(declare-fun a () Int)\n"
+            "(declare-fun b () Int)\n"
+            "(assert (= a b))\n"
+            "(assert (not (= (f a) (f b))))\n"
+            "(check-sat)\n",
+            "impossible",
+        ),
+        (
+            "boolean-sat",
+            "(set-logic QF_IDL)\n"
+            "(declare-fun p () Bool)\n"
+            "(declare-fun x () Int)\n"
+            "(assert (or p (and (<= x 0) (<= (- x 0) 1))))\n"
+            "(check-sat)\n",
+            "found",
+        ),
+    ]
+    smt_oracle_vocabulary = {"sat": "found", "unsat": "impossible"}
+    for name, source, expected in smt_cases:
+        path = smt_work / f"{name}.smt2"
+        path.write_text(source)
+        c = Case("smt", name, expected)
+        c.axiom = axiom_run(axiom_bin, ["smt", str(path)])
+        c.oracle = "z3"
+        raw = z3_smt(path)
+        c.oracle_result = None if raw is None else smt_oracle_vocabulary.get(raw, raw)
+        c.skipped = c.oracle_result is None
+        c.match = None if c.skipped else c.axiom["answer"] == c.oracle_result == expected
+        if c.match is False:
+            print(f"MISMATCH smt/{name}: axiom={c.axiom['answer']} oracle={c.oracle_result}", file=sys.stderr)
         cases.append(c)
 
     summary = {

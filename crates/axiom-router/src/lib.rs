@@ -1,6 +1,6 @@
 //! Axiom v4 cross-domain router.
 //!
-//! [`Router::standard`] registers the four v4 engines. Routing is by declared
+//! [`Router::standard`] registers the v4 engines. Routing is by declared
 //! [`ProblemKind`](axiom_core::ProblemKind), with first-registered-wins among
 //! engines that claim the same kind. Every definite answer is handed back to the
 //! producing engine's independent verifier before the router returns it; a
@@ -68,6 +68,7 @@ impl Router {
         r.registry.register(axiom_core::DatalogEngine::new());
         r.registry.register(axiom_asp::AspEngine::new());
         r.registry.register(axiom_prover::FolEngine::new());
+        r.registry.register(axiom_smt::SmtEngine::new());
         r.registry.register(axiom_planning::PlanningEngine::new());
         r
     }
@@ -152,17 +153,19 @@ mod tests {
             ),
             Problem::asp("{ p }. :- p.", 0),
             Problem::fol("axiom P(a) -> Q(a). axiom P(a). goal Q(a)."),
+            Problem::smt("(declare-fun x () Int) (assert (<= x 2)) (assert (>= x 0)) (check-sat)"),
             Problem::planning(DOMAIN, PDDL),
         ];
         let mut b = Budget::steps(5_000_000);
         let out = r.solve_all(&problems, &mut b).unwrap();
-        assert_eq!(out.len(), 4);
+        assert_eq!(out.len(), 5);
         assert_eq!(out[0].outcome.verdict, Verdict::Proved);
         assert_eq!(out[1].outcome.verdict, Verdict::Found);
         assert_eq!(out[2].outcome.verdict, Verdict::Proved);
         assert_eq!(out[3].outcome.verdict, Verdict::Found);
-        assert_eq!(r.trace().len(), 4);
-        assert_eq!(r.capabilities().len(), 4);
+        assert_eq!(out[4].outcome.verdict, Verdict::Found);
+        assert_eq!(r.trace().len(), 5);
+        assert_eq!(r.capabilities().len(), 5);
     }
 
     #[test]

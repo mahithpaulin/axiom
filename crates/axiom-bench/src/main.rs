@@ -11,12 +11,14 @@ use axiom_asp::AspEngine;
 use axiom_core::{DatalogEngine, Engine, Problem, Verdict};
 use axiom_planning::PlanningEngine;
 use axiom_prover::FolEngine;
+use axiom_smt::SmtEngine;
 use std::process::ExitCode;
 
 fn usage() -> ! {
     eprintln!(
         "usage: axiom-bench sat <dimacs> | datalog <source> [goal] | \
-         asp <source> [max_models] | planning <domain> <problem> | fol <source>"
+         asp <source> [max_models] | planning <domain> <problem> | fol <source> | \
+         smt <source>"
     );
     std::process::exit(2);
 }
@@ -125,6 +127,16 @@ fn run() -> Result<(), String> {
             let source = read(path)?;
             let problem = Problem::fol(source);
             let mut engine = FolEngine::new();
+            let mut budget = Budget::steps(100_000_000);
+            let out = engine.solve(&problem, &mut budget);
+            println!("verdict={}", out.verdict.as_str());
+            println!("steps={}", out.stats.steps);
+        }
+        "smt" => {
+            let path = args.get(1).ok_or("smt needs a source path")?;
+            let source = read(path)?;
+            let problem = Problem::smt(source);
+            let mut engine = SmtEngine::new();
             let mut budget = Budget::steps(100_000_000);
             let out = engine.solve(&problem, &mut budget);
             println!("verdict={}", out.verdict.as_str());

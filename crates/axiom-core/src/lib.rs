@@ -30,6 +30,7 @@ pub enum ProblemKind {
     Asp,
     Fol,
     Planning,
+    Smt,
 }
 
 impl ProblemKind {
@@ -39,6 +40,7 @@ impl ProblemKind {
             ProblemKind::Asp => "asp",
             ProblemKind::Fol => "fol",
             ProblemKind::Planning => "planning",
+            ProblemKind::Smt => "smt",
         }
     }
 }
@@ -67,6 +69,9 @@ pub enum Problem {
         domain: String,
         problem: String,
     },
+    Smt {
+        source: String,
+    },
 }
 
 impl Problem {
@@ -76,6 +81,7 @@ impl Problem {
             Problem::Asp { .. } => ProblemKind::Asp,
             Problem::Fol { .. } => ProblemKind::Fol,
             Problem::Planning { .. } => ProblemKind::Planning,
+            Problem::Smt { .. } => ProblemKind::Smt,
         }
     }
 
@@ -103,6 +109,12 @@ impl Problem {
         Problem::Planning {
             domain: domain.into(),
             problem: problem.into(),
+        }
+    }
+
+    pub fn smt(source: impl Into<String>) -> Self {
+        Problem::Smt {
+            source: source.into(),
         }
     }
 }

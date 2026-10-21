@@ -12,4 +12,5 @@ axiom = { path = "../.." }
 axiom-core = { path = "../axiom-core" }
 axiom-asp = { path = "../axiom-asp" }
 axiom-prover = { path = "../axiom-prover" }
+axiom-smt = { path = "../axiom-smt" }
 axiom-planning = { path = "../axiom-planning" }

@@ -5,6 +5,7 @@ members = [
     "crates/axiom-asp",
     "crates/axiom-proof",
     "crates/axiom-prover",
+    "crates/axiom-smt",
     "crates/axiom-planning",
     "crates/axiom-router",
     "crates/axiom-bridge",
