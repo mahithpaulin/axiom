@@ -1,0 +1,15 @@
+[package]
+name = "axiom-router"
+version = "0.2.0"
+edition = "2021"
+rust-version = "1.75"
+description = "Axiom v4 deterministic cross-domain engine router with verified outcomes."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/mahithpaulin/axiom"
+
+[dependencies]
+axiom = { path = "../.." }
+axiom-core = { path = "../axiom-core" }
+axiom-asp = { path = "../axiom-asp" }
+axiom-prover = { path = "../axiom-prover" }
+axiom-planning = { path = "../axiom-planning" }

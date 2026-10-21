@@ -84,7 +84,7 @@ impl Term {
 
     pub fn from_sexp(s: &Sexp) -> Result<Self, KernelError> {
         let xs = list(s, "term")?;
-        let tag = head_of(&xs, "term")?;
+        let tag = head_of(xs, "term")?;
         match tag {
             "var" if xs.len() == 2 => Ok(Term::var(atom(&xs[1], "variable")?)),
             "const" if xs.len() == 2 => Ok(Term::constant(atom(&xs[1], "constant")?)),
@@ -150,7 +150,7 @@ impl Atom {
 
     pub fn from_sexp(s: &Sexp) -> Result<Self, KernelError> {
         let xs = list(s, "atom")?;
-        if xs.len() != 3 || head_of(&xs, "atom")? != "atom" {
+        if xs.len() != 3 || head_of(xs, "atom")? != "atom" {
             return Err(KernelError::Malformed("atom form".into()));
         }
         let args = list(&xs[2], "atom args")?
@@ -212,7 +212,7 @@ impl Literal {
 
     pub fn from_sexp(s: &Sexp) -> Result<Self, KernelError> {
         let xs = list(s, "literal")?;
-        if xs.len() != 3 || head_of(&xs, "literal")? != "lit" {
+        if xs.len() != 3 || head_of(xs, "literal")? != "lit" {
             return Err(KernelError::Malformed("literal form".into()));
         }
         let atom = Atom::from_sexp(&xs[2])?;
@@ -378,7 +378,7 @@ fn rule_to_sexp(r: &StepRule) -> Sexp {
 
 fn rule_from_sexp(s: &Sexp) -> Result<StepRule, KernelError> {
     let xs = list(s, "rule")?;
-    let tag = head_of(&xs, "rule")?;
+    let tag = head_of(xs, "rule")?;
     let num = |i: usize| -> Result<usize, KernelError> {
         let v = xs
             .get(i)
@@ -394,7 +394,7 @@ fn rule_from_sexp(s: &Sexp) -> Result<StepRule, KernelError> {
             first: num(2)?,
             second: num(3)?,
         }),
-        "resolve" if xs.len() == 6 => Ok(StepRule::Resolve {
+        "resolve" if xs.len() == 5 => Ok(StepRule::Resolve {
             left: num(1)?,
             right: num(2)?,
             left_lit: num(3)?,

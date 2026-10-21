@@ -6,6 +6,7 @@ members = [
     "crates/axiom-proof",
     "crates/axiom-prover",
     "crates/axiom-planning",
+    "crates/axiom-router",
 ]
 resolver = "2"
 

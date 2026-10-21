@@ -295,10 +295,13 @@ mod tests {
     }
 
     #[test]
-    fn positive_loop_does_not_create_a_self_supported_model() {
+    fn positive_loop_does_not_support_its_head() {
+        // The empty set is the (only) stable model: the loop cannot derive p,
+        // and it does not get to assume p merely because p is in the candidate.
         let e = solve("p :- p.", 0);
         assert!(e.complete);
-        assert!(e.models.is_empty());
+        assert_eq!(e.models.len(), 1);
+        assert!(e.models[0].is_empty());
     }
 
     #[test]
