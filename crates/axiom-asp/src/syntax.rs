@@ -374,7 +374,7 @@ impl Parser {
                 let body = self.body()?;
                 let stmt = Statement::Constraint(body);
                 check_safety(&stmt)?;
-                return Ok(stmt);
+                Ok(stmt)
             }
             Some(Tok::LBrace) => {
                 self.bump();
@@ -401,7 +401,7 @@ impl Parser {
                 };
                 let stmt = Statement::Choice(Choice { heads, body });
                 check_safety(&stmt)?;
-                return Ok(stmt);
+                Ok(stmt)
             }
             Some(Tok::Show) => {
                 self.bump();

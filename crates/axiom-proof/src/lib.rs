@@ -720,7 +720,7 @@ mod tests {
             Clause::new(vec![Literal::negative(q(Term::constant("a")))]),
             &mut proof,
         );
-        let d = resolve(&mut proof, a, b, 1, 0);
+        let d = resolve(&mut proof, a, b, 0, 0);
         let _ = resolve(&mut proof, d, c, 0, 0);
         check_resolution(&proof).unwrap();
         let text = proof.to_text();

@@ -152,7 +152,7 @@ impl Engine for PlanningEngine {
                     .get("plan")
                     .ok_or_else(|| VerifyError::InvalidEvidence("missing plan".into()))?;
                 let actions =
-                    planner::parse_plan_text(text).map_err(|e| VerifyError::InvalidEvidence(e))?;
+                    planner::parse_plan_text(text).map_err(VerifyError::InvalidEvidence)?;
                 if actions.len() != length {
                     return Err(VerifyError::Mismatch {
                         expected: length.to_string(),
