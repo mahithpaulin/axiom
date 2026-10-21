@@ -115,8 +115,10 @@ separate from the release evidence above:
   `ProgramError::UnsafeRule`;
 - `AspEngine::models` exposes validated, structured stable models;
 - `axiom-bridge` adds a checked ASP-to-planning pipeline;
-- `axiom-bench` and `benchmarks/external/run.py` provide a small differential
-  correctness round, run manually by `.github/workflows/external-bench.yml`;
+- `axiom-bench` and `benchmarks/external/run.py` provide small differential
+  correctness rounds, run manually by `.github/workflows/external-bench.yml`;
+- differential round 2 (run `39597261031`) matched all 12 fixtures against Z3,
+  clingo, Soufflé, Fast Downward, and Vampire, with no mismatches or skips;
 - documentation is updated for these changes.
 
 Local validation on the development device: `cargo fmt --check`, workspace

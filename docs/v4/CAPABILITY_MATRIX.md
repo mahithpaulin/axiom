@@ -106,7 +106,7 @@ by a DPLL(T) driver over the existing SAT core.
 | Provenance / derivation explanations | Partial | `src/proof.rs`, `src/check.rs` | Full derivation records when `ProofMode::Full`; no provenance semiring. |
 | Memory-efficient storage / peak measurement | Partial | `src/bench.rs`; F-03 | Dedicated probe is valid; per-row RSS column is post-solve and invalid. |
 | Parallel evaluation | Absent | — | Single-threaded. |
-| Soufflé differential benchmarks | Partial | `benchmarks/external/run.py`; `external-bench.yml` | One transitive-closure and one safe-negation fixture; not a corpus or performance claim. |
+| Soufflé differential benchmarks | Partial | `benchmarks/external/run.py`; `external-bench.yml` | One transitive-closure and one safe-negation program (two queries); not a corpus or performance claim. |
 | Magic sets / demand transformation | Absent | `docs/ROADMAP.md` II7 | Planned compiler pass. |
 | Rule subsumption / argument reordering | Absent | `docs/ROADMAP.md` II7 | Only constant folding and dead static rules exist today. |
 
@@ -192,7 +192,7 @@ by a DPLL(T) driver over the existing SAT core.
 | Structured errors | Implemented | `VerifyError`, `RouteError`, `KernelError` | Per-layer, not one universal error enum. |
 | Stable evidence serialisation | Partial | text payloads | No versioned schema. |
 | Versioned internal API | Partial | workspace crate versions | No semver policy for unpublished crates. |
-| Conformance/test harness | Partial | per-crate tests + CI; `benchmarks/external/` | One small differential round, not conformance. |
+| Conformance/test harness | Partial | per-crate tests + CI; `benchmarks/external/` | Two small differential rounds; not conformance. |
 | Benchmark suite | Partial | root benches + CI; `benchmarks/external/` | Differential suite exists; no scaling study yet. |
 | Cross-domain router | Implemented (dispatch) | `crates/axiom-router` | First-registered-wins; no translation. |
 | Checked ASP→planning bridge | Implemented (one pipeline) | `crates/axiom-bridge` | Selected validated model becomes extra `:init`; plan is replayed against translated task. |

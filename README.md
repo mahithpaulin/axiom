@@ -148,9 +148,10 @@ measurements (baseline `docs/v4/BASELINE.md`):
 The `rss kB` column in kernel output is sampled after the solver is dropped and
 is **not** peak memory (`src/bench.rs:206-258`, F-03). Do not use it as a
 baseline. A differential harness now exists (`benchmarks/external/` and the
-`external differential benchmarks` workflow); it records oracle availability
-and mismatches rather than assuming agreement. No competitive performance claim
-is made until that round has run and been reported.
+`external differential benchmarks` workflow). Round 2 (run `39597261031`)
+matched all 12 fixtures against Z3, clingo, Soufflé, Fast Downward, and Vampire,
+with zero mismatches and zero skips. These are small correctness fixtures, not
+a competitive performance claim.
 
 ## Documentation
 

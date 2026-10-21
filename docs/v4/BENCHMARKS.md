@@ -63,11 +63,11 @@ A small differential correctness round is separate from these gates:
 |---|---|---|
 | External differential | `python3 benchmarks/external/run.py --axiom target/release/axiom-bench` | 12 fixtures against Z3, clingo, Soufflé, Fast Downward, and Vampire when installed |
 
-The workflow `.github/workflows/external-bench.yml` is manual, installs oracles
-best-effort, records skipped oracles explicitly, and uploads `results.json` and
-`results.md`. A skipped oracle is not agreement, and one fixture per family is
-not a conformance or performance result. No v4 engine has a throughput benchmark
-or scaling study, and no competitive ranking is claimed.
+The workflow `.github/workflows/external-bench.yml` is manual and uploads
+`results.json` and `results.md`. Round 2 required every oracle and matched all 12
+fixtures. A skipped oracle is not agreement, and one fixture per family is not a
+conformance or performance result. No v4 engine has a throughput benchmark or
+scaling study, and no competitive ranking is claimed.
 
 ## 5. RSS defect
 
@@ -105,7 +105,9 @@ The external harness exists, but these are still not done:
 Until these exist, v4 claims are functional: what each fragment decides, with
 what evidence, and where it stops.
 
-## 8. External differential round 1
+## 8. External differential rounds
+
+### Round 1
 
 Run `39596516261` (`external differential benchmarks`, 2026-10-21) used commit
 `65ea4db` and the 12-fixture harness. Results:
@@ -123,3 +125,19 @@ including the skipped ones.
 This is a functional smoke test, not a conformance or performance result. The
 workflow now installs Soufflé 2.5 and Vampire 5.1.0 from pinned upstream release
 assets for later rounds.
+
+### Round 2
+
+Run `39597261031` (2026-10-21, commit `a5328e4`) installed pinned Soufflé 2.5
+and Vampire 5.1.0 binaries. With `allow_missing_oracles=false`, the run required
+every oracle and completed:
+
+- 12 cases total;
+- 12 matched an independent oracle;
+- 0 mismatches;
+- 0 skipped.
+
+The round covers two Z3 SAT cases, five clingo ASP cases, three Soufflé Datalog
+cases, one Fast Downward planning case, and one Vampire FOL case. This removes
+the round-1 oracle gap but does not turn the suite into a conformance or
+performance claim: the fixtures are small and deliberately hand-written.
