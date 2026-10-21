@@ -30,8 +30,16 @@ jobs:
         run: |
           python3 -m pip install --user z3-solver clingo
           sudo apt-get update
-          sudo apt-get install -y souffle z3 cmake g++ make || true
-          sudo apt-get install -y vampire || true
+          sudo apt-get install -y z3 cmake g++ make unzip curl || true
+          curl -fsSL -o /tmp/souffle.deb \
+            https://github.com/souffle-lang/souffle/releases/download/2.5/x86_64-ubuntu-2404-souffle-2.5-Linux.deb
+          sudo dpkg -i /tmp/souffle.deb || sudo apt-get install -f -y
+          curl -fsSL -o /tmp/vampire.zip \
+            https://github.com/vprover/vampire/releases/download/v5.1.0/vampire-Linux-X64.zip
+          unzip -o /tmp/vampire.zip -d /tmp/vampire-bin
+          sudo install -m 0755 /tmp/vampire-bin/vampire /usr/local/bin/vampire
+          souffle --version || true
+          vampire --version || true
 
       - name: Build Fast Downward (best effort)
         continue-on-error: true
