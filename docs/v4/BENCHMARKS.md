@@ -7,8 +7,8 @@ competitive performance claim against any external solver.
 ## 1. Environment
 
 - Authoritative runner: GitHub Actions `ubuntu-latest`, single-threaded jobs.
-- Local device: Android/Termux phone. It is not used for builds, tests, or
-  benchmarks; see `docs/v4/BASELINE.md` §1.
+- Local device: Android/Termux phone. It is used for development checks, but
+  CI remains authoritative; see `docs/v4/BASELINE.md` §1.
 - Toolchain: `stable` (not pinned). The declared MSRV `1.75` is not exercised by
   CI; this remains an open infrastructure gap.
 - Timings are wall-clock on shared runners and are noisy. Deterministic work
@@ -61,10 +61,10 @@ A small differential correctness round is separate from these gates:
 
 | Harness | Command | Scope |
 |---|---|---|
-| External differential | `python3 benchmarks/external/run.py --axiom target/release/axiom-bench` | 12 fixtures against Z3, clingo, Soufflé, Fast Downward, and Vampire when installed |
+| External differential | `python3 benchmarks/external/run.py --axiom target/release/axiom-bench` | 14 fixtures against Z3, clingo, Soufflé, Fast Downward, and Vampire when installed |
 
 The workflow `.github/workflows/external-bench.yml` is manual and uploads
-`results.json` and `results.md`. Round 2 required every oracle and matched all 12
+`results.json` and `results.md`. Round 3 required every oracle and matched all 14
 fixtures. A skipped oracle is not agreement, and one fixture per family is not a
 conformance or performance result. No v4 engine has a throughput benchmark or
 scaling study, and no competitive ranking is claimed.
@@ -94,7 +94,7 @@ separate process-level probe.
 
 The external harness exists, but these are still not done:
 
-- a broad external differential suite (the current suite has 12 fixtures);
+- a broad external differential suite (the current suite has 14 fixtures);
 - a cross-engine conformance fixture format;
 - performance and scaling comparisons with clingo/Vampire/Fast Downward/Z3;
 - peak-RSS instrumentation;
@@ -141,3 +141,18 @@ The round covers two Z3 SAT cases, five clingo ASP cases, three Soufflé Datalog
 cases, one Fast Downward planning case, and one Vampire FOL case. This removes
 the round-1 oracle gap but does not turn the suite into a conformance or
 performance claim: the fixtures are small and deliberately hand-written.
+
+### Round 3
+
+Run `39601253129` (2026-10-21, commit `8073d13`) added two ground-equality FOL
+fixtures and required every oracle:
+
+- 14 cases total;
+- 14 matched an independent oracle;
+- 0 mismatches;
+- 0 skipped.
+
+The FOL cases are `equality-substitution` (`a = b`, `P(a)` therefore `P(b)`) and
+`equality-congruence` (`a = b` therefore `f(a) = f(b)`); Vampire reported
+`Theorem` for both. The suite remains a small functional differential check, not
+a conformance or performance claim.

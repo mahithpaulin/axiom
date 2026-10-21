@@ -248,7 +248,9 @@ a real claim rather than "the search gave up". Half the value is in refusing
 programs that have no least model instead of picking one.
 
 **Cost.** No general first-order refutation. No clauses, no disjunction, no
-quantifiers, no equality over non-ground terms, no Herbrand theorem. Proving
+quantifiers, no equality in the root Datalog engine, no Herbrand theorem.
+(The separate v4 FOL crate has bounded equality support; see
+`docs/v4/KNOWN_LIMITATIONS.md`.) Proving
 `p ∨ q` is out of reach; so is anything requiring more than one positive
 alternative.
 

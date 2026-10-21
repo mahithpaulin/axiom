@@ -94,8 +94,8 @@ test, and the router domain sweep.
 - external differential suites and a conformance harness;
 - in-closure peak-RSS measurement;
 - ASP performance and a real grounder;
-- FOL equality and countermodel/`Refuted` support (or an explicit decision to
-  omit them permanently);
+- FOL superposition and countermodel/`Refuted` support (ground/non-ground
+  equality is implemented in §8);
 - planning heuristics and cost-aware search;
 - cross-domain evidence translation;
 - MSRV CI for the declared 1.75;
@@ -119,10 +119,17 @@ separate from the release evidence above:
   correctness rounds, run manually by `.github/workflows/external-bench.yml`;
 - differential round 2 (run `39597261031`) matched all 12 fixtures against Z3,
   clingo, Soufflé, Fast Downward, and Vampire, with no mismatches or skips;
+- FOL equality is parsed as an infix atom. Ground equality is normalised by
+  congruence closure when the axioms are positive units; other equality uses
+  reflexivity, symmetry, transitivity, and congruence axioms. Both paths still
+  produce ordinary resolution proofs checked by the kernel;
+- differential round 3 (run `39601253129`) added equality-substitution and
+  equality-congruence FOL cases and matched all 14 fixtures with no mismatches
+  or skips;
 - documentation is updated for these changes.
 
 Local validation on the development device: `cargo fmt --check`, workspace
-`clippy -D warnings`, 243 library/integration tests, and 7 doc tests pass.
-CI run `39598017389` at `5b16efb` also passed all 10 jobs with the same 243
-tests and 7 doc tests. The release statements in sections 4 and 7 describe
-`d606aab`; this section supersedes them for the new work.
+`clippy --all-targets -D warnings`, 255 library/integration tests, and 7 doc
+tests pass. CI run `39601214713` at `8073d13` also passed all 10 jobs. The
+release statements in sections 4 and 7 describe `d606aab`; this section
+supersedes them for the new work.

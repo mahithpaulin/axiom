@@ -102,10 +102,10 @@ relation are trusted tested code. See `docs/v4/VERIFICATION.md`.
 ## Current verification status
 
 GitHub Actions is authoritative. The Android/Termux device can run local
-checks and release builds, but is not a CI substitute. Run `39598017389` on
-branch `v4` passed all 10 jobs:
+checks and release builds, but is not a CI substitute. Run `39601214713` on
+branch `v4` (`8073d13`) passed all 10 jobs:
 
-- 243 library/integration tests, 0 failed, 0 ignored;
+- 255 library/integration tests, 0 failed, 0 ignored;
 - 7 doc tests;
 - workspace `clippy -D warnings`, `fmt --check`, examples, and known-defects
   gates;
@@ -148,10 +148,10 @@ measurements (baseline `docs/v4/BASELINE.md`):
 The `rss kB` column in kernel output is sampled after the solver is dropped and
 is **not** peak memory (`src/bench.rs:206-258`, F-03). Do not use it as a
 baseline. A differential harness now exists (`benchmarks/external/` and the
-`external differential benchmarks` workflow). Round 2 (run `39597261031`)
-matched all 12 fixtures against Z3, clingo, Soufflé, Fast Downward, and Vampire,
-with zero mismatches and zero skips. These are small correctness fixtures, not
-a competitive performance claim.
+`external differential benchmarks` workflow). Round 3 (run `39601253129`)
+matched all 14 fixtures against Z3, clingo, Soufflé, Fast Downward, and Vampire,
+with zero mismatches and zero skips; it adds two ground-equality FOL cases.
+These are small correctness fixtures, not a competitive performance claim.
 
 ## Documentation
 

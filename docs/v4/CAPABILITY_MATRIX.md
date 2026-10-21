@@ -192,7 +192,7 @@ by a DPLL(T) driver over the existing SAT core.
 | Structured errors | Implemented | `VerifyError`, `RouteError`, `KernelError` | Per-layer, not one universal error enum. |
 | Stable evidence serialisation | Partial | text payloads | No versioned schema. |
 | Versioned internal API | Partial | workspace crate versions | No semver policy for unpublished crates. |
-| Conformance/test harness | Partial | per-crate tests + CI; `benchmarks/external/` | Two small differential rounds; not conformance. |
+| Conformance/test harness | Partial | per-crate tests + CI; `benchmarks/external/` | Three small differential rounds; not conformance. |
 | Benchmark suite | Partial | root benches + CI; `benchmarks/external/` | Differential suite exists; no scaling study yet. |
 | Cross-domain router | Implemented (dispatch) | `crates/axiom-router` | First-registered-wins; no translation. |
 | Checked ASP→planning bridge | Implemented (one pipeline) | `crates/axiom-bridge` | Selected validated model becomes extra `:init`; plan is replayed against translated task. |
