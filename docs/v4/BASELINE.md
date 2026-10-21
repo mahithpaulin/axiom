@@ -171,3 +171,11 @@ The GitHub workflow is `.github/workflows/ci.yml`.
 * v4 work branch: `v4`.
 * No source file was modified to produce this baseline; only `docs/v4/` was
   added. The source tree remains byte-identical to `4c60f3f`.
+
+Stage 0 checkpoint commit `4e6bd18` was pushed as `v4` and opened as draft PR
+#14. Its CI run
+[`39583623858`](https://github.com/mahithpaulin/axiom/actions/runs/39583623858)
+completed with **10/10 jobs green** (`fmt`, `test`, `diag`, `bench-theory`,
+`examples`, `bench-ci`, `clippy`, `known-defects`, `bench-sat`, `doc`). This
+confirms that adding the audit documents does not disturb the baseline build,
+test, or benchmark jobs.
