@@ -625,7 +625,7 @@ impl Formula {
         Formula::Atom(atom)
     }
 
-    pub fn not(f: Formula) -> Self {
+    pub fn negated(f: Formula) -> Self {
         Formula::Not(Box::new(f))
     }
 
@@ -1199,7 +1199,7 @@ impl Formula {
             "true" if items.len() == 1 => Ok(Formula::True),
             "false" if items.len() == 1 => Ok(Formula::False),
             "atom" => Ok(Formula::Atom(atom_from_sexp(s)?)),
-            "not" if items.len() == 2 => Ok(Formula::not(Formula::from_sexp(&items[1])?)),
+            "not" if items.len() == 2 => Ok(Formula::negated(Formula::from_sexp(&items[1])?)),
             "and" => Ok(Formula::and(
                 items[1..]
                     .iter()
