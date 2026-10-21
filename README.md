@@ -1,13 +1,26 @@
-# axiom — symbolic reasoning engine
+# axiom — a multi-engine symbolic reasoning platform
 
-A general symbolic reasoning engine in Rust. One intermediate representation,
-several solvers, machine-checkable proofs. Zero runtime dependencies.
+Axiom is a Rust workspace of checked symbolic engines behind one contract. It
+began as a zero-dependency Datalog/SAT engine and now adds answer-set
+programming, first-order resolution, a trusted proof kernel, STRIPS planning,
+and a router that verifies every definite answer.
 
 ```text
-EXTERNAL WORLD  ──▶  LOGICAL EXTERIOR  ──▶  LOGICAL IR  ──▶  LOGICAL CORE  ──▶  Status + Proof
-                   (only place with        (Program)      (no domain
-                    domain knowledge)                       knowledge)
+source problem
+   │
+   ├── Datalog ────── least model, proofs, SAT/Theory/CSP root engine
+   ├── ASP ────────── finite grounding, stable models, model validation
+   ├── FOL ────────── CNF, bounded resolution, kernel-checked refutations
+   └── Planning ───── untyped STRIPS, BFS, plan replay
+             │
+        axiom-core contract
+             │
+        axiom-router (dispatch + verify)
 ```
+
+## Quick start
+
+Existing Datalog API (zero dependencies):
 
 ```rust
 use axiom::{exterior, Budget, Solver, Status};
@@ -19,138 +32,132 @@ path(X, Y) :- edge(X, Y).
 path(X, Z) :- path(X, Y), edge(Y, Z).
 ?- path(a, c).
 ";
-// The exterior compiles source into the IR. The core sees no domain concepts.
 let parsed = exterior::parse(src).unwrap();
 let goal = parsed.queries[0];
 let mut solver = Solver::new(parsed.program);
-
 let mut budget = Budget::steps(1_000_000);
 assert_eq!(solver.least_model(&mut budget).unwrap().idb_facts, 5);
-
 let out = solver.prove(goal, &mut budget);
 assert_eq!(out.status, Status::Proved);
-let proof = out.proof.expect("a definite status carries a proof");
-assert!(solver.verify(&proof).is_ok());   // re-derived from the rules alone
+assert!(solver.verify(&out.proof.unwrap()).is_ok());
 ```
 
-## Status — read this before trusting anything
+v4 cross-domain API:
 
-This is **Stage 1 plus a CDCL SAT core** (`ROADMAP II1`). The Datalog engine:
-facts, rules with positive and stratified-negated bodies, function symbols in
-rule heads handled by resolution rather than saturation, and complete
-least-model computation. The SAT core: two-watched propagation, first-UIP
-learning, VSIDS, phase saving, Luby restarts, over ground clauses — with
-machine-checked certificates both ways (models by satisfaction, unsatisfiability
-by reverse unit propagation) and a cross-engine differential against the least
-model on positive programs.
+```rust
+use axiom::Budget;
+use axiom_core::Problem;
+use axiom_router::Router;
 
-**The test suite is green with no exclusions.** Two completeness defects that
-used to be `#[ignore]`d (ROADMAP I5, I6) were fixed in `src/solver_fwd.rs`:
-after each derived solution the join undid the substitution to the rule-entry
-mark, discarding the seed bindings, so every second and later solution per
-seed ran with unbound variables — heads came out non-ground and were dropped.
-Undoing to the join's resume point instead keeps the seed. The differential
-test and the `non_ground_heads` canary that caught it stay in the suite as
-regression coverage.
+let mut router = Router::standard();
+let mut budget = Budget::steps(1_000_000);
 
-No SMT, no constraint propagators, no symbolic arithmetic, no
-search, no strategy selection, no neural components, no IR serialisation. See
-`docs/KNOWN_LIMITATIONS.md`, which is itemised and deliberately unflattering.
+// FOL: a proof checked by the resolution kernel.
+let fol = Problem::fol("axiom P(a) -> Q(a). axiom P(a). goal Q(a).");
+let out = router.solve(&fol, &mut budget).unwrap();
+assert_eq!(out.outcome.verdict, axiom_core::Verdict::Proved);
 
-## Version 2 — the representation set (branch `v2`)
-
-V1's engine is untouched. V2 adds new representations with new operations
-under one spine (`src/repr.rs`), all verified by the same Actions matrix:
-
-- **Puzzles** (`src/csp.rs`, `src/puzzle.rs`): 9x9 sudoku, N-queens,
-  map coloring, logic grids — propagation with explanations.
-- **Word problems** (`src/word.rs`): named quantities, linear relations.
-- **Planning** (`src/state.rs`, `src/domains.rs`): shortest plans plus a
-  BMC lowering onto the SAT core, with plan-vs-SAT agreement tests.
-- **Games** (`src/chess.rs`, `src/chess_play.rs`, `src/go.rs`, `src/search.rs`):
-  legal chess movegen (perft 20/400/8902), mate search, **full self-play
-  games** at fixed depth (negamax + TT + quiescence, real draw rules),
-  5x5 go captures with ko, A\*/IDA\*/alpha-beta — and a deterministic
-  chooser (`src/choose.rs`).
-
-```sh
-cargo run --example sudoku      # classic puzzle, verified assignment
-cargo run --example queens      # 8-queens
-cargo run --example chess_mate  # back-rank mate in one + alpha-beta line
-cargo run --example chess_play  # full self-play game at depth 2
-cargo run --example go_capture  # 5x5 capture puzzle
-cargo run --example plan        # chooser -> plan verdict
+// ASP: stable models, each independently validated.
+let asp = Problem::asp("{ p }. :- p.", 0);
+let out = router.solve(&asp, &mut budget).unwrap();
+assert_eq!(out.outcome.verdict, axiom_core::Verdict::Found);
 ```
 
-Scope is stated in `docs/V2.md` §8: full-board chess/go play, unbounded
-integer arithmetic, and a text language for the new representations are
-explicitly future work — anything past the budget is `Exhausted`, never
-a guessed answer.
+## What each engine decides
+
+| Engine | Fragment | A definite answer means |
+|---|---|---|
+| Datalog (`axiom-core`) | stratified Datalog, finite terms, ground-safe negation | least-model derivation or completed absence |
+| SAT (`axiom::sat`) | propositional CNF | model checked by satisfaction; UNSAT by RUP |
+| CDCL(T) (`axiom::theory`) | integer difference logic + equality/congruence | checked model or replayed theory lemmas |
+| ASP (`axiom-asp`) | normal/choice rules, constraints, finite Herbrand grounding | each listed model passes the stable-model test |
+| FOL (`axiom-prover`) | quantifiers, predicates, functions; no equality/arithmetic | kernel-checked empty clause |
+| Planning (`axiom-planning`) | untyped STRIPS, negative preconditions | replayable shortest plan, or exhausted state space |
+| STLC (`axiom-proof::stlc`) | simply typed lambda calculus | inferred type accepted by the checker |
+
+Scoped limits are intentional. FOL saturation is `Unknown`, never `Refuted`.
+ASP returns `Impossible` only for a complete zero-model enumeration. Planning
+returns `Impossible` only after exhaustive BFS. A resource cap is
+`ResourceLimit`, not a negative answer.
 
 ## The honesty contract
 
-> A status that claims knowledge carries a proof object. A status that does not
-> (`Exhausted`, `Unknown`) carries none, and must never be read as a negative
-> answer.
+> A definite verdict carries evidence. An inconclusive verdict carries none and
+> is not a negative result.
 
-`Refuted` specifically means *absent from the least model, and the least model
-was computed to completion* — never "the search gave up". It is only reachable
-when backward resolution exhaustively returns `NotProvable`; any decline (depth
-bound, negated body, non-ground subgoal) reports `Unknown` with the reason.
+| Verdict | Evidence |
+|---|---|
+| `Proved`, `Refuted`, `Found`, `Impossible` | required and re-checked |
+| `Unknown`, `Unsupported`, `ResourceLimit`, `Error` | absent by contract |
 
-General first-order validity is undecidable, so no complete procedure exists.
-The engine reports that rather than hiding it.
+The router calls the producing engine's verifier before returning a definite
+outcome. A verification failure is an error, not a downgraded verdict.
 
-## Verification
+This is not formal verification. The FOL kernel is deliberately small, but the
+CNF converter, root Datalog solver, ASP stable-model test, and plan transition
+relation are trusted tested code. See `docs/v4/VERIFICATION.md`.
 
-`Solver::verify` re-derives a goal from program facts and rules **without using
-the solver's substitution, arena, or join**. That duplication is deliberate: a
-checker sharing the solver's unification cannot catch a unification bug.
+## Current verification status
 
-`tests/reference.rs` is a second, independent implementation — string terms, naive
-fixpoint, no index — used for differential testing. It shares no code with the
-engine, so agreement is evidence rather than tautology.
+GitHub Actions is authoritative; the Android/Termux development device is not
+used for builds. Run `39591302192` on branch `v4` passed all 10 jobs:
 
-```
-cargo test                              # 80 pass, 2 ignored with reasons
-cargo test -- --ignored                 # run the known-defect tests
-cargo bench --bench kernel              # full suite
-cargo bench --bench kernel -- quick     # fast subset
-cargo bench --bench kernel -- diag      # scaling probe with work counters
-```
+- 231 library/integration tests, 0 failed, 0 ignored;
+- 6 doc tests;
+- workspace `clippy -D warnings`, `fmt --check`, examples, and known-defects
+  gates;
+- existing kernel, SAT, theory, and scaling probes.
+
+The B3 negation scheduling bug is fixed with a regression test. Details and
+run IDs are in `docs/v4/RELEASE_REPORT.md`.
+
+## Repository layout
+
+| Path | Contents |
+|---|---|
+| `src/` | root `axiom` crate: Datalog, SAT, theory, CSP, search, games |
+| `crates/axiom-core/` | common contract, registry, Datalog adapter |
+| `crates/axiom-ir/` | typed IR and S-expression serialisation |
+| `crates/axiom-asp/` | ASP syntax, grounding, stable models |
+| `crates/axiom-proof/` | trusted resolution kernel, STLC checker |
+| `crates/axiom-prover/` | FOL parser, CNF, bounded resolution |
+| `crates/axiom-planning/` | untyped STRIPS planner and validator |
+| `crates/axiom-router/` | standard engine bundle |
+| `tests/` | root integration, soundness, SAT, theory, V2 tests |
+| `docs/v4/` | architecture, semantics, verification, benchmarks, limits |
+
+## Performance posture
+
+CPU-first, single-threaded, no GPU path, zero root dependencies. Existing
+measurements (baseline `docs/v4/BASELINE.md`):
+
+- first-argument index examines 495.8× fewer tuples than a scan;
+- transitive-closure candidate growth ≈ 2.00 over `n = 100..800`, zero unbound
+  scans;
+- ~324 B RSS/fact with proofs, ~197 B without (501,500 facts);
+- SAT corpus 9/9 with checked certificates.
+
+The `rss kB` column in kernel output is sampled after the solver is dropped and
+is **not** peak memory (`src/bench.rs:206-258`, F-03). Do not use it as a
+baseline. v4 adds no competitive benchmark claim against clingo, Vampire,
+Fast Downward, Z3, or Soufflé.
 
 ## Documentation
 
 | File | Contents |
 |---|---|
-| `docs/ARCHITECTURE.md` | Layers, data flow, the status contract, the generality test |
-| `docs/IR_SPEC.md` | Terms, atoms, rules, stratification, derivations — normative |
-| `docs/LANGUAGE_SPEC.md` | Surface syntax, limits, every error message |
-| `docs/ALGORITHMS.md` | What is implemented, what it costs, where it stops being correct |
-| `docs/DESIGN_DECISIONS.md` | 17 decisions, each with hypothesis → alternatives → measurement. Reversals kept |
-| `docs/KNOWN_LIMITATIONS.md` | What this cannot do, and why |
-| `docs/ROADMAP.md` | Ordered next steps and eight numbered open defects |
-
-## Performance posture
-
-CPU-first, single-threaded, no GPU path. 16 bytes per term node; a term is a
-`u32`; duplicate interning allocates nothing (asserted, not claimed). Measured:
-a first-argument index examines **495.8× fewer tuples** than a scan (the second
-level measures the same on argument 1); transitive-closure join cost fits slope
-**2.00** over n ∈ {100, 200, 400, 800} with zero unbound scans (was 3.0 with
-256M unbound at n=800), 0.41 s for 321,200 facts.
-
-Memory is the price: ~324 bytes of RSS per derived fact against ~20 B of IR
-payload with proofs on — the second index level cost ~76 B/fact for a 95×
-speedup — and ~197 B/fact with `ProofMode::Off`, which reports `Found` rather
-than `Proved` because it records nothing to check.
-
-## Automation
-
-Autonomous coding tasks run on GitHub Actions, submitted from Termux with
-`agentctl submit "task"` and tracked as `ai-task` issues — no phone, Codespace
-or Kaggle session needs to stay on. See `docs/AI_SUPERVISOR.md` for setup,
-security, usage and recovery.
+| `docs/v4/ARCHITECTURE.md` | workspace layout, data flow, trust boundaries |
+| `docs/v4/SEMANTICS.md` | exact fragment semantics and verdicts |
+| `docs/v4/VERIFICATION.md` | evidence formats and what each verifier checks |
+| `docs/v4/BENCHMARKS.md` | measured vs. counted, RSS defect, limits of claims |
+| `docs/v4/KNOWN_LIMITATIONS.md` | what v4 cannot do and must not claim |
+| `docs/v4/RELEASE_REPORT.md` | shipped changes and verification evidence |
+| `docs/v4/CAPABILITY_MATRIX.md` | per-capability status |
+| `docs/IR_SPEC.md` | root term/rule IR, stratification, serialisation |
+| `docs/LANGUAGE_SPEC.md` | root surface syntax and errors |
+| `docs/ALGORITHMS.md` | root algorithms and complexity boundaries |
+| `docs/KNOWN_LIMITATIONS.md` | root engine limitations and retained defects |
+| `docs/ROADMAP.md` | open work, including items v4 did not fix |
 
 ## Licence
 

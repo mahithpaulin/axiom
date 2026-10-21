@@ -162,10 +162,11 @@ impl Engine for DatalogEngine {
         Capabilities::new("axiom-datalog", env!("CARGO_PKG_VERSION"))
             .handles(ProblemKind::Datalog)
             .fragment("stratified Datalog with finite terms")
-            .fragment("ground-safe negation; unsafe negation is rejected before solving")
+            .fragment("stratified negation, complete when each negated literal becomes ground before evaluation")
             .guarantee(Guarantee::Sound)
             .guarantee(Guarantee::Deterministic)
             .guarantee(Guarantee::EvidenceChecked)
+            .limit("non-ground negated literals block the derivation (sound, incomplete)")
             .limit("function symbols in rule heads are backward-only and not saturated")
             .limit("verification re-runs the solver with a 100M-step budget")
     }

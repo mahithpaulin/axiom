@@ -1,6 +1,6 @@
 # LANGUAGE SPECIFICATION
 
-The surface syntax of the logical exterior. Normative for Stage 1.
+The surface syntax of the logical exterior. Normative for the root crate.
 
 Everything here is implemented in `src/exterior.rs` (553 lines) and documented in
 `docs/IR_SPEC.md` for the representation it produces. Where this document and the
@@ -76,7 +76,7 @@ Integer tokens are accepted **only in argument position** (inside `f(...)`).
 A predicate name is read with `ident()` (`src/exterior.rs:250`), which requires
 `Tok::Ident`, so `?- 1(a).` fails with `expected an identifier`. Integers carry
 no arithmetic: `n(1).` and `n(2).` are two facts and nothing relates them. There
-are no arithmetic constraints anywhere in Stage 1 (see `KNOWN_LIMITATIONS.md`).
+are no arithmetic constraints anywhere in the root surface language (see `KNOWN_LIMITATIONS.md`).
 
 ### 1.4 Case
 
@@ -438,7 +438,7 @@ because variables are rule-local and `is_variable` accepts a leading `_`.
 text yields the same rule count.
 
 This is a debug and proof-rendering facility, not a serialisation format. There
-is no IR dump of any kind in Stage 1 — see `docs/IR_SPEC.md` §10 and
+is no root IR dump of any kind — see `docs/IR_SPEC.md` §10 and
 `docs/KNOWN_LIMITATIONS.md`.
 
 ---

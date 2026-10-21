@@ -1,7 +1,7 @@
 # IR SPECIFICATION
 
 The intermediate representation: what the exterior produces and the core
-consumes. Normative for Stage 1.
+consumes. Normative for the root crate.
 
 ---
 
@@ -112,7 +112,7 @@ Rule    := {
 }
 ```
 
-Stage 1 permits a single positive head only. Multiple heads, nested
+The root language permits a single positive head only. Multiple heads, nested
 disjunctions, and quantifiers are not in the representation.
 
 ### 4.1 `backward_only`
@@ -259,7 +259,7 @@ before reading benchmark numbers that involve `idb_fact_count`.
 
 ## 10. Serialisation
 
-**Not implemented.** No binary or textual IR dump exists in Stage 1. The
+**Not implemented.** No binary or textual root IR dump exists. The
 interchange format is the exterior's surface syntax plus the Rust builder API.
 Recorded as a gap in `ROADMAP.md` rather than silently absent: a
 "general-purpose engine" that cannot load a saved problem is not general-purpose,

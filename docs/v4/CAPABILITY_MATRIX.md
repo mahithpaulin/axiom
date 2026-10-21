@@ -1,7 +1,7 @@
 # Axiom v4 — capability matrix
 
 Audit date: 2026-10-21
-Baseline: `main` @ `4c60f3f` (tag `v4-baseline`)
+Baseline: `main` @ `4c60f3f` (tag `v4-baseline`); status updated for branch `v4`.
 Matrix owner: this file. Narrative docs that disagree are stale until
 reconciled (see `AUDIT.md` F-01).
 
@@ -9,9 +9,9 @@ reconciled (see `AUDIT.md` F-01).
 
 | Label | Meaning |
 |---|---|
-| **Implemented** | Working code in `main`, exercised by at least one named test, for the fragment it documents. |
+| **Implemented** | Working code in `v4`, exercised by at least one named test, for the fragment it documents. |
 | **Partial** | Working subset, or a documented incompleteness / missing sub-capability. |
-| **Planned** | No code on `main`; assigned to a v4 stage. |
+| **Planned** | No code in `v4`; assigned to a future stage. |
 | **Broken** | Code exists but a known defect makes the stated capability unreliable; a regression test is the first fix. |
 | **Absent** | No code and not currently scheduled in the v4 plan. |
 
@@ -20,19 +20,20 @@ capability is not upgraded from Partial/Planned because a document claims it.
 
 ## Summary
 
-| Engine family | Implemented | Partial | Planned/Absent |
-|---|---|---|---|
-| 1. Axiom foundation (Datalog, SAT, V2) | 9 | 4 | 2 |
-| 2. SMT / constraints (Z3 reference) | 5 | 1 | 5 |
-| 3. High-performance Datalog (Soufflé) | 2 | 4 | 4 |
-| 4. ASP (clingo) | 0 | 0 | 8 |
-| 5. First-order proving (Vampire) | 0 | 3 | 6 |
-| 6. Trusted proof kernel (Lean 4) | 1 | 2 | 5 |
-| 7. Planning / heuristic search (Fast Downward) | 5 | 1 | 6 |
-| 8. v4 common infrastructure | 1 | 4 | 6 |
+| Engine family | v4 status |
+|---|---|
+| 1. Axiom foundation (Datalog, SAT, V2) | implemented with scoped limits; B3 scheduling fixed |
+| 2. SMT / constraints (Z3 reference) | implemented for RDL + UF only |
+| 3. High-performance Datalog (Soufflé reference) | partial: correct, not competitive |
+| 4. ASP (clingo reference) | implemented finite fragment with model validation |
+| 5. First-order proving (Vampire reference) | implemented bounded resolution; no equality, no `Refuted` |
+| 6. Trusted proof kernel (Lean 4 reference) | small resolution kernel + STLC checker; not formally verified |
+| 7. Planning / heuristic search (Fast Downward reference) | root StateGraph plus untyped STRIPS BFS |
+| 8. v4 common infrastructure | implemented `Engine`/evidence/registry contract |
+| 9. Cross-domain router | implemented dispatch + per-engine verification |
 
-The counts are a reading aid, not a score. Several “Implemented” rows are
-narrow fragments with explicit boundaries.
+Counts were removed because they invited scorekeeping. Several “implemented”
+rows are narrow fragments with explicit boundaries.
 
 ---
 
@@ -44,12 +45,12 @@ narrow fragments with explicit boundaries.
 | Datalog facts, rules, positive recursion | Implemented | `src/solver_fwd.rs:438`, `src/program.rs`; `tests/soundness.rs`, `tests/v2.rs` | Least model over the finite positive fragment. |
 | Semi-naive evaluation | Implemented | `src/solver_fwd.rs:438`; `diag` job (2 rounds, exact closure) | Mixed all-old/all-new delta; no per-rule variant selection. |
 | Recursive inference with function symbols in heads | Partial | `src/program.rs` `backward_only`, `src/solver_bwd.rs`; §B4/§B5 | Ground goals, positive bodies, depth 64; saturation skips these rules. |
-| Stratified negation | Partial | `src/program.rs:28-29`, `src/solver_fwd.rs:99-116`; §B3 | **Incomplete**: a non-ground negated literal blocks the derivation and can still lead to `Refuted`. F-02. |
+| Stratified negation | Partial | `src/program.rs:28-29`, `src/solver_fwd.rs:98-116`; `tests/soundness.rs::negation_waits_for_later_positive_bindings` | B3 scheduling fixed. A negated literal that never becomes ground still blocks the derivation; safe programs only. |
 | Negation-as-failure / unstratified negation | Absent | `src/program.rs` rejects negative cycles; `docs/LANGUAGE_SPEC.md` §8 | Deliberate: a unique least model is required for `Refuted`. |
 | Efficient relations / indexing | Partial | `src/db.rs:41-44,128`; `diag` job | Hash indexes on argument positions 0 and 1 only; no cardinality-aware join order. |
 | Join ordering / query planning | Absent | `docs/ROADMAP.md` II7 | Body order is source order. |
 | Provenance / explanations | Partial | `src/proof.rs`, `src/solver.rs:268`, `src/check.rs`; `tests/soundness.rs` | Derivation chains, not provenance semirings. `ProofMode::Off` downgrades to `Found`. |
-| Least-model completeness / honest status | Partial | `src/status.rs`, `src/solver_bwd.rs`; `tests/soundness.rs` | A1/A2/A9 fixed; B3 remains. `Impossible` is constructed by the planner but not by Datalog. |
+| Least-model completeness / honest status | Partial | `src/status.rs`, `src/solver_bwd.rs`; `tests/soundness.rs` | A1/A2/A9 fixed; B3 scheduling fixed. `Impossible` is not produced by Datalog. |
 | SAT core (CDCL) | Implemented | `src/sat.rs:11-12`; `tests/sat.rs` | Two-watched literals, first-UIP, VSIDS, phase saving, Luby restarts, learned-clause deletion. |
 | Conflict analysis / learned clauses | Implemented | `src/sat.rs:465-645`; `tests/sat.rs` | Learned clauses retained in a RUP proof stream. |
 | Model generation and validation | Implemented | `src/sat.rs:837`, `src/solver.rs:268`, `src/check.rs` | SAT models checked by satisfaction; Datalog derivations replayed. |
@@ -101,7 +102,7 @@ by a DPLL(T) driver over the existing SAT core.
 | Join ordering / cardinality-aware planning | Absent / Planned Stage 5 | — | Source order only. |
 | Efficient tuple storage | Partial | `src/term.rs` (16 B/node), `src/db.rs`; `memory_per_fact_probe` | 20 B IR payload/fact; ~324 B RSS/fact with proofs, ~197 B without. |
 | Duplicate suppression | Implemented | `src/db.rs` insertion path | Hash-consing plus predicate membership. |
-| Stratified negation | Partial | `src/solver_fwd.rs:99-116`; §B3 | Incomplete for non-ground negation. |
+| Stratified negation | Partial | `src/solver_fwd.rs:98-116`; §B3 | Scheduling fixed; non-ground negation still blocks (safe programs only). |
 | Provenance / derivation explanations | Partial | `src/proof.rs`, `src/check.rs` | Full derivation records when `ProofMode::Full`; no provenance semiring. |
 | Memory-efficient storage / peak measurement | Partial | `src/bench.rs`; F-03 | Dedicated probe is valid; per-row RSS column is post-solve and invalid. |
 | Parallel evaluation | Absent | — | Single-threaded. |
@@ -113,17 +114,18 @@ by a DPLL(T) driver over the existing SAT core.
 
 ## Engine 4 — Answer Set Programming (clingo reference)
 
-| Capability | Status | Evidence | Notes |
+| Capability | Status | Evidence | Notes / boundary |
 |---|---|---|---|
-| ASP input representation | Absent / Planned Stage 6 | — | No ASP syntax or AST. |
-| Grounding | Absent / Planned Stage 6 | — | No grounding module. |
-| Choice rules | Absent / Planned Stage 6 | — | — |
-| Constraints (integrity constraints) | Absent / Planned Stage 6 | — | — |
-| Stable-model semantics | Absent / Planned Stage 6 | — | Datalog least-model semantics must not be reused as a substitute. |
-| Search and propagation | Absent / Planned Stage 6 | — | The SAT core is a possible substrate, but no ASP encoding exists. |
-| Conflict-driven learning for ASP | Absent / Planned Stage 6 | — | — |
-| Answer-set enumeration | Absent / Planned Stage 6 | — | Must not claim completeness without a termination argument. |
-| Independent answer-set validation | Absent / Planned Stage 6 | — | Required before any enumeration result is accepted. |
+| ASP input representation | Implemented | `crates/axiom-asp/src/syntax.rs` | Facts, normal rules, choice rules, constraints, `#show`. No aggregates/functions. |
+| Grounding | Implemented (naive) | `ground.rs`; `MAX_UNIVERSE=22`, `MAX_GROUND_RULES=200_000` | Full assignment of safe variables over constants; correct but not a real grounder. |
+| Choice rules | Implemented | `stable.rs::choice_is_optional` | Selected heads seeded only when the body holds. |
+| Integrity constraints | Implemented | `stable.rs::unsat_constraint_is_impossible_only_after_complete_enumeration` | A satisfied constraint rejects the candidate. |
+| Stable-model semantics | Implemented | `stable.rs::is_stable`, `validate_model` | Reduct closure equality; empty model for positive loops. |
+| Search and propagation | Partial | `stable.rs::enumerate` | Exhaustive subset enumeration; no learning or propagation. |
+| Conflict-driven learning | Absent | — | Not attempted. |
+| Answer-set enumeration | Implemented with cap | `Enumeration { complete }` | 22-atom universe; default 1024 models; truncation is explicit. |
+| Independent answer-set validation | Implemented | `AspEngine::verify` | Re-grounds, re-enumerates, validates every model. Shares `is_stable`. |
+| aggregates/cardinality/optimisation | Absent | parser rejects | Explicit `Unsupported`/parse error. |
 
 ---
 
@@ -131,16 +133,16 @@ by a DPLL(T) driver over the existing SAT core.
 
 | Capability | Status | Evidence | Notes / boundary |
 |---|---|---|---|
-| First-order terms and unification | Partial | `src/term.rs`, `src/subst.rs` (occurs check, trail) | Untyped, no quantifiers or clause representation; used by Datalog. |
-| Variable scopes and capture-avoiding substitution | Partial | `src/subst.rs`, `src/program.rs` rule-local variables; `tests/soundness.rs::deep_backward_proof_with_fresh_variables_per_step` | Rule-local freshening exists; no general FOL binder scoping. |
-| Logical normalization / clausal form | Absent / Planned Stage 7 | — | — |
-| Resolution and factoring | Absent / Planned Stage 7 | — | Backward SLD is ground, positive, depth-bounded, and not resolution. |
-| Clause selection and search strategies | Absent / Planned Stage 7 | — | — |
-| Equality reasoning / superposition | Absent / Planned Stage 7 | — | The theory layer has congruence, not superposition. |
-| Simplification / redundancy elimination | Absent / Planned Stage 7 | — | — |
-| Proof production for FOL | Absent / Planned Stage 7 | — | Datalog derivations are not FOL resolution proofs. |
-| Independent proof checking | Partial | `src/check.rs`, `tests/soundness.rs` | Independent checker for Datalog derivations only. |
-| Completeness claims | Absent | — | General FOL validity is undecidable; any implementation must state its calculus and search restrictions. |
+| FOL syntax | Implemented | `crates/axiom-prover/src/fol.rs` | Quantifiers, Boolean connectives, predicates/functions. No equality/sorts/arithmetic. |
+| Variable scope and capture avoidance | Implemented | NNF alpha-renaming, Skolemisation | `cnf.rs`; tested on small formulas. |
+| Clausal form | Implemented | `cnf.rs` | NNF, Skolem, CNF with deterministic naming. |
+| Resolution and factoring | Implemented bounded | `resolve.rs`; `Limits` | Given-clause, factoring, tautology/subsumption checks. |
+| Clause selection/search strategies | Partial | `resolve.rs` | Simple deterministic selection; no portfolio or sophisticated heuristics. |
+| Equality/superposition | Absent | parser rejects `=` | Explicit `Unsupported`. |
+| Simplification/redundancy | Partial | tautology + subsumption | No rewrite/term indexing beyond simple checks. |
+| Proof production | Implemented | `axiom-fol-resolution` evidence | S-expression resolution proof. |
+| Independent proof checking | Implemented | `axiom-proof::check_resolution` | Re-runs unification and clause construction. |
+| Completeness claims | None | saturation → `Unknown` | General FOL validity is undecidable; caps are explicit. |
 
 ---
 
@@ -148,14 +150,14 @@ by a DPLL(T) driver over the existing SAT core.
 
 | Capability | Status | Evidence | Notes |
 |---|---|---|---|
-| Small trusted kernel | Absent / Planned Stage 8 | — | No typed kernel. |
-| Explicit proof terms | Partial | `src/proof.rs` (`Proof`, `Derivation`, `Saturation`), `src/sat.rs` (`UnsatProof`) | Evidence objects exist, but they are ad-hoc per engine, not a typed calculus. |
-| Typed expressions and contexts | Absent | — | Terms are untyped `TermId`s; no sorts or contexts. |
-| Type checking / definitional equality | Absent | — | — |
-| Structured proof objects | Partial | `Proof`, `TheoryProof`, `CspOutcome`, `PlanOutcome` | Different shapes per engine; no common evidence IR. |
-| Separation of search from verification | Implemented (per engine) | `src/check.rs`, `src/sat.rs:837,920`, `src/theory.rs:1152,1309`, `src/state.rs:110`, `src/csp.rs:123` | Real and valuable, but not a general kernel. |
-| Kernel integration for solver outputs | Absent / Planned Stage 10 | — | Requires a sound translation per logic; none exists. |
-| Formal-verification claim for all results | Absent | — | Must never be inferred from the existence of these checkers. |
+| Small trusted kernel | Implemented | `crates/axiom-proof/src/lib.rs` | Resolution/refutation kernel; no typed logical framework. |
+| Explicit proof terms | Implemented for resolution | `ProofClause`, `StepRule`, `ResolutionProof` | Serialisable S-expressions. |
+| Typed expressions and contexts | Implemented for STLC | `stlc.rs` | Base/arrow/product types; no dependent types. |
+| Type checking | Implemented | `infer_type`, `check_type` | Typing only, not consistency. |
+| Common evidence IR | Partial | `axiom_core::Evidence` | Text kind/payload; no typed evidence schema. |
+| Separation of search from verification | Implemented | `Engine::verify` per crate | FOL, ASP, planning, Datalog each re-check. |
+| Kernel integration for solver outputs | Implemented for FOL only | `FolEngine::verify` | ASP/planning use their own validators. |
+| Formal-verification claim | None | — | Do not claim. |
 
 ---
 
@@ -163,21 +165,17 @@ by a DPLL(T) driver over the existing SAT core.
 
 | Capability | Status | Evidence | Notes / boundary |
 |---|---|---|---|
-| Finite state representation | Implemented | `src/state.rs:32-65` | Explicit state ids. |
-| Actions with preconditions and effects | Partial | `src/state.rs:23-32` | Actions are compiled edges; no declarative preconditions/effects. |
-| Initial state and goals | Implemented | `src/state.rs:40-64` | Single initial state; goal set. |
-| Breadth-first baseline | Partial | `src/state.rs:128` | Dijkstra; unit costs reduce to BFS. |
-| A* | Implemented (graph search) | `src/search.rs:98` | Available for explicit `SearchGraph`, not wired into `StateGraph` planning. |
-| Greedy best-first | Absent | — | — |
-| Duplicate-state detection | Implemented | `src/search.rs` closed set; `src/state.rs` `done` | — |
-| Delete-relaxation / planning heuristics | Absent | — | No heuristic portfolio; `SearchGraph::set_heuristic` is caller-supplied. |
-| Plan reconstruction | Implemented | `src/state.rs:128-190` | Predecessor chain. |
-| Independent plan validation | Implemented | `src/state.rs:110`; `verify_plan` | Replays actions and cost. |
-| Search budgets / interruption | Implemented | `src/budget.rs`; `PlanOutcome`/`Exhausted` | Step and wall-clock budgets; no external cancellation token. |
-| Optimality on non-negative explicit graphs | Implemented | `src/state.rs:128` | Dijkstra terminates with `Impossible` only after full reachable exploration. |
-| PDDL parser / grounded task language | Absent / Planned Stage 9 | — | — |
-| Cost/resource-aware planning | Partial | `src/state.rs:32` | Edge costs and step budgets; no resource variables. |
-| Optimal-plan certificates | Partial | `src/state.rs:128` | Dijkstra's exploration is the optimality argument; no separately checkable bound certificate. |
+| Finite state representation | Implemented | root `src/state.rs`; `axiom-planning` | Root graph and STRIPS state sets. |
+| Declarative actions | Implemented (STRIPS) | `crates/axiom-planning/src/pddl.rs` | Untyped STRIPS; negative preconditions/delete effects. |
+| Initial state and goals | Implemented | `pddl.rs`, `planner.rs` | Conjunctive goals only. |
+| Breadth-first baseline | Implemented | `planner::plan` | Shortest in action count. |
+| A* / heuristics | Root only | `src/search.rs` | Not wired into the STRIPS planner. |
+| Duplicate-state detection | Implemented | `planner.rs` visited set | Deterministic. |
+| Plan reconstruction | Implemented | `Plan` action sequence | — |
+| Independent plan validation | Implemented | `validate_actions` | Replays from initial state; shares transition code. |
+| Budgets/interruption | Implemented | step budget + state/action caps | Caps are `ResourceLimit`. |
+| PDDL parser | Partial | `pddl.rs` | Small subset; not conformant PDDL. |
+| Typing/equality/numeric/costs | Absent | parser rejects | Explicit `Unsupported`. |
 
 ---
 
@@ -185,40 +183,36 @@ by a DPLL(T) driver over the existing SAT core.
 
 | Capability | Status | Evidence | Notes |
 |---|---|---|---|
-| Shared problem/result model | Partial | `src/repr.rs` (V2 only), `src/status.rs` | No cross-engine problem IR or evidence enum. |
-| Typed IR with sorts / type checking | Absent / Planned Stage 2 | — | Terms are untyped. |
-| Solver capability declarations (`capabilities()`) | Absent / Planned Stage 1 | — | — |
-| `solve(problem, budget)` interface | Partial | Ad-hoc per module (`Solver`, `SatSolver`, `TheoryDriver`, `solve_csp`, `shortest_plan`, `astar`) | No common trait. |
-| `verify(problem, result)` interface | Partial | Per-module verifiers, listed above | No common trait or evidence dispatch. |
-| Resource budgets and cancellation | Implemented (steps/time) | `src/budget.rs`; `Exhausted::{Steps,Time,Depth,Memory,Malformed}` | No cancellation token or async interrupt. |
-| Structured errors | Partial | `ParseError`, `CheckErr`, `SatCheckErr`, `TheoryError`, `Exhausted` | No unified error type across engines. |
-| Stable serialisation | Absent / Planned Stage 2 | `docs/IR_SPEC.md` §10 | No JSON/binary/text IR dump. |
-| Versioned internal API | Partial | crate version `0.1.0`; no semver policy for intermediate crates | v4 workspace must define it. |
-| Shared conformance/test harness | Partial | `src/bench.rs`, per-suite tests | No cross-engine conformance harness or fixture format. |
-| Benchmark suite | Partial | `benches/kernel.rs`, `sat.rs`, `theory.rs`, `v2perf.rs`; CI jobs | Strong per-engine microbenchmarks; no cross-engine or external-reference suite; RSS defect F-03. |
-| Cross-domain coordinator | Absent / Planned Stage 10 | — | No dependency graph, no evidence translation, no origin tracking. |
-| Deterministic router | Partial | `src/choose.rs` | V2 representations only; not capability/fragment based. |
-| MCP/TUI adapters | Absent on `main` | `v3-slice-1` | Unmerged; see `BRANCH_ANALYSIS.md`. |
+| Shared problem/result model | Implemented | `crates/axiom-core/src/lib.rs` | `Problem`, `Verdict`, `Evidence`, `Outcome`, `Stats`. |
+| Typed IR with serialisation | Implemented (v4 subset) | `crates/axiom-ir` | Structural IR + Sexp; not root-arena serialisation. |
+| Capability declarations | Implemented | `Engine::capabilities` | Name, version, kinds, fragments, guarantees, limits. |
+| `solve(problem, budget)` interface | Implemented | `Engine::solve` | Adapters for four domains. |
+| `verify(problem, result)` interface | Implemented | `Engine::verify` | Each engine has its own checker. |
+| Resource budgets | Implemented (steps; wall clock observational) | `axiom::Budget` | No cancellation token. |
+| Structured errors | Implemented | `VerifyError`, `RouteError`, `KernelError` | Per-layer, not one universal error enum. |
+| Stable evidence serialisation | Partial | text payloads | No versioned schema. |
+| Versioned internal API | Partial | workspace crate versions | No semver policy for unpublished crates. |
+| Conformance/test harness | Partial | per-crate tests + CI | No external differential suite. |
+| Benchmark suite | Partial | root benches + CI | No v4 engine performance benchmarks. |
+| Cross-domain router | Implemented (dispatch) | `crates/axiom-router` | First-registered-wins; no translation. |
+| MCP/TUI adapters | Absent on `v4` | `v3-slice-1` branch | Unmerged; not part of v4. |
 
 ---
 
-## Cross-domain demonstrations (Stage 10 targets)
+## Cross-domain demonstrations
 
-None of these exist on `main`. They are listed here so they cannot be mistaken
-for existing functionality.
-
-| Demonstration | Status | Prerequisite |
+| Demonstration | Status | Note |
 |---|---|---|
-| Datalog-derived constraints checked by the SMT engine | Planned Stage 10 | A constraint extraction API + SMT-LIB/IR adapter. |
-| SAT + planning on a bounded planning problem | Partial foundation | `bmc_clauses` + SAT exist; no coordinator and no declarative planning task. |
-| Prover proof validated by the trusted kernel | Planned Stages 7–8, 10 | FOL prover + typed kernel + sound translation. |
-| Planner plan replayed by an independent validator | Implemented locally | `verify_plan` exists; the cross-domain composition does not. |
-| ASP enumeration filtered by a constraint engine | Planned Stages 6, 10 | ASP engine + constraint API. |
-| Symbolic policy rules + constraints justify a decision | Planned Stage 10 | Datalog + SMT/RDL adapters and evidence provenance. |
+| Datalog result checked by the theory engine | Not implemented | No constraint extraction API. |
+| SAT + bounded planning | Root `StateGraph` lowering only | Not wired to `axiom-planning`. |
+| FOL proof checked by the trusted kernel | Implemented | `FolEngine::verify` + `check_resolution`. |
+| Planning plan replayed by a validator | Implemented | `validate_actions`. |
+| ASP model filtered by a constraint engine | Not implemented | No constraint adapter. |
+| Router dispatches all four domains | Implemented | `Router::standard` + verification. |
+| Cross-domain evidence translation | Not implemented | Router does not translate. |
 
-## Status of the “additional specialist capabilities”
+## Additional specialist capabilities
 
-All are audited above: chess (implemented, bounded), Go (partial), puzzles
-(implemented), shortest path / A* / IDA* (implemented), planning + BMC
-(partial), deterministic solver selection (partial). None is assumed to be
-competitive with a specialist engine; no such benchmark exists yet.
+Chess (implemented, bounded), Go (partial), puzzles (implemented), search
+(A*/IDA*/alpha-beta, implemented), explicit-state planning + BMC (partial).
+None is claimed competitive with a specialist engine.
