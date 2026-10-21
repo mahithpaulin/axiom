@@ -112,10 +112,10 @@ relation are trusted tested code. See `docs/v4/VERIFICATION.md`.
 ## Current verification status
 
 GitHub Actions is authoritative. The Android/Termux device can run local
-checks and release builds, but is not a CI substitute. Run `39607136661` on
-branch `v4` (`95bbd4b`) passed all 10 jobs:
+checks and release builds, but is not a CI substitute. Run `39610624826` on
+branch `v4` (`59303ee`) passed all 10 jobs:
 
-- 273 library/integration tests, 0 failed, 0 ignored;
+- 274 library/integration tests, 0 failed, 0 ignored;
 - 8 doc tests;
 - workspace `clippy -D warnings`, `fmt --check`, examples, and known-defects
   gates;
@@ -159,10 +159,11 @@ measurements (baseline `docs/v4/BASELINE.md`):
 The `rss kB` column in kernel output is sampled after the solver is dropped and
 is **not** peak memory (`src/bench.rs:206-258`, F-03). Do not use it as a
 baseline. A differential harness now exists (`benchmarks/external/` and the
-`external differential benchmarks` workflow). Round 4 (run `39607159188`)
-matched all 19 fixtures against Z3, clingo, Soufflé, Fast Downward, and Vampire,
-with zero mismatches and zero skips; it adds two ground-equality FOL cases and
-five SMT-LIB cases. These are small correctness fixtures, not a competitive
+`external differential benchmarks` workflow). Round 5 (run `39610655498`)
+matched all 20 fixtures against Z3, clingo, Soufflé, Fast Downward, and Vampire,
+with zero mismatches and zero skips; it adds two ground-equality FOL cases, six
+SMT-LIB cases including a `push`/`pop` session replayed by Z3, and the
+`axiom-smt` frontend. These are small correctness fixtures, not a competitive
 performance claim.
 
 ## Documentation

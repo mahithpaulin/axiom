@@ -143,10 +143,18 @@ separate from the release evidence above:
 - differential round 4 (run `39607159188`) added five SMT-LIB fixtures and
   matched all 19 fixtures with no mismatches or skips; Z3 agreed with Axiom on
   every SMT case, including the congruence case;
+- the SMT frontend supports `push`/`pop` scopes and several `check-sat`
+  commands per file: each check snapshots the assertions in scope and carries
+  its own certificate. Every check is solved from scratch, so no learnt clause
+  and no theory state is reused: this is incremental *questions*, not
+  incremental *solving*, and the documentation says so;
+- differential round 5 (run `39610655498`) added a `push`/`pop` session and
+  matched all 20 fixtures with no mismatches or skips. The harness replays the
+  same file through Z3's `push`/`pop` API and compares the answers per check;
 - documentation is updated for these changes.
 
 Local validation on the development device: `cargo fmt --check`, workspace
-`clippy --all-targets -D warnings`, 273 library/integration tests, and 8 doc
-tests pass. CI run `39607136661` at `95bbd4b` also passed all 10 jobs. The
+`clippy --all-targets -D warnings`, 274 library/integration tests, and 8 doc
+tests pass. CI run `39610624826` at `59303ee` also passed all 10 jobs. The
 release statements in sections 4 and 7 describe `d606aab`; this section
 supersedes them for the new work.

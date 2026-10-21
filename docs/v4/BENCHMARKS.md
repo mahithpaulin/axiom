@@ -61,10 +61,10 @@ A small differential correctness round is separate from these gates:
 
 | Harness | Command | Scope |
 |---|---|---|
-| External differential | `python3 benchmarks/external/run.py --axiom target/release/axiom-bench` | 19 fixtures against Z3, clingo, Soufflé, Fast Downward, and Vampire when installed |
+| External differential | `python3 benchmarks/external/run.py --axiom target/release/axiom-bench` | 20 fixtures against Z3, clingo, Soufflé, Fast Downward, and Vampire when installed |
 
 The workflow `.github/workflows/external-bench.yml` is manual and uploads
-`results.json` and `results.md`. Round 4 required every oracle and matched all 19
+`results.json` and `results.md`. Round 5 required every oracle and matched all 20
 fixtures. A skipped oracle is not agreement, and one fixture per family is not a
 conformance or performance result. No v4 engine has a throughput benchmark or
 scaling study, and no competitive ranking is claimed.
@@ -94,7 +94,7 @@ separate process-level probe.
 
 The external harness exists, but these are still not done:
 
-- a broad external differential suite (the current suite has 19 fixtures);
+- a broad external differential suite (the current suite has 20 fixtures);
 - a cross-engine conformance fixture format;
 - performance and scaling comparisons with clingo/Vampire/Fast Downward/Z3;
 - peak-RSS instrumentation;
@@ -172,3 +172,20 @@ The new family is SMT: `difference-sat`, `difference-unsat`, `equality-unsat`,
 `congruence-unsat` case is the interesting one: `a = b` together with
 `f(a) != f(b)` is unsatisfiable only through congruence, and both solvers
 found it. This is still five hand-written fixtures, not a conformance suite.
+
+### Round 5
+
+Run `39610655498` (2026-10-21, commit `59303ee`) added a `push`/`pop` session
+and required every oracle:
+
+- 20 cases total;
+- 20 matched an independent oracle;
+- 0 mismatches;
+- 0 skipped.
+
+The new case is `smt/push-pop-session`: one file with three `check-sat`
+commands and a `push`/`pop` in the middle. The harness replays *the same file*
+through Z3's own `push`/`pop` API and compares the answers per check, so the
+two sides answered the same sequence of questions: `sat,unsat,sat` on both
+sides. Round 5 also fixed the harness's script reader, which had flattened the
+term structure of the SMT-LIB commands it replayed.
