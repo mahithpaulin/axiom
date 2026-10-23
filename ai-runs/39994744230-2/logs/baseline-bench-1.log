@@ -1,0 +1,87 @@
+$ cargo bench -p axiom --bench kernel -- ci
+rc=0 timeout=False elapsed=25.493s
+
+--- stdout ---
+==============================================================================
+axiom -- Stage 1 kernel benchmarks
+
+  index_selectivity: 50000 tuples, 500 distinct first arguments
+    scan   examines 2314516000 tuples total
+    index  examines 4667854 tuples total
+    ratio  495.84x fewer tuples examined
+    index-arg1 examines 4671050 tuples total
+    average tuples per distinct first argument: 92.4
+
+  proof_check_strong: goal proof contains 100 derivations
+    verify() ok = true
+    proofs on   facts=501500   rss=  156960 kB  store= 10010160 B  db_indexes= 15055488 B  deriv_records= 29360128 B  derivs=500500
+                measured 320 B/fact   IR payload 20 B/fact   deriv+db 89 B/fact
+    proofs off  facts=501500   rss=   96548 kB  store= 10010160 B  db_indexes= 15055488 B  deriv_records=        0 B  derivs=0
+                measured 197 B/fact   IR payload 20 B/fact   deriv+db 30 B/fact
+------------------------------------------------------------------------------
+axiom -- Stage 1 kernel benchmarks
+  single-threaded, one core; wall and CPU time reported separately
+  work bounded by deterministic step budgets; time measured, never used as a limit
+  allocator: counting global allocator over std::alloc::System
+  
+  -- representation --
+  
+  -- unification --
+  
+  -- indexing --
+  
+  -- inference algorithms --
+  
+  -- proof checking --
+  
+  -- memory --
+  
+  -- exterior and end to end --
+------------------------------------------------------------------------------
+benchmark                       iters     wall ms    cpu ms     Mops/s  allocs/it     alloc B/op      rss kB
+------------------------------------------------------------------------------
+hash_cons_1000_terms                1        0.81         0      11.14       8095            111        2780
+hash_cons_sharing                   1        0.01         0      86.87         43              7        2780
+unify_ground_pairs                629       50.06        50       0.29          6           1830        3328
+match_pattern_vs_fact            2000       47.72        50       0.00          4              0        3328
+occurs_check_cost                 515       50.03        50       0.00          4              0        3328
+db_index_lookup                    26       51.07        50    2376.34          0              0       12568
+db_index_lookup_arg1               26       51.58        60    2354.77          0              0       12568
+db_scan_lookup                      1      654.68       650    3535.36         21              0       12568
+semi_naive_vs_fixpoint_n600[A]        3      590.22       590       0.92     556673            507       55520
+semi_naive_vs_fixpoint_n600[B]        3      575.42       580       0.94     556058            507       55520
+tc_path_n200                        1       15.57        10       1.30      65164            545       23604
+tc_path_n1000                       1      698.66       710       0.72    1528906            478        6240
+tc_random_n1500                     1    11257.60     11250       0.20    6811764            594        8284
+stratified_negation_5000            1        8.44        10       1.19      75317           1049        9140
+proof_verify_strong              1655       50.03        50       0.03        805          15535        9180
+proof_verify_shallow             2000        0.05         0      38.25          0              2        9180
+memory_per_fact_probe               1      422.16       430       1.19     527869            284       62760
+parse_program                     808       50.01        50       1.65       1575           1517       62760
+end_to_end_prove                   14       50.99        50       0.00      17851        2742193       62760
+------------------------------------------------------------------------------
+
+--- stderr ---
+   Compiling axiom v0.1.0 (/home/runner/work/axiom/axiom)
+    Finished `bench` profile [optimized + debuginfo] target(s) in 9.00s
+     Running benches/kernel.rs (target/release/deps/kernel-db6414f9b68da303)
+  hash_cons_1000_terms                 1 it       0.81 ms 11.135548897701888 Mops/s      8095 allocs/it        111 B/op     2780 rss kB
+  hash_cons_sharing                    1 it       0.01 ms 86.87342541916426 Mops/s        43 allocs/it          7 B/op     2780 rss kB
+  unify_ground_pairs                 629 it      50.06 ms 0.2889835676676387 Mops/s         6 allocs/it       1830 B/op     3328 rss kB
+  match_pattern_vs_fact             2000 it      47.72 ms         0 Mops/s         4 allocs/it          0 B/op     3328 rss kB
+  occurs_check_cost                  515 it      50.03 ms         0 Mops/s         4 allocs/it          0 B/op     3328 rss kB
+  db_index_lookup                     26 it      51.07 ms 2376.342008619659 Mops/s         0 allocs/it          0 B/op    12568 rss kB
+  db_index_lookup_arg1                26 it      51.58 ms 2354.769717790911 Mops/s         0 allocs/it          0 B/op    12568 rss kB
+  db_scan_lookup                       1 it     654.68 ms 3535.3584811228593 Mops/s        21 allocs/it          0 B/op    12568 rss kB
+  semi_naive_vs_fixpoint_n600[A]       3 it     590.22 ms 0.9194855284134659 Mops/s    556673 allocs/it        507 B/op    55520 rss kB
+  semi_naive_vs_fixpoint_n600[B]       3 it     575.42 ms 0.9431352936615617 Mops/s    556058 allocs/it        507 B/op    55520 rss kB
+  tc_path_n200                         1 it      15.57 ms 1.3037004155529017 Mops/s     65164 allocs/it        545 B/op    23604 rss kB
+  tc_path_n1000                        1 it     698.66 ms 0.7178065559538535 Mops/s   1528906 allocs/it        478 B/op     6240 rss kB
+  tc_random_n1500                      1 it   11257.60 ms 0.20012970155583962 Mops/s   6811764 allocs/it        594 B/op     8284 rss kB
+  stratified_negation_5000             1 it       8.44 ms 1.1853631828329068 Mops/s     75317 allocs/it       1049 B/op     9140 rss kB
+  proof_verify_strong               1655 it      50.03 ms 0.033080271587630564 Mops/s       805 allocs/it      15535 B/op     9180 rss kB
+  proof_verify_shallow              2000 it       0.05 ms 38.2540836234268 Mops/s         0 allocs/it          2 B/op     9180 rss kB
+  memory_per_fact_probe                1 it     422.16 ms 1.1879311116592781 Mops/s    527869 allocs/it        284 B/op    62760 rss kB
+  parse_program                      808 it      50.01 ms 1.6480521585631904 Mops/s      1575 allocs/it       1517 B/op    62760 rss kB
+  end_to_end_prove                    14 it      50.99 ms 0.00027456023148408453 Mops/s     17851 allocs/it    2742193 B/op    62760 rss kB
+

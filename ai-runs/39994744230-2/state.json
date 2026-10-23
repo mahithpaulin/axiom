@@ -1,0 +1,529 @@
+{
+  "accepted": [],
+  "baseline": {
+    "at": "2026-10-23T17:33:30Z",
+    "bench": {
+      "db_index_lookup": {
+        "allocs_per_it": 0,
+        "bytes_per_op": 0,
+        "iters": 26,
+        "mops": 2376.342008619659,
+        "rss_kb": 12568,
+        "wall_ms": 51.07
+      },
+      "db_index_lookup_arg1": {
+        "allocs_per_it": 0,
+        "bytes_per_op": 0,
+        "iters": 26,
+        "mops": 2354.769717790911,
+        "rss_kb": 12568,
+        "wall_ms": 50.62
+      },
+      "db_scan_lookup": {
+        "allocs_per_it": 21,
+        "bytes_per_op": 0,
+        "iters": 1,
+        "mops": 3535.3584811228593,
+        "rss_kb": 12568,
+        "wall_ms": 654.68
+      },
+      "end_to_end_prove": {
+        "allocs_per_it": 17851,
+        "bytes_per_op": 2742193,
+        "iters": 14,
+        "mops": 0.00027456023148408453,
+        "rss_kb": 62760,
+        "wall_ms": 50.99
+      },
+      "hash_cons_1000_terms": {
+        "allocs_per_it": 8095,
+        "bytes_per_op": 111,
+        "iters": 1,
+        "mops": 11.135548897701888,
+        "rss_kb": 2780,
+        "wall_ms": 0.78
+      },
+      "hash_cons_sharing": {
+        "allocs_per_it": 43,
+        "bytes_per_op": 7,
+        "iters": 1,
+        "mops": 86.87342541916426,
+        "rss_kb": 2780,
+        "wall_ms": 0.01
+      },
+      "match_pattern_vs_fact": {
+        "allocs_per_it": 4,
+        "bytes_per_op": 0,
+        "iters": 2000,
+        "mops": 0.0,
+        "rss_kb": 3328,
+        "wall_ms": 47.72
+      },
+      "memory_per_fact_probe": {
+        "allocs_per_it": 527869,
+        "bytes_per_op": 284,
+        "iters": 1,
+        "mops": 1.1879311116592781,
+        "rss_kb": 62756,
+        "wall_ms": 421.26
+      },
+      "occurs_check_cost": {
+        "allocs_per_it": 4,
+        "bytes_per_op": 0,
+        "iters": 515,
+        "mops": 0.0,
+        "rss_kb": 3328,
+        "wall_ms": 50.03
+      },
+      "parse_program": {
+        "allocs_per_it": 1575,
+        "bytes_per_op": 1517,
+        "iters": 808,
+        "mops": 1.6480521585631904,
+        "rss_kb": 62756,
+        "wall_ms": 50.01
+      },
+      "proof_verify_shallow": {
+        "allocs_per_it": 0,
+        "bytes_per_op": 2,
+        "iters": 2000,
+        "mops": 38.2540836234268,
+        "rss_kb": 9176,
+        "wall_ms": 0.05
+      },
+      "proof_verify_strong": {
+        "allocs_per_it": 805,
+        "bytes_per_op": 15535,
+        "iters": 1647,
+        "mops": 0.033080271587630564,
+        "rss_kb": 9176,
+        "wall_ms": 50.02
+      },
+      "semi_naive_vs_fixpoint_n600[A]": {
+        "allocs_per_it": 556673,
+        "bytes_per_op": 507,
+        "iters": 3,
+        "mops": 0.9194855284134659,
+        "rss_kb": 55372,
+        "wall_ms": 583.6
+      },
+      "semi_naive_vs_fixpoint_n600[B]": {
+        "allocs_per_it": 556058,
+        "bytes_per_op": 507,
+        "iters": 3,
+        "mops": 0.9431352936615617,
+        "rss_kb": 55372,
+        "wall_ms": 568.69
+      },
+      "stratified_negation_5000": {
+        "allocs_per_it": 75317,
+        "bytes_per_op": 1049,
+        "iters": 1,
+        "mops": 1.1853631828329068,
+        "rss_kb": 9140,
+        "wall_ms": 8.41
+      },
+      "tc_path_n1000": {
+        "allocs_per_it": 1528906,
+        "bytes_per_op": 478,
+        "iters": 1,
+        "mops": 0.7178065559538535,
+        "rss_kb": 6240,
+        "wall_ms": 698.66
+      },
+      "tc_path_n200": {
+        "allocs_per_it": 65164,
+        "bytes_per_op": 545,
+        "iters": 1,
+        "mops": 1.3037004155529017,
+        "rss_kb": 23604,
+        "wall_ms": 15.57
+      },
+      "tc_random_n1500": {
+        "allocs_per_it": 6811764,
+        "bytes_per_op": 594,
+        "iters": 1,
+        "mops": 0.20012970155583962,
+        "rss_kb": 8284,
+        "wall_ms": 11206.91
+      },
+      "unify_ground_pairs": {
+        "allocs_per_it": 6,
+        "bytes_per_op": 1830,
+        "iters": 625,
+        "mops": 0.2889835676676387,
+        "rss_kb": 3328,
+        "wall_ms": 50.05
+      }
+    },
+    "bench_elapsed_seconds": 41.922,
+    "bench_ok": true,
+    "bench_runs": [
+      {
+        "elapsed_seconds": 25.493,
+        "log": "ai-runs/39994744230-2/logs/baseline-bench-1.log",
+        "ok": true,
+        "rows": {
+          "db_index_lookup": {
+            "allocs_per_it": 0,
+            "bytes_per_op": 0,
+            "iters": 26,
+            "mops": 2376.342008619659,
+            "rss_kb": 12568,
+            "wall_ms": 51.07
+          },
+          "db_index_lookup_arg1": {
+            "allocs_per_it": 0,
+            "bytes_per_op": 0,
+            "iters": 26,
+            "mops": 2354.769717790911,
+            "rss_kb": 12568,
+            "wall_ms": 51.58
+          },
+          "db_scan_lookup": {
+            "allocs_per_it": 21,
+            "bytes_per_op": 0,
+            "iters": 1,
+            "mops": 3535.3584811228593,
+            "rss_kb": 12568,
+            "wall_ms": 654.68
+          },
+          "end_to_end_prove": {
+            "allocs_per_it": 17851,
+            "bytes_per_op": 2742193,
+            "iters": 14,
+            "mops": 0.00027456023148408453,
+            "rss_kb": 62760,
+            "wall_ms": 50.99
+          },
+          "hash_cons_1000_terms": {
+            "allocs_per_it": 8095,
+            "bytes_per_op": 111,
+            "iters": 1,
+            "mops": 11.135548897701888,
+            "rss_kb": 2780,
+            "wall_ms": 0.81
+          },
+          "hash_cons_sharing": {
+            "allocs_per_it": 43,
+            "bytes_per_op": 7,
+            "iters": 1,
+            "mops": 86.87342541916426,
+            "rss_kb": 2780,
+            "wall_ms": 0.01
+          },
+          "match_pattern_vs_fact": {
+            "allocs_per_it": 4,
+            "bytes_per_op": 0,
+            "iters": 2000,
+            "mops": 0.0,
+            "rss_kb": 3328,
+            "wall_ms": 47.72
+          },
+          "memory_per_fact_probe": {
+            "allocs_per_it": 527869,
+            "bytes_per_op": 284,
+            "iters": 1,
+            "mops": 1.1879311116592781,
+            "rss_kb": 62760,
+            "wall_ms": 422.16
+          },
+          "occurs_check_cost": {
+            "allocs_per_it": 4,
+            "bytes_per_op": 0,
+            "iters": 515,
+            "mops": 0.0,
+            "rss_kb": 3328,
+            "wall_ms": 50.03
+          },
+          "parse_program": {
+            "allocs_per_it": 1575,
+            "bytes_per_op": 1517,
+            "iters": 808,
+            "mops": 1.6480521585631904,
+            "rss_kb": 62760,
+            "wall_ms": 50.01
+          },
+          "proof_verify_shallow": {
+            "allocs_per_it": 0,
+            "bytes_per_op": 2,
+            "iters": 2000,
+            "mops": 38.2540836234268,
+            "rss_kb": 9180,
+            "wall_ms": 0.05
+          },
+          "proof_verify_strong": {
+            "allocs_per_it": 805,
+            "bytes_per_op": 15535,
+            "iters": 1655,
+            "mops": 0.033080271587630564,
+            "rss_kb": 9180,
+            "wall_ms": 50.03
+          },
+          "semi_naive_vs_fixpoint_n600[A]": {
+            "allocs_per_it": 556673,
+            "bytes_per_op": 507,
+            "iters": 3,
+            "mops": 0.9194855284134659,
+            "rss_kb": 55520,
+            "wall_ms": 590.22
+          },
+          "semi_naive_vs_fixpoint_n600[B]": {
+            "allocs_per_it": 556058,
+            "bytes_per_op": 507,
+            "iters": 3,
+            "mops": 0.9431352936615617,
+            "rss_kb": 55520,
+            "wall_ms": 575.42
+          },
+          "stratified_negation_5000": {
+            "allocs_per_it": 75317,
+            "bytes_per_op": 1049,
+            "iters": 1,
+            "mops": 1.1853631828329068,
+            "rss_kb": 9140,
+            "wall_ms": 8.44
+          },
+          "tc_path_n1000": {
+            "allocs_per_it": 1528906,
+            "bytes_per_op": 478,
+            "iters": 1,
+            "mops": 0.7178065559538535,
+            "rss_kb": 6240,
+            "wall_ms": 698.66
+          },
+          "tc_path_n200": {
+            "allocs_per_it": 65164,
+            "bytes_per_op": 545,
+            "iters": 1,
+            "mops": 1.3037004155529017,
+            "rss_kb": 23604,
+            "wall_ms": 15.57
+          },
+          "tc_random_n1500": {
+            "allocs_per_it": 6811764,
+            "bytes_per_op": 594,
+            "iters": 1,
+            "mops": 0.20012970155583962,
+            "rss_kb": 8284,
+            "wall_ms": 11257.6
+          },
+          "unify_ground_pairs": {
+            "allocs_per_it": 6,
+            "bytes_per_op": 1830,
+            "iters": 629,
+            "mops": 0.2889835676676387,
+            "rss_kb": 3328,
+            "wall_ms": 50.06
+          }
+        }
+      },
+      {
+        "elapsed_seconds": 16.429,
+        "log": "ai-runs/39994744230-2/logs/baseline-bench-2.log",
+        "ok": true,
+        "rows": {
+          "db_index_lookup": {
+            "allocs_per_it": 0,
+            "bytes_per_op": 0,
+            "iters": 26,
+            "mops": 2367.7006100246563,
+            "rss_kb": 12568,
+            "wall_ms": 51.26
+          },
+          "db_index_lookup_arg1": {
+            "allocs_per_it": 0,
+            "bytes_per_op": 0,
+            "iters": 26,
+            "mops": 2398.9964485371725,
+            "rss_kb": 12568,
+            "wall_ms": 50.62
+          },
+          "db_scan_lookup": {
+            "allocs_per_it": 21,
+            "bytes_per_op": 0,
+            "iters": 1,
+            "mops": 3533.096074253348,
+            "rss_kb": 12568,
+            "wall_ms": 655.1
+          },
+          "end_to_end_prove": {
+            "allocs_per_it": 17851,
+            "bytes_per_op": 2742193,
+            "iters": 14,
+            "mops": 0.00027277274961263836,
+            "rss_kb": 62760,
+            "wall_ms": 51.32
+          },
+          "hash_cons_1000_terms": {
+            "allocs_per_it": 8095,
+            "bytes_per_op": 111,
+            "iters": 1,
+            "mops": 11.526440260849412,
+            "rss_kb": 2780,
+            "wall_ms": 0.78
+          },
+          "hash_cons_sharing": {
+            "allocs_per_it": 43,
+            "bytes_per_op": 7,
+            "iters": 1,
+            "mops": 96.86168151879117,
+            "rss_kb": 2780,
+            "wall_ms": 0.01
+          },
+          "match_pattern_vs_fact": {
+            "allocs_per_it": 4,
+            "bytes_per_op": 0,
+            "iters": 2000,
+            "mops": 0.0,
+            "rss_kb": 3328,
+            "wall_ms": 48.1
+          },
+          "memory_per_fact_probe": {
+            "allocs_per_it": 527869,
+            "bytes_per_op": 284,
+            "iters": 1,
+            "mops": 1.1904801101360507,
+            "rss_kb": 62756,
+            "wall_ms": 421.26
+          },
+          "occurs_check_cost": {
+            "allocs_per_it": 4,
+            "bytes_per_op": 0,
+            "iters": 532,
+            "mops": 0.0,
+            "rss_kb": 3328,
+            "wall_ms": 50.06
+          },
+          "parse_program": {
+            "allocs_per_it": 1575,
+            "bytes_per_op": 1517,
+            "iters": 794,
+            "mops": 1.619252655757898,
+            "rss_kb": 62756,
+            "wall_ms": 50.02
+          },
+          "proof_verify_shallow": {
+            "allocs_per_it": 0,
+            "bytes_per_op": 2,
+            "iters": 2000,
+            "mops": 38.243842741318645,
+            "rss_kb": 9176,
+            "wall_ms": 0.05
+          },
+          "proof_verify_strong": {
+            "allocs_per_it": 805,
+            "bytes_per_op": 15535,
+            "iters": 1647,
+            "mops": 0.032925209337461424,
+            "rss_kb": 9176,
+            "wall_ms": 50.02
+          },
+          "semi_naive_vs_fixpoint_n600[A]": {
+            "allocs_per_it": 556673,
+            "bytes_per_op": 507,
+            "iters": 3,
+            "mops": 0.9299237638834151,
+            "rss_kb": 55372,
+            "wall_ms": 583.6
+          },
+          "semi_naive_vs_fixpoint_n600[B]": {
+            "allocs_per_it": 556058,
+            "bytes_per_op": 507,
+            "iters": 3,
+            "mops": 0.9543047346650376,
+            "rss_kb": 55372,
+            "wall_ms": 568.69
+          },
+          "stratified_negation_5000": {
+            "allocs_per_it": 75317,
+            "bytes_per_op": 1049,
+            "iters": 1,
+            "mops": 1.18866658710525,
+            "rss_kb": 9140,
+            "wall_ms": 8.41
+          },
+          "tc_path_n1000": {
+            "allocs_per_it": 1528906,
+            "bytes_per_op": 478,
+            "iters": 1,
+            "mops": 0.7126780461962201,
+            "rss_kb": 6240,
+            "wall_ms": 703.68
+          },
+          "tc_path_n200": {
+            "allocs_per_it": 65164,
+            "bytes_per_op": 545,
+            "iters": 1,
+            "mops": 1.2865404420502258,
+            "rss_kb": 23604,
+            "wall_ms": 15.78
+          },
+          "tc_random_n1500": {
+            "allocs_per_it": 6811764,
+            "bytes_per_op": 594,
+            "iters": 1,
+            "mops": 0.20103493649165577,
+            "rss_kb": 8284,
+            "wall_ms": 11206.91
+          },
+          "unify_ground_pairs": {
+            "allocs_per_it": 6,
+            "bytes_per_op": 1830,
+            "iters": 625,
+            "mops": 0.28721154195994797,
+            "rss_kb": 3328,
+            "wall_ms": 50.05
+          }
+        }
+      }
+    ],
+    "head": "5a70ea27819af1bc5969be6a1528506e0990f4a7",
+    "test_elapsed_seconds": 7.203,
+    "test_log": "ai-runs/39994744230-2/logs/baseline-tests.log",
+    "test_ok": true,
+    "tests": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 274,
+      "suites": 20
+    }
+  },
+  "branch": "ai-optimization/setup-axiom-v4",
+  "commits": [],
+  "created_at": "2026-10-23T17:33:21Z",
+  "elapsed_minutes": 0.849,
+  "failure_streak": 0,
+  "iterations": 0,
+  "minutes": 225.0,
+  "model": {
+    "available": true,
+    "calls": 0,
+    "candidates": [
+      "opencode/deepseek-v4.1-flash-free",
+      "opencode/cat-jam-free",
+      "opencode/glm-5.3-flash-free",
+      "opencode/ll-alpha-free",
+      "opencode/longcat-2.5-preview-free",
+      "opencode/mimo-v2.6-flash-free",
+      "opencode/muse-spark-1.3-contributor-free",
+      "opencode/nemotron-3-ultra-free",
+      "opencode/nemotron-3.5-lightning-free",
+      "opencode/nemotron-3.5-super-vl-free",
+      "opencode/space-bunny-free"
+    ],
+    "failures": 0,
+    "reason": "",
+    "secret_present": true
+  },
+  "push_failures": 0,
+  "rejected": [],
+  "remaining_minutes": 224.151,
+  "run_id": "39994744230-2",
+  "schema": 1,
+  "started_at": "2026-10-23T17:33:21Z",
+  "status": "running",
+  "target": "/home/runner/work/axiom/axiom",
+  "tasks": {},
+  "updated_at": "2026-10-23T17:34:12Z"
+}
