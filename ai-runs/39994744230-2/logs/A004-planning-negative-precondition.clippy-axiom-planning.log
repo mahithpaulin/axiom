@@ -1,0 +1,9 @@
+$ cargo clippy -p axiom-planning --lib --tests -- -D warnings
+rc=0 timeout=False elapsed=0.191s
+
+--- stdout ---
+
+--- stderr ---
+    Checking axiom-planning v0.2.0 (/home/runner/work/axiom/axiom/crates/axiom-planning)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.16s
+

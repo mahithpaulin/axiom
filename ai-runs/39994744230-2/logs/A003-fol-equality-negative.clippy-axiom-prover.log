@@ -1,0 +1,10 @@
+$ cargo clippy -p axiom-prover --lib --tests -- -D warnings
+rc=0 timeout=False elapsed=0.31s
+
+--- stdout ---
+
+--- stderr ---
+    Checking axiom-proof v0.2.0 (/home/runner/work/axiom/axiom/crates/axiom-proof)
+    Checking axiom-prover v0.2.0 (/home/runner/work/axiom/axiom/crates/axiom-prover)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.28s
+

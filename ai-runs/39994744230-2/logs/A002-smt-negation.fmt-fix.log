@@ -1,0 +1,7 @@
+$ cargo fmt --all
+rc=0 timeout=False elapsed=0.196s
+
+--- stdout ---
+
+--- stderr ---
+

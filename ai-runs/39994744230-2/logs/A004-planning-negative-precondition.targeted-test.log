@@ -1,0 +1,36 @@
+$ cargo test -p axiom-planning --lib --tests
+rc=0 timeout=False elapsed=0.116s
+
+--- stdout ---
+
+running 13 tests
+test pddl::tests::typing_is_rejected ... ok
+test pddl::tests::missing_goal_is_an_error ... ok
+test pddl::tests::parses_untyped_strips ... ok
+test planner::tests::astar_and_bfs_return_shortest_plans ... ok
+test planner::tests::astar_respects_negative_preconditions ... ok
+test planner::tests::finds_and_validates_a_plan ... ok
+test planner::tests::invalid_plan_is_rejected ... ok
+test planner::tests::impossible_is_exhaustive ... ok
+test tests::an_empty_plan_is_valid ... ok
+test tests::finds_and_verifies_a_plan ... ok
+test tests::typed_input_is_unsupported ... ok
+test tests::proves_impossibility_by_exhaustion ... ok
+test tests::tampered_plan_is_rejected ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test a_true_negative_precondition_blocks_the_action ... ok
+test a_negative_precondition_is_honoured_and_replayed ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+--- stderr ---
+   Compiling axiom-planning v0.2.0 (/home/runner/work/axiom/axiom/crates/axiom-planning)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running unittests src/lib.rs (target/debug/deps/axiom_planning-7e55537117c6367c)
+     Running tests/negative_preconditions.rs (target/debug/deps/negative_preconditions-19bf5268ee5218c0)
+

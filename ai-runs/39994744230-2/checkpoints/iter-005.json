@@ -1,0 +1,16 @@
+{
+  "iteration": 5,
+  "task": "A006-db-third-index",
+  "origin": "model",
+  "started_at": "2026-10-23T17:34:40Z",
+  "pre_head": "02131e2bba570910ccedb3c54e29d95cd621b005",
+  "status": "rejected",
+  "model": {
+    "ok": false,
+    "name": null,
+    "error": "opencode/deepseek-v4.1-flash-free rejected the free-tier request",
+    "elapsed_seconds": null,
+    "call": null
+  },
+  "reason": "CampaignError: opencode/deepseek-v4.1-flash-free rejected the free-tier request"
+}

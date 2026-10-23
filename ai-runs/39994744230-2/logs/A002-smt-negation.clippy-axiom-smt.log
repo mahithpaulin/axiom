@@ -1,0 +1,12 @@
+$ cargo clippy -p axiom-smt --lib --tests -- -D warnings
+rc=0 timeout=False elapsed=0.843s
+
+--- stdout ---
+
+--- stderr ---
+    Checking axiom-ir v0.2.0 (/home/runner/work/axiom/axiom/crates/axiom-ir)
+    Checking axiom v0.1.0 (/home/runner/work/axiom/axiom)
+    Checking axiom-core v0.2.0 (/home/runner/work/axiom/axiom/crates/axiom-core)
+    Checking axiom-smt v0.2.0 (/home/runner/work/axiom/axiom/crates/axiom-smt)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.82s
+
