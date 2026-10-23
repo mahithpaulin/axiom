@@ -12,6 +12,19 @@
         "passed": 275,
         "suites": 21
       }
+    },
+    {
+      "benchmark": [],
+      "commit": "ecf13da2f01d6685dcd67445b02b7947491dce58",
+      "iteration": 2,
+      "push_ok": true,
+      "task": "A002-smt-negation",
+      "tests": {
+        "failed": 0,
+        "ignored": 0,
+        "passed": 277,
+        "suites": 22
+      }
     }
   ],
   "baseline": {
@@ -516,14 +529,20 @@
       "message": "ai-campaign: A001-peak-rss (deterministic, 275 tests) [skip ci]",
       "push_ok": true,
       "sha": "ec20a342ce238a51ca0f4a322a32ba947e2f17f7"
+    },
+    {
+      "at": "2026-10-23T17:49:55Z",
+      "message": "ai-campaign: A002-smt-negation (deterministic, 277 tests) [skip ci]",
+      "push_ok": true,
+      "sha": "ecf13da2f01d6685dcd67445b02b7947491dce58"
     }
   ],
   "created_at": "2026-10-23T17:48:25Z",
-  "current_task": "A002-smt-negation",
-  "elapsed_minutes": 1.475,
+  "current_task": "A003-fol-equality-negative",
+  "elapsed_minutes": 1.56,
   "failure_streak": 0,
-  "iterations": 2,
-  "last_checkpoint": "ai-runs/39998021258-1/checkpoints/iter-001.json",
+  "iterations": 3,
+  "last_checkpoint": "ai-runs/39998021258-1/checkpoints/iter-002.json",
   "minutes": 225.0,
   "model": {
     "available": true,
@@ -547,7 +566,7 @@
   },
   "push_failures": 0,
   "rejected": [],
-  "remaining_minutes": 223.525,
+  "remaining_minutes": 223.44,
   "run_id": "39998021258-1",
   "schema": 1,
   "started_at": "2026-10-23T17:48:25Z",
@@ -558,7 +577,11 @@
       "attempts": 1,
       "status": "accepted"
     },
-    "A002-smt-negation": {}
+    "A002-smt-negation": {
+      "attempts": 1,
+      "status": "accepted"
+    },
+    "A003-fol-equality-negative": {}
   },
-  "updated_at": "2026-10-23T17:49:54Z"
+  "updated_at": "2026-10-23T17:49:59Z"
 }
