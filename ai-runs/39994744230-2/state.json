@@ -560,14 +560,20 @@
       "message": "ai-campaign: A004-planning-negative-precondition (deterministic, 280 tests) [skip ci]",
       "push_ok": true,
       "sha": "02131e2bba570910ccedb3c54e29d95cd621b005"
+    },
+    {
+      "at": "2026-10-23T17:34:44Z",
+      "message": "ai-campaign: record failed A006-db-third-index iteration 5 [skip ci]",
+      "push_ok": true,
+      "sha": "3d5831087d94cb5cad654166383ac4e7a3e41940"
     }
   ],
   "created_at": "2026-10-23T17:33:21Z",
   "current_task": "A006-db-third-index",
-  "elapsed_minutes": 1.355,
+  "elapsed_minutes": 1.407,
   "failure_streak": 1,
-  "iterations": 5,
-  "last_checkpoint": "ai-runs/39994744230-2/checkpoints/iter-005.json",
+  "iterations": 6,
+  "last_checkpoint": "ai-runs/39994744230-2/checkpoints/soak-001.json",
   "minutes": 225.0,
   "model": {
     "available": false,
@@ -604,7 +610,7 @@
       "task": "A006-db-third-index"
     }
   ],
-  "remaining_minutes": 223.645,
+  "remaining_minutes": 223.593,
   "run_id": "39994744230-2",
   "schema": 1,
   "started_at": "2026-10-23T17:33:21Z",
@@ -636,8 +642,23 @@
       "failures": [
         "CampaignError: opencode/deepseek-v4.1-flash-free rejected the free-tier request"
       ],
-      "status": "retryable"
+      "status": "blocked_model"
+    },
+    "A007-smt-lib-printer": {
+      "status": "blocked_model"
+    },
+    "A008-datalog-join-order": {
+      "status": "blocked_model"
+    },
+    "A009-fol-equality-coverage": {
+      "status": "blocked_model"
+    },
+    "A010-docs-claim-audit": {
+      "status": "blocked_model"
+    },
+    "A011-rdl-chain-memory": {
+      "status": "blocked_model"
     }
   },
-  "updated_at": "2026-10-23T17:34:42Z"
+  "updated_at": "2026-10-23T17:34:45Z"
 }
