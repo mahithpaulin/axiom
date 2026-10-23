@@ -1,0 +1,135 @@
+name: ai-optimize
+
+# One bounded optimization campaign, started by opening or reopening a
+# same-repository pull request whose head branch starts with
+# `ai-optimization/` and targets `v4`.
+#
+# The phone is not involved after the PR is opened. All builds, tests,
+# benchmarks and model calls run on this runner. The job never pushes to `v4`
+# or `main`, never merges, and never edits workflows or permissions itself.
+
+on:
+  pull_request:
+    types: [opened, reopened]
+    branches: [v4]
+
+concurrency:
+  group: ai-optimize-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  optimize:
+    name: bounded Axiom v4 campaign
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'ai-optimization/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 255
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      BRANCH: ${{ github.event.pull_request.head.ref }}
+      RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      OPTIMIZER_SHA: bedaf44d6af6fe3a4da9150011a5187d7684ec46
+    steps:
+      - name: Checkout campaign branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # actions/checkout v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Verify campaign branch
+        run: |
+          set -euo pipefail
+          case "$BRANCH" in
+            ai-optimization/*) ;;
+            *) echo "::error::campaign branch must start with ai-optimization/"; exit 1 ;;
+          esac
+          if [ "$BRANCH" = "v4" ] || [ "$BRANCH" = "main" ]; then
+            echo "::error::refusing to run on a protected branch"
+            exit 1
+          fi
+          git fetch origin "$BRANCH:refs/remotes/origin/$BRANCH"
+          git checkout -B "$BRANCH" "origin/$BRANCH"
+          echo "campaign branch: $BRANCH"
+
+      - name: Checkout pinned optimizer
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # actions/checkout v4
+        with:
+          repository: mahithpaulin/self-optimizing-opencode
+          ref: ${{ env.OPTIMIZER_SHA }}
+          path: .ai/optimizer
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Restore cargo cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+
+      - name: Install OpenCode
+        run: |
+          set -euo pipefail
+          npm install -g 'opencode-ai@1.19.3'
+          opencode --version
+
+      - name: Run bounded campaign
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OPENCODE_API_KEY:-}" ]; then
+            echo "::error::OPENCODE_API_KEY is not configured; the campaign cannot call a model"
+            exit 1
+          fi
+          cd .ai/optimizer
+          python3 -m tools.axiom_campaign \
+            --target-dir "$GITHUB_WORKSPACE" \
+            --optimizer-dir "$GITHUB_WORKSPACE/.ai/optimizer" \
+            --run-id "$RUN_ID" \
+            --branch "$BRANCH" \
+            --minutes 225
+
+      - name: Publish report to job summary
+        if: always()
+        run: |
+          REPORT="ai-runs/$RUN_ID/FINAL_REPORT.md"
+          if [ -f "$REPORT" ]; then
+            cat "$REPORT" >> "$GITHUB_STEP_SUMMARY"
+            cp "$REPORT" /tmp/ai-optimize-report.md
+          else
+            {
+              echo "## Axiom v4 campaign $RUN_ID"
+              echo
+              echo "The campaign exited before writing a final report."
+              echo "See the job log and the \`ai-runs/$RUN_ID\` artifact."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # upload-artifact v4
+        with:
+          name: ai-run-${{ env.RUN_ID }}
+          path: ai-runs/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Comment the report on the pull request
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if [ -f /tmp/ai-optimize-report.md ]; then
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file /tmp/ai-optimize-report.md
+          else
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" \
+              --body "Campaign \`$RUN_ID\` exited without a final report. Job: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          fi
