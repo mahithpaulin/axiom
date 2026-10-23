@@ -496,13 +496,19 @@
       "message": "ai-campaign: start 39994744230-2 (baseline 274 tests) [skip ci]",
       "push_ok": true,
       "sha": "c824058f3a4426ab11c35d95c16baca2a8ef1110"
+    },
+    {
+      "at": "2026-10-23T17:34:21Z",
+      "message": "ai-campaign: record failed A001-peak-rss iteration 1 [skip ci]",
+      "push_ok": true,
+      "sha": "da0a1fc21762b086d0f78f500227dbbc60429fba"
     }
   ],
   "created_at": "2026-10-23T17:33:21Z",
-  "current_task": "A001-peak-rss",
-  "elapsed_minutes": 0.977,
+  "current_task": "A002-smt-negation",
+  "elapsed_minutes": 1.152,
   "failure_streak": 1,
-  "iterations": 1,
+  "iterations": 2,
   "last_checkpoint": "ai-runs/39994744230-2/checkpoints/iter-001.json",
   "minutes": 225.0,
   "model": {
@@ -534,7 +540,7 @@
       "task": "A001-peak-rss"
     }
   ],
-  "remaining_minutes": 224.023,
+  "remaining_minutes": 223.848,
   "run_id": "39994744230-2",
   "schema": 1,
   "started_at": "2026-10-23T17:33:21Z",
@@ -547,7 +553,8 @@
         "CampaignError: targeted test command failed; full workspace tests failed; test count fell from 274 to 67"
       ],
       "status": "failed"
-    }
+    },
+    "A002-smt-negation": {}
   },
-  "updated_at": "2026-10-23T17:34:20Z"
+  "updated_at": "2026-10-23T17:34:30Z"
 }
