@@ -1,0 +1,172 @@
+{
+  "at": "2026-10-23T17:45:18Z",
+  "tests": {
+    "ok": true,
+    "counts": {
+      "suites": 23,
+      "passed": 280,
+      "failed": 0,
+      "ignored": 0
+    },
+    "log": "ai-runs/39994744230-2/logs/final-tests.log"
+  },
+  "bench": {
+    "ok": true,
+    "rows": {
+      "hash_cons_1000_terms": {
+        "iters": 1,
+        "wall_ms": 0.81,
+        "mops": 11.072203014168041,
+        "allocs_per_it": 8095,
+        "bytes_per_op": 111,
+        "rss_kb": 2772
+      },
+      "hash_cons_sharing": {
+        "iters": 1,
+        "wall_ms": 0.01,
+        "mops": 82.00754469411186,
+        "allocs_per_it": 43,
+        "bytes_per_op": 7,
+        "rss_kb": 2772
+      },
+      "unify_ground_pairs": {
+        "iters": 631,
+        "wall_ms": 50.06,
+        "mops": 0.2898986645065857,
+        "allocs_per_it": 6,
+        "bytes_per_op": 1830,
+        "rss_kb": 3320
+      },
+      "match_pattern_vs_fact": {
+        "iters": 2000,
+        "wall_ms": 47.77,
+        "mops": 0.0,
+        "allocs_per_it": 4,
+        "bytes_per_op": 0,
+        "rss_kb": 3320
+      },
+      "occurs_check_cost": {
+        "iters": 515,
+        "wall_ms": 50.05,
+        "mops": 0.0,
+        "allocs_per_it": 4,
+        "bytes_per_op": 0,
+        "rss_kb": 3320
+      },
+      "db_index_lookup": {
+        "iters": 26,
+        "wall_ms": 51.22,
+        "mops": 2369.468434145067,
+        "allocs_per_it": 0,
+        "bytes_per_op": 0,
+        "rss_kb": 12560
+      },
+      "db_index_lookup_arg1": {
+        "iters": 26,
+        "wall_ms": 50.67,
+        "mops": 2396.914497544041,
+        "allocs_per_it": 0,
+        "bytes_per_op": 0,
+        "rss_kb": 12560
+      },
+      "db_scan_lookup": {
+        "iters": 1,
+        "wall_ms": 653.77,
+        "mops": 3540.2775347927413,
+        "allocs_per_it": 21,
+        "bytes_per_op": 0,
+        "rss_kb": 12560
+      },
+      "semi_naive_vs_fixpoint_n600[A]": {
+        "iters": 3,
+        "wall_ms": 607.6,
+        "mops": 0.8931836857364851,
+        "allocs_per_it": 556673,
+        "bytes_per_op": 507,
+        "rss_kb": 55424
+      },
+      "semi_naive_vs_fixpoint_n600[B]": {
+        "iters": 3,
+        "wall_ms": 594.95,
+        "mops": 0.9121705960912483,
+        "allocs_per_it": 556058,
+        "bytes_per_op": 507,
+        "rss_kb": 55424
+      },
+      "tc_path_n200": {
+        "iters": 1,
+        "wall_ms": 15.65,
+        "mops": 1.2969788251914687,
+        "allocs_per_it": 65164,
+        "bytes_per_op": 545,
+        "rss_kb": 23596
+      },
+      "tc_path_n1000": {
+        "iters": 1,
+        "wall_ms": 718.28,
+        "mops": 0.6981930545172206,
+        "allocs_per_it": 1528906,
+        "bytes_per_op": 478,
+        "rss_kb": 6232
+      },
+      "tc_random_n1500": {
+        "iters": 1,
+        "wall_ms": 11778.92,
+        "mops": 0.1912722485573564,
+        "allocs_per_it": 6811764,
+        "bytes_per_op": 594,
+        "rss_kb": 8276
+      },
+      "stratified_negation_5000": {
+        "iters": 1,
+        "wall_ms": 8.56,
+        "mops": 1.1676587484613177,
+        "allocs_per_it": 75317,
+        "bytes_per_op": 1049,
+        "rss_kb": 9132
+      },
+      "proof_verify_strong": {
+        "iters": 1658,
+        "wall_ms": 50.0,
+        "mops": 0.03315760801015814,
+        "allocs_per_it": 805,
+        "bytes_per_op": 15535,
+        "rss_kb": 9168
+      },
+      "proof_verify_shallow": {
+        "iters": 2000,
+        "wall_ms": 0.06,
+        "mops": 31.733439111463703,
+        "allocs_per_it": 0,
+        "bytes_per_op": 2,
+        "rss_kb": 9168
+      },
+      "memory_per_fact_probe": {
+        "iters": 1,
+        "wall_ms": 451.21,
+        "mops": 1.1114608044821122,
+        "allocs_per_it": 527869,
+        "bytes_per_op": 284,
+        "rss_kb": 62748
+      },
+      "parse_program": {
+        "iters": 775,
+        "wall_ms": 50.04,
+        "mops": 1.5797761474185947,
+        "allocs_per_it": 1575,
+        "bytes_per_op": 1517,
+        "rss_kb": 62748
+      },
+      "end_to_end_prove": {
+        "iters": 14,
+        "wall_ms": 50.8,
+        "mops": 0.00027559604140145466,
+        "allocs_per_it": 17851,
+        "bytes_per_op": 2742193,
+        "rss_kb": 62752
+      }
+    },
+    "log": "ai-runs/39994744230-2/logs/final-bench.log"
+  },
+  "head": "c59d4103d1e4112563e14cc135c58b98a9a9ea4b"
+}
