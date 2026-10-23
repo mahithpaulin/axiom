@@ -1,0 +1,45 @@
+{
+  "iteration": 5,
+  "task": "A005-docs-peak-rss",
+  "origin": "deterministic",
+  "started_at": "2026-10-23T17:50:06Z",
+  "pre_head": "4c3817cf7bfb60e49a46e0e40113f1644cd38b85",
+  "status": "accepted",
+  "checks": {
+    "fmt_ok": true,
+    "fmt_fix_log": "ai-runs/39998021258-1/logs/A005-docs-peak-rss.fmt-fix.log",
+    "fmt_log": "ai-runs/39998021258-1/logs/A005-docs-peak-rss.fmt-check.log",
+    "clippy": [],
+    "targeted": {
+      "ok": true,
+      "log": "ai-runs/39998021258-1/logs/A005-docs-peak-rss.targeted-test.log",
+      "returncode": 0
+    },
+    "tests": {
+      "ok": true,
+      "counts": {
+        "suites": 24,
+        "passed": 281,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "ai-runs/39998021258-1/logs/A005-docs-peak-rss.tests.log"
+    },
+    "bench": null,
+    "elapsed_seconds": 4.304
+  },
+  "bench": [],
+  "changed_files": [
+    "docs/ROADMAP.md",
+    "docs/v4/CAPABILITY_MATRIX.md",
+    "docs/v4/KNOWN_LIMITATIONS.md"
+  ],
+  "tests": {
+    "suites": 24,
+    "passed": 281,
+    "failed": 0,
+    "ignored": 0
+  },
+  "benchmark": [],
+  "checks_elapsed_seconds": 4.304
+}

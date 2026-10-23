@@ -1,0 +1,49 @@
+{
+  "iteration": 2,
+  "task": "A002-smt-negation",
+  "origin": "deterministic",
+  "started_at": "2026-10-23T17:49:50Z",
+  "pre_head": "ec20a342ce238a51ca0f4a322a32ba947e2f17f7",
+  "status": "accepted",
+  "checks": {
+    "fmt_ok": true,
+    "fmt_fix_log": "ai-runs/39998021258-1/logs/A002-smt-negation.fmt-fix.log",
+    "fmt_log": "ai-runs/39998021258-1/logs/A002-smt-negation.fmt-check.log",
+    "clippy": [
+      {
+        "package": "axiom-smt",
+        "ok": true,
+        "log": "ai-runs/39998021258-1/logs/A002-smt-negation.clippy-axiom-smt.log"
+      }
+    ],
+    "targeted": {
+      "ok": true,
+      "log": "ai-runs/39998021258-1/logs/A002-smt-negation.targeted-test.log",
+      "returncode": 0
+    },
+    "tests": {
+      "ok": true,
+      "counts": {
+        "suites": 22,
+        "passed": 277,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "ai-runs/39998021258-1/logs/A002-smt-negation.tests.log"
+    },
+    "bench": null,
+    "elapsed_seconds": 4.044
+  },
+  "bench": [],
+  "changed_files": [
+    "crates/axiom-smt/tests/negation.rs"
+  ],
+  "tests": {
+    "suites": 22,
+    "passed": 277,
+    "failed": 0,
+    "ignored": 0
+  },
+  "benchmark": [],
+  "checks_elapsed_seconds": 4.044
+}

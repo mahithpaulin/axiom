@@ -227,7 +227,7 @@ impl Bench {
             cpu_ms: cpu_ms().saturating_sub(c0),
             allocs: allocs().saturating_sub(a0),
             alloc_bytes: allocated_bytes().saturating_sub(b0),
-            rss_kb: rss_kb(),
+            rss_kb: peak_rss_kb(),
             note: format!("hint {hint_ops} ops"),
         });
     }
@@ -249,7 +249,7 @@ impl Bench {
             cpu_ms: cpu_ms().saturating_sub(c0),
             allocs: allocs().saturating_sub(a0),
             alloc_bytes: allocated_bytes().saturating_sub(b0),
-            rss_kb: rss_kb(),
+            rss_kb: peak_rss_kb(),
             note: "single shot".into(),
         });
     }

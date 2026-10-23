@@ -1,0 +1,8 @@
+{
+  "model": "opencode/deepseek-v4.1-flash-free",
+  "returncode": 1,
+  "timed_out": false,
+  "elapsed_seconds": 2.621,
+  "text": "{\"type\":\"error\",\"timestamp\":1792777814487,\"sessionID\":\"ses_e961d829affe10V4dTt2UdUloX\",\"error\":{\"name\":\"APIError\",\"data\":{\"message\":\"OpenCode's free tier can only be used from within OpenCode. Download it at https://opencode.ai and keep building.\",\"statusCode\":403,\"isRetryable\":false,\"responseHeaders\":{\"cf-ray\":\"a4f2953b2e281417-ORD\",\"connection\":\"keep-alive\",\"content-encoding\":\"br\",\"content-type\":\"application/json\",\"date\":\"Fri, 23 Oct 2026 17:50:14 GMT\",\"server\":\"cloudflare\",\"transfer-encoding\":\"chunked\",\"x-opencode-log-id\":\"01a169e2-8114-7920-b330-b1f2d7587e84\"},\"responseBody\":\"{\\\"type\\\":\\\"error\\\",\\\"error\\\":{\\\"type\\\":\\\"FreeTierError\\\",\\\"message\\\":\\\"OpenCode's free tier can only be used from within OpenCode. Download it at https://opencode.ai and keep building.\\\"}}\",\"metadata\":{\"url\":\"https://opencode.ai/inference/openai/v1/chat/completions\"}}}}\n",
+  "error_text": ""
+}

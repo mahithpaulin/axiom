@@ -1,0 +1,49 @@
+{
+  "iteration": 4,
+  "task": "A004-planning-negative-precondition",
+  "origin": "deterministic",
+  "started_at": "2026-10-23T17:50:01Z",
+  "pre_head": "9a119ae7e228bfd71447b902a2c01ee7161fd005",
+  "status": "accepted",
+  "checks": {
+    "fmt_ok": true,
+    "fmt_fix_log": "ai-runs/39998021258-1/logs/A004-planning-negative-precondition.fmt-fix.log",
+    "fmt_log": "ai-runs/39998021258-1/logs/A004-planning-negative-precondition.fmt-check.log",
+    "clippy": [
+      {
+        "package": "axiom-planning",
+        "ok": true,
+        "log": "ai-runs/39998021258-1/logs/A004-planning-negative-precondition.clippy-axiom-planning.log"
+      }
+    ],
+    "targeted": {
+      "ok": true,
+      "log": "ai-runs/39998021258-1/logs/A004-planning-negative-precondition.targeted-test.log",
+      "returncode": 0
+    },
+    "tests": {
+      "ok": true,
+      "counts": {
+        "suites": 24,
+        "passed": 281,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "ai-runs/39998021258-1/logs/A004-planning-negative-precondition.tests.log"
+    },
+    "bench": null,
+    "elapsed_seconds": 3.83
+  },
+  "bench": [],
+  "changed_files": [
+    "crates/axiom-planning/tests/negative_preconditions.rs"
+  ],
+  "tests": {
+    "suites": 24,
+    "passed": 281,
+    "failed": 0,
+    "ignored": 0
+  },
+  "benchmark": [],
+  "checks_elapsed_seconds": 3.83
+}

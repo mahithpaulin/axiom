@@ -29,8 +29,8 @@ This is the unflattering list. If a capability is not here, check
 - **GitHub Actions uses unpinned `stable`.** The declared MSRV 1.75 is not
   tested.
 - **The root crate is still single-threaded and zero-dependency.**
-- **RSS sampling is invalid for peak memory** (`src/bench.rs:206-258`, F-03).
-  Do not use the kernel `rss kB` column as a peak baseline.
+- **The per-row RSS column is a process-lifetime high-water mark.**
+  `Bench::run` and `run_once` now read `VmHWM`, so the column is a peak rather than a post-solve point sample. It is still process-wide, not per-benchmark: run each memory claim in its own process.
 
 ## 2. Datalog (`axiom-core::DatalogEngine`)
 

@@ -1,0 +1,172 @@
+{
+  "at": "2026-10-23T18:01:02Z",
+  "tests": {
+    "ok": true,
+    "counts": {
+      "suites": 24,
+      "passed": 281,
+      "failed": 0,
+      "ignored": 0
+    },
+    "log": "ai-runs/39998021258-1/logs/final-tests.log"
+  },
+  "bench": {
+    "ok": true,
+    "rows": {
+      "hash_cons_1000_terms": {
+        "iters": 1,
+        "wall_ms": 1.08,
+        "mops": 8.352818914003638,
+        "allocs_per_it": 8095,
+        "bytes_per_op": 111,
+        "rss_kb": 3052
+      },
+      "hash_cons_sharing": {
+        "iters": 1,
+        "wall_ms": 0.01,
+        "mops": 71.62810686913544,
+        "allocs_per_it": 43,
+        "bytes_per_op": 7,
+        "rss_kb": 3052
+      },
+      "unify_ground_pairs": {
+        "iters": 599,
+        "wall_ms": 50.07,
+        "mops": 0.2751354518370369,
+        "allocs_per_it": 6,
+        "bytes_per_op": 1830,
+        "rss_kb": 3324
+      },
+      "match_pattern_vs_fact": {
+        "iters": 1333,
+        "wall_ms": 50.0,
+        "mops": 0.0,
+        "allocs_per_it": 4,
+        "bytes_per_op": 0,
+        "rss_kb": 3324
+      },
+      "occurs_check_cost": {
+        "iters": 616,
+        "wall_ms": 50.0,
+        "mops": 0.0,
+        "allocs_per_it": 4,
+        "bytes_per_op": 0,
+        "rss_kb": 3324
+      },
+      "db_index_lookup": {
+        "iters": 20,
+        "wall_ms": 50.59,
+        "mops": 1845.5394500053208,
+        "allocs_per_it": 1,
+        "bytes_per_op": 0,
+        "rss_kb": 12564
+      },
+      "db_index_lookup_arg1": {
+        "iters": 21,
+        "wall_ms": 52.15,
+        "mops": 1881.0052507886194,
+        "allocs_per_it": 1,
+        "bytes_per_op": 0,
+        "rss_kb": 12564
+      },
+      "db_scan_lookup": {
+        "iters": 1,
+        "wall_ms": 816.33,
+        "mops": 2835.2868014016917,
+        "allocs_per_it": 21,
+        "bytes_per_op": 0,
+        "rss_kb": 12564
+      },
+      "semi_naive_vs_fixpoint_n600[A]": {
+        "iters": 3,
+        "wall_ms": 851.16,
+        "mops": 0.6376018392267119,
+        "allocs_per_it": 556673,
+        "bytes_per_op": 507,
+        "rss_kb": 55456
+      },
+      "semi_naive_vs_fixpoint_n600[B]": {
+        "iters": 3,
+        "wall_ms": 844.27,
+        "mops": 0.6428012186942571,
+        "allocs_per_it": 556058,
+        "bytes_per_op": 507,
+        "rss_kb": 55456
+      },
+      "tc_path_n200": {
+        "iters": 1,
+        "wall_ms": 19.18,
+        "mops": 1.0583224286153703,
+        "allocs_per_it": 65164,
+        "bytes_per_op": 545,
+        "rss_kb": 55456
+      },
+      "tc_path_n1000": {
+        "iters": 1,
+        "wall_ms": 1014.56,
+        "mops": 0.49430085894310355,
+        "allocs_per_it": 1528906,
+        "bytes_per_op": 478,
+        "rss_kb": 154340
+      },
+      "tc_random_n1500": {
+        "iters": 1,
+        "wall_ms": 16514.54,
+        "mops": 0.1364241078929444,
+        "allocs_per_it": 6811764,
+        "bytes_per_op": 594,
+        "rss_kb": 675920
+      },
+      "stratified_negation_5000": {
+        "iters": 1,
+        "wall_ms": 10.52,
+        "mops": 0.9503805371189651,
+        "allocs_per_it": 75317,
+        "bytes_per_op": 1049,
+        "rss_kb": 675920
+      },
+      "proof_verify_strong": {
+        "iters": 1518,
+        "wall_ms": 50.02,
+        "mops": 0.030350068850470747,
+        "allocs_per_it": 805,
+        "bytes_per_op": 15535,
+        "rss_kb": 675920
+      },
+      "proof_verify_shallow": {
+        "iters": 2000,
+        "wall_ms": 0.07,
+        "mops": 28.098569782798055,
+        "allocs_per_it": 0,
+        "bytes_per_op": 2,
+        "rss_kb": 675920
+      },
+      "memory_per_fact_probe": {
+        "iters": 1,
+        "wall_ms": 702.14,
+        "mops": 0.7142434385207597,
+        "allocs_per_it": 527869,
+        "bytes_per_op": 284,
+        "rss_kb": 675920
+      },
+      "parse_program": {
+        "iters": 726,
+        "wall_ms": 50.0,
+        "mops": 1.480996488323173,
+        "allocs_per_it": 1575,
+        "bytes_per_op": 1517,
+        "rss_kb": 675920
+      },
+      "end_to_end_prove": {
+        "iters": 12,
+        "wall_ms": 53.76,
+        "mops": 0.00022323057955346293,
+        "allocs_per_it": 17851,
+        "bytes_per_op": 2742264,
+        "rss_kb": 675920
+      }
+    },
+    "log": "ai-runs/39998021258-1/logs/final-bench.log"
+  },
+  "head": "5d00e218e27bfa4fe2baf717fce9ea6190a9827d"
+}

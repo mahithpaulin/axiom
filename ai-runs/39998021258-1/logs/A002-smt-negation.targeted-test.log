@@ -1,0 +1,41 @@
+$ cargo test -p axiom-smt --lib --tests
+rc=0 timeout=False elapsed=0.154s
+
+--- stdout ---
+
+running 18 tests
+test parse::tests::a_coefficient_of_two_is_rejected ... ok
+test parse::tests::a_bare_numeral_uses_the_origin ... ok
+test parse::tests::constant_comparisons_fold ... ok
+test parse::tests::equality_with_equal_offsets_is_one_atom ... ok
+test parse::tests::equality_with_offsets_is_two_constraints ... ok
+test parse::tests::parses_a_difference_constraint ... ok
+test parse::tests::push_and_pop_open_and_close_scopes ... ok
+test parse::tests::unknown_symbols_are_errors ... ok
+test tests::a_pop_below_the_base_scope_is_an_error ... ok
+test tests::a_tampered_model_is_rejected ... ok
+test tests::a_consistent_difference_system_is_found ... ok
+test tests::a_tampered_unsat_proof_is_rejected ... ok
+test tests::a_numeral_equality_is_checked ... ok
+test tests::an_inconsistent_difference_system_is_impossible ... ok
+test tests::boolean_structure_is_handled ... ok
+test tests::uninterpreted_functions_use_congruence ... ok
+test tests::unsupported_fragments_are_explicit ... ok
+test tests::push_pop_scopes_change_the_answer ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test the_integer_gap_in_a_negated_difference_bound_is_exact ... ok
+test disequality_contradicts_equality ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+--- stderr ---
+   Compiling axiom-smt v0.2.0 (/home/runner/work/axiom/axiom/crates/axiom-smt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running unittests src/lib.rs (target/debug/deps/axiom_smt-3a0ce0e21cc8d731)
+     Running tests/negation.rs (target/debug/deps/negation-4d6c36654f6369cf)
+

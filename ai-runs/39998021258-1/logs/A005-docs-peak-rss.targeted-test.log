@@ -1,0 +1,19 @@
+$ cargo check --workspace
+rc=0 timeout=False elapsed=0.977s
+
+--- stdout ---
+
+--- stderr ---
+    Checking axiom-ir v0.2.0 (/home/runner/work/axiom/axiom/crates/axiom-ir)
+    Checking axiom v0.1.0 (/home/runner/work/axiom/axiom)
+    Checking axiom-proof v0.2.0 (/home/runner/work/axiom/axiom/crates/axiom-proof)
+    Checking axiom-core v0.2.0 (/home/runner/work/axiom/axiom/crates/axiom-core)
+    Checking axiom-asp v0.2.0 (/home/runner/work/axiom/axiom/crates/axiom-asp)
+    Checking axiom-planning v0.2.0 (/home/runner/work/axiom/axiom/crates/axiom-planning)
+    Checking axiom-smt v0.2.0 (/home/runner/work/axiom/axiom/crates/axiom-smt)
+    Checking axiom-prover v0.2.0 (/home/runner/work/axiom/axiom/crates/axiom-prover)
+    Checking axiom-bridge v0.2.0 (/home/runner/work/axiom/axiom/crates/axiom-bridge)
+    Checking axiom-bench v0.2.0 (/home/runner/work/axiom/axiom/crates/axiom-bench)
+    Checking axiom-router v0.2.0 (/home/runner/work/axiom/axiom/crates/axiom-router)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.96s
+

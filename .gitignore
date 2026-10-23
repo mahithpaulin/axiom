@@ -4,3 +4,4 @@ Cargo.lock
 /artifacts/
 /benchmarks/external/out/
 __pycache__/
+/.ai/

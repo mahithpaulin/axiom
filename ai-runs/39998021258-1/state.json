@@ -1,0 +1,875 @@
+{
+  "accepted": [
+    {
+      "benchmark": [],
+      "commit": "ec20a342ce238a51ca0f4a322a32ba947e2f17f7",
+      "iteration": 1,
+      "push_ok": true,
+      "task": "A001-peak-rss",
+      "tests": {
+        "failed": 0,
+        "ignored": 0,
+        "passed": 275,
+        "suites": 21
+      }
+    },
+    {
+      "benchmark": [],
+      "commit": "ecf13da2f01d6685dcd67445b02b7947491dce58",
+      "iteration": 2,
+      "push_ok": true,
+      "task": "A002-smt-negation",
+      "tests": {
+        "failed": 0,
+        "ignored": 0,
+        "passed": 277,
+        "suites": 22
+      }
+    },
+    {
+      "benchmark": [],
+      "commit": "9a119ae7e228bfd71447b902a2c01ee7161fd005",
+      "iteration": 3,
+      "push_ok": true,
+      "task": "A003-fol-equality-negative",
+      "tests": {
+        "failed": 0,
+        "ignored": 0,
+        "passed": 279,
+        "suites": 23
+      }
+    },
+    {
+      "benchmark": [],
+      "commit": "4c3817cf7bfb60e49a46e0e40113f1644cd38b85",
+      "iteration": 4,
+      "push_ok": true,
+      "task": "A004-planning-negative-precondition",
+      "tests": {
+        "failed": 0,
+        "ignored": 0,
+        "passed": 281,
+        "suites": 24
+      }
+    },
+    {
+      "benchmark": [],
+      "commit": "a4c64f1a8f0ba0b763215ebf61575e16467bb60c",
+      "iteration": 5,
+      "push_ok": true,
+      "task": "A005-docs-peak-rss",
+      "tests": {
+        "failed": 0,
+        "ignored": 0,
+        "passed": 281,
+        "suites": 24
+      }
+    }
+  ],
+  "baseline": {
+    "at": "2026-10-23T17:48:37Z",
+    "bench": {
+      "db_index_lookup": {
+        "allocs_per_it": 1,
+        "bytes_per_op": 0,
+        "iters": 20,
+        "mops": 1840.9064373617416,
+        "rss_kb": 12568,
+        "wall_ms": 50.53
+      },
+      "db_index_lookup_arg1": {
+        "allocs_per_it": 1,
+        "bytes_per_op": 0,
+        "iters": 21,
+        "mops": 1876.9301801922468,
+        "rss_kb": 12568,
+        "wall_ms": 52.24
+      },
+      "db_scan_lookup": {
+        "allocs_per_it": 21,
+        "bytes_per_op": 0,
+        "iters": 1,
+        "mops": 2838.2167604302817,
+        "rss_kb": 12568,
+        "wall_ms": 815.48
+      },
+      "end_to_end_prove": {
+        "allocs_per_it": 17851,
+        "bytes_per_op": 2742264,
+        "iters": 12,
+        "mops": 0.0002208143711292276,
+        "rss_kb": 62760,
+        "wall_ms": 53.32
+      },
+      "hash_cons_1000_terms": {
+        "allocs_per_it": 8095,
+        "bytes_per_op": 111,
+        "iters": 1,
+        "mops": 9.056146701126032,
+        "rss_kb": 2780,
+        "wall_ms": 0.99
+      },
+      "hash_cons_sharing": {
+        "allocs_per_it": 43,
+        "bytes_per_op": 7,
+        "iters": 1,
+        "mops": 73.909830007391,
+        "rss_kb": 2780,
+        "wall_ms": 0.01
+      },
+      "match_pattern_vs_fact": {
+        "allocs_per_it": 4,
+        "bytes_per_op": 0,
+        "iters": 1334,
+        "mops": 0.0,
+        "rss_kb": 3328,
+        "wall_ms": 50.0
+      },
+      "memory_per_fact_probe": {
+        "allocs_per_it": 527869,
+        "bytes_per_op": 284,
+        "iters": 1,
+        "mops": 0.749237918216613,
+        "rss_kb": 62756,
+        "wall_ms": 556.78
+      },
+      "occurs_check_cost": {
+        "allocs_per_it": 4,
+        "bytes_per_op": 0,
+        "iters": 621,
+        "mops": 0.0,
+        "rss_kb": 3328,
+        "wall_ms": 50.0
+      },
+      "parse_program": {
+        "allocs_per_it": 1575,
+        "bytes_per_op": 1517,
+        "iters": 718,
+        "mops": 1.4645236659573417,
+        "rss_kb": 62756,
+        "wall_ms": 50.01
+      },
+      "proof_verify_shallow": {
+        "allocs_per_it": 0,
+        "bytes_per_op": 2,
+        "iters": 2000,
+        "mops": 28.090676704401805,
+        "rss_kb": 9176,
+        "wall_ms": 0.07
+      },
+      "proof_verify_strong": {
+        "allocs_per_it": 805,
+        "bytes_per_op": 15535,
+        "iters": 1486,
+        "mops": 0.029920575562344925,
+        "rss_kb": 9176,
+        "wall_ms": 50.02
+      },
+      "semi_naive_vs_fixpoint_n600[A]": {
+        "allocs_per_it": 556673,
+        "bytes_per_op": 507,
+        "iters": 3,
+        "mops": 0.6849336195453052,
+        "rss_kb": 55456,
+        "wall_ms": 792.34
+      },
+      "semi_naive_vs_fixpoint_n600[B]": {
+        "allocs_per_it": 556058,
+        "bytes_per_op": 507,
+        "iters": 3,
+        "mops": 0.6617435031066632,
+        "rss_kb": 55456,
+        "wall_ms": 820.11
+      },
+      "stratified_negation_5000": {
+        "allocs_per_it": 75317,
+        "bytes_per_op": 1049,
+        "iters": 1,
+        "mops": 1.1174465363291926,
+        "rss_kb": 9140,
+        "wall_ms": 8.62
+      },
+      "tc_path_n1000": {
+        "allocs_per_it": 1528906,
+        "bytes_per_op": 478,
+        "iters": 1,
+        "mops": 0.5174332853842061,
+        "rss_kb": 6240,
+        "wall_ms": 969.21
+      },
+      "tc_path_n200": {
+        "allocs_per_it": 65164,
+        "bytes_per_op": 545,
+        "iters": 1,
+        "mops": 1.0673765965430038,
+        "rss_kb": 23604,
+        "wall_ms": 19.02
+      },
+      "tc_random_n1500": {
+        "allocs_per_it": 6811764,
+        "bytes_per_op": 594,
+        "iters": 1,
+        "mops": 0.14229506201150655,
+        "rss_kb": 8284,
+        "wall_ms": 15789.91
+      },
+      "unify_ground_pairs": {
+        "allocs_per_it": 6,
+        "bytes_per_op": 1830,
+        "iters": 594,
+        "mops": 0.27308522621718917,
+        "rss_kb": 3328,
+        "wall_ms": 50.03
+      }
+    },
+    "bench_elapsed_seconds": 56.32,
+    "bench_ok": true,
+    "bench_runs": [
+      {
+        "elapsed_seconds": 33.559,
+        "log": "ai-runs/39998021258-1/logs/baseline-bench-1.log",
+        "ok": true,
+        "rows": {
+          "db_index_lookup": {
+            "allocs_per_it": 1,
+            "bytes_per_op": 0,
+            "iters": 20,
+            "mops": 1840.9064373617416,
+            "rss_kb": 12572,
+            "wall_ms": 50.71
+          },
+          "db_index_lookup_arg1": {
+            "allocs_per_it": 1,
+            "bytes_per_op": 0,
+            "iters": 21,
+            "mops": 1876.9301801922468,
+            "rss_kb": 12572,
+            "wall_ms": 52.26
+          },
+          "db_scan_lookup": {
+            "allocs_per_it": 21,
+            "bytes_per_op": 0,
+            "iters": 1,
+            "mops": 2838.2167604302817,
+            "rss_kb": 12572,
+            "wall_ms": 815.48
+          },
+          "end_to_end_prove": {
+            "allocs_per_it": 17851,
+            "bytes_per_op": 2742264,
+            "iters": 12,
+            "mops": 0.0002208143711292276,
+            "rss_kb": 62764,
+            "wall_ms": 54.34
+          },
+          "hash_cons_1000_terms": {
+            "allocs_per_it": 8095,
+            "bytes_per_op": 111,
+            "iters": 1,
+            "mops": 9.056146701126032,
+            "rss_kb": 2784,
+            "wall_ms": 0.99
+          },
+          "hash_cons_sharing": {
+            "allocs_per_it": 43,
+            "bytes_per_op": 7,
+            "iters": 1,
+            "mops": 73.909830007391,
+            "rss_kb": 2784,
+            "wall_ms": 0.01
+          },
+          "match_pattern_vs_fact": {
+            "allocs_per_it": 4,
+            "bytes_per_op": 0,
+            "iters": 1334,
+            "mops": 0.0,
+            "rss_kb": 3332,
+            "wall_ms": 50.0
+          },
+          "memory_per_fact_probe": {
+            "allocs_per_it": 527869,
+            "bytes_per_op": 284,
+            "iters": 1,
+            "mops": 0.749237918216613,
+            "rss_kb": 62760,
+            "wall_ms": 669.35
+          },
+          "occurs_check_cost": {
+            "allocs_per_it": 4,
+            "bytes_per_op": 0,
+            "iters": 621,
+            "mops": 0.0,
+            "rss_kb": 3332,
+            "wall_ms": 50.0
+          },
+          "parse_program": {
+            "allocs_per_it": 1575,
+            "bytes_per_op": 1517,
+            "iters": 718,
+            "mops": 1.4645236659573417,
+            "rss_kb": 62760,
+            "wall_ms": 50.01
+          },
+          "proof_verify_shallow": {
+            "allocs_per_it": 0,
+            "bytes_per_op": 2,
+            "iters": 2000,
+            "mops": 28.090676704401805,
+            "rss_kb": 9180,
+            "wall_ms": 0.07
+          },
+          "proof_verify_strong": {
+            "allocs_per_it": 805,
+            "bytes_per_op": 15535,
+            "iters": 1497,
+            "mops": 0.029920575562344925,
+            "rss_kb": 9180,
+            "wall_ms": 50.03
+          },
+          "semi_naive_vs_fixpoint_n600[A]": {
+            "allocs_per_it": 556673,
+            "bytes_per_op": 507,
+            "iters": 3,
+            "mops": 0.6849336195453052,
+            "rss_kb": 55460,
+            "wall_ms": 792.34
+          },
+          "semi_naive_vs_fixpoint_n600[B]": {
+            "allocs_per_it": 556058,
+            "bytes_per_op": 507,
+            "iters": 3,
+            "mops": 0.6617435031066632,
+            "rss_kb": 55460,
+            "wall_ms": 820.11
+          },
+          "stratified_negation_5000": {
+            "allocs_per_it": 75317,
+            "bytes_per_op": 1049,
+            "iters": 1,
+            "mops": 1.1174465363291926,
+            "rss_kb": 9144,
+            "wall_ms": 8.95
+          },
+          "tc_path_n1000": {
+            "allocs_per_it": 1528906,
+            "bytes_per_op": 478,
+            "iters": 1,
+            "mops": 0.5174332853842061,
+            "rss_kb": 6244,
+            "wall_ms": 969.21
+          },
+          "tc_path_n200": {
+            "allocs_per_it": 65164,
+            "bytes_per_op": 545,
+            "iters": 1,
+            "mops": 1.0673765965430038,
+            "rss_kb": 23608,
+            "wall_ms": 19.02
+          },
+          "tc_random_n1500": {
+            "allocs_per_it": 6811764,
+            "bytes_per_op": 594,
+            "iters": 1,
+            "mops": 0.14229506201150655,
+            "rss_kb": 8288,
+            "wall_ms": 15833.16
+          },
+          "unify_ground_pairs": {
+            "allocs_per_it": 6,
+            "bytes_per_op": 1830,
+            "iters": 594,
+            "mops": 0.27308522621718917,
+            "rss_kb": 3332,
+            "wall_ms": 50.03
+          }
+        }
+      },
+      {
+        "elapsed_seconds": 22.761,
+        "log": "ai-runs/39998021258-1/logs/baseline-bench-2.log",
+        "ok": true,
+        "rows": {
+          "db_index_lookup": {
+            "allocs_per_it": 1,
+            "bytes_per_op": 0,
+            "iters": 20,
+            "mops": 1847.6782314173784,
+            "rss_kb": 12568,
+            "wall_ms": 50.53
+          },
+          "db_index_lookup_arg1": {
+            "allocs_per_it": 1,
+            "bytes_per_op": 0,
+            "iters": 21,
+            "mops": 1877.780611161265,
+            "rss_kb": 12568,
+            "wall_ms": 52.24
+          },
+          "db_scan_lookup": {
+            "allocs_per_it": 21,
+            "bytes_per_op": 0,
+            "iters": 1,
+            "mops": 2809.1053567154586,
+            "rss_kb": 12568,
+            "wall_ms": 823.93
+          },
+          "end_to_end_prove": {
+            "allocs_per_it": 17851,
+            "bytes_per_op": 2742264,
+            "iters": 12,
+            "mops": 0.00022506187795006888,
+            "rss_kb": 62760,
+            "wall_ms": 53.32
+          },
+          "hash_cons_1000_terms": {
+            "allocs_per_it": 8095,
+            "bytes_per_op": 111,
+            "iters": 1,
+            "mops": 9.044036682500261,
+            "rss_kb": 2780,
+            "wall_ms": 1.0
+          },
+          "hash_cons_sharing": {
+            "allocs_per_it": 43,
+            "bytes_per_op": 7,
+            "iters": 1,
+            "mops": 71.42346975216057,
+            "rss_kb": 2780,
+            "wall_ms": 0.01
+          },
+          "match_pattern_vs_fact": {
+            "allocs_per_it": 4,
+            "bytes_per_op": 0,
+            "iters": 1335,
+            "mops": 0.0,
+            "rss_kb": 3328,
+            "wall_ms": 50.01
+          },
+          "memory_per_fact_probe": {
+            "allocs_per_it": 527869,
+            "bytes_per_op": 284,
+            "iters": 1,
+            "mops": 0.9007095507864227,
+            "rss_kb": 62756,
+            "wall_ms": 556.78
+          },
+          "occurs_check_cost": {
+            "allocs_per_it": 4,
+            "bytes_per_op": 0,
+            "iters": 622,
+            "mops": 0.0,
+            "rss_kb": 3328,
+            "wall_ms": 50.03
+          },
+          "parse_program": {
+            "allocs_per_it": 1575,
+            "bytes_per_op": 1517,
+            "iters": 731,
+            "mops": 1.4902433848339585,
+            "rss_kb": 62756,
+            "wall_ms": 50.03
+          },
+          "proof_verify_shallow": {
+            "allocs_per_it": 0,
+            "bytes_per_op": 2,
+            "iters": 2000,
+            "mops": 28.098569782798055,
+            "rss_kb": 9176,
+            "wall_ms": 0.07
+          },
+          "proof_verify_strong": {
+            "allocs_per_it": 805,
+            "bytes_per_op": 15536,
+            "iters": 1486,
+            "mops": 0.02970767250421765,
+            "rss_kb": 9176,
+            "wall_ms": 50.02
+          },
+          "semi_naive_vs_fixpoint_n600[A]": {
+            "allocs_per_it": 556673,
+            "bytes_per_op": 507,
+            "iters": 3,
+            "mops": 0.6389438637272395,
+            "rss_kb": 55456,
+            "wall_ms": 849.37
+          },
+          "semi_naive_vs_fixpoint_n600[B]": {
+            "allocs_per_it": 556058,
+            "bytes_per_op": 507,
+            "iters": 3,
+            "mops": 0.6293749795021139,
+            "rss_kb": 55456,
+            "wall_ms": 862.28
+          },
+          "stratified_negation_5000": {
+            "allocs_per_it": 75317,
+            "bytes_per_op": 1049,
+            "iters": 1,
+            "mops": 1.1597201363366991,
+            "rss_kb": 9140,
+            "wall_ms": 8.62
+          },
+          "tc_path_n1000": {
+            "allocs_per_it": 1528906,
+            "bytes_per_op": 478,
+            "iters": 1,
+            "mops": 0.5033799039642886,
+            "rss_kb": 6240,
+            "wall_ms": 996.27
+          },
+          "tc_path_n200": {
+            "allocs_per_it": 65164,
+            "bytes_per_op": 545,
+            "iters": 1,
+            "mops": 1.0546343725499556,
+            "rss_kb": 23604,
+            "wall_ms": 19.25
+          },
+          "tc_random_n1500": {
+            "allocs_per_it": 6811764,
+            "bytes_per_op": 594,
+            "iters": 1,
+            "mops": 0.1426848931352145,
+            "rss_kb": 8284,
+            "wall_ms": 15789.91
+          },
+          "unify_ground_pairs": {
+            "allocs_per_it": 6,
+            "bytes_per_op": 1830,
+            "iters": 578,
+            "mops": 0.2656195494070244,
+            "rss_kb": 3328,
+            "wall_ms": 50.05
+          }
+        }
+      }
+    ],
+    "head": "a54aea4f6fea2e347c0360827aa570538eac77ea",
+    "test_elapsed_seconds": 9.584,
+    "test_log": "ai-runs/39998021258-1/logs/baseline-tests.log",
+    "test_ok": true,
+    "tests": {
+      "failed": 0,
+      "ignored": 0,
+      "passed": 274,
+      "suites": 20
+    }
+  },
+  "branch": "ai-optimization/run2-axiom-v4",
+  "commits": [
+    {
+      "at": "2026-10-23T17:49:34Z",
+      "message": "ai-campaign: start 39998021258-1 (baseline 274 tests) [skip ci]",
+      "push_ok": true,
+      "sha": "d2dc24b07ba81d5326dcee4a345c8c384edf4652"
+    },
+    {
+      "at": "2026-10-23T17:49:50Z",
+      "message": "ai-campaign: A001-peak-rss (deterministic, 275 tests) [skip ci]",
+      "push_ok": true,
+      "sha": "ec20a342ce238a51ca0f4a322a32ba947e2f17f7"
+    },
+    {
+      "at": "2026-10-23T17:49:55Z",
+      "message": "ai-campaign: A002-smt-negation (deterministic, 277 tests) [skip ci]",
+      "push_ok": true,
+      "sha": "ecf13da2f01d6685dcd67445b02b7947491dce58"
+    },
+    {
+      "at": "2026-10-23T17:50:01Z",
+      "message": "ai-campaign: A003-fol-equality-negative (deterministic, 279 tests) [skip ci]",
+      "push_ok": true,
+      "sha": "9a119ae7e228bfd71447b902a2c01ee7161fd005"
+    },
+    {
+      "at": "2026-10-23T17:50:06Z",
+      "message": "ai-campaign: A004-planning-negative-precondition (deterministic, 281 tests) [skip ci]",
+      "push_ok": true,
+      "sha": "4c3817cf7bfb60e49a46e0e40113f1644cd38b85"
+    },
+    {
+      "at": "2026-10-23T17:50:11Z",
+      "message": "ai-campaign: A005-docs-peak-rss (deterministic, 281 tests) [skip ci]",
+      "push_ok": true,
+      "sha": "a4c64f1a8f0ba0b763215ebf61575e16467bb60c"
+    },
+    {
+      "at": "2026-10-23T17:50:16Z",
+      "message": "ai-campaign: record failed A006-db-third-index iteration 6 [skip ci]",
+      "push_ok": true,
+      "sha": "5d860c259244a9879d7d96184694a6a94fb642ea"
+    },
+    {
+      "at": "2026-10-23T17:50:20Z",
+      "message": "ai-campaign: soak 1 (281 tests) [skip ci]",
+      "push_ok": true,
+      "sha": "da6fddccb3bf18685c7966e48578534835428762"
+    },
+    {
+      "at": "2026-10-23T17:55:24Z",
+      "message": "ai-campaign: soak 2 (281 tests) [skip ci]",
+      "push_ok": true,
+      "sha": "5d00e218e27bfa4fe2baf717fce9ea6190a9827d"
+    }
+  ],
+  "created_at": "2026-10-23T17:48:25Z",
+  "current_task": "A006-db-third-index",
+  "elapsed_minutes": 12.609,
+  "failure_streak": 1,
+  "final": {
+    "at": "2026-10-23T18:01:02Z",
+    "bench": {
+      "log": "ai-runs/39998021258-1/logs/final-bench.log",
+      "ok": true,
+      "rows": {
+        "db_index_lookup": {
+          "allocs_per_it": 1,
+          "bytes_per_op": 0,
+          "iters": 20,
+          "mops": 1845.5394500053208,
+          "rss_kb": 12564,
+          "wall_ms": 50.59
+        },
+        "db_index_lookup_arg1": {
+          "allocs_per_it": 1,
+          "bytes_per_op": 0,
+          "iters": 21,
+          "mops": 1881.0052507886194,
+          "rss_kb": 12564,
+          "wall_ms": 52.15
+        },
+        "db_scan_lookup": {
+          "allocs_per_it": 21,
+          "bytes_per_op": 0,
+          "iters": 1,
+          "mops": 2835.2868014016917,
+          "rss_kb": 12564,
+          "wall_ms": 816.33
+        },
+        "end_to_end_prove": {
+          "allocs_per_it": 17851,
+          "bytes_per_op": 2742264,
+          "iters": 12,
+          "mops": 0.00022323057955346293,
+          "rss_kb": 675920,
+          "wall_ms": 53.76
+        },
+        "hash_cons_1000_terms": {
+          "allocs_per_it": 8095,
+          "bytes_per_op": 111,
+          "iters": 1,
+          "mops": 8.352818914003638,
+          "rss_kb": 3052,
+          "wall_ms": 1.08
+        },
+        "hash_cons_sharing": {
+          "allocs_per_it": 43,
+          "bytes_per_op": 7,
+          "iters": 1,
+          "mops": 71.62810686913544,
+          "rss_kb": 3052,
+          "wall_ms": 0.01
+        },
+        "match_pattern_vs_fact": {
+          "allocs_per_it": 4,
+          "bytes_per_op": 0,
+          "iters": 1333,
+          "mops": 0.0,
+          "rss_kb": 3324,
+          "wall_ms": 50.0
+        },
+        "memory_per_fact_probe": {
+          "allocs_per_it": 527869,
+          "bytes_per_op": 284,
+          "iters": 1,
+          "mops": 0.7142434385207597,
+          "rss_kb": 675920,
+          "wall_ms": 702.14
+        },
+        "occurs_check_cost": {
+          "allocs_per_it": 4,
+          "bytes_per_op": 0,
+          "iters": 616,
+          "mops": 0.0,
+          "rss_kb": 3324,
+          "wall_ms": 50.0
+        },
+        "parse_program": {
+          "allocs_per_it": 1575,
+          "bytes_per_op": 1517,
+          "iters": 726,
+          "mops": 1.480996488323173,
+          "rss_kb": 675920,
+          "wall_ms": 50.0
+        },
+        "proof_verify_shallow": {
+          "allocs_per_it": 0,
+          "bytes_per_op": 2,
+          "iters": 2000,
+          "mops": 28.098569782798055,
+          "rss_kb": 675920,
+          "wall_ms": 0.07
+        },
+        "proof_verify_strong": {
+          "allocs_per_it": 805,
+          "bytes_per_op": 15535,
+          "iters": 1518,
+          "mops": 0.030350068850470747,
+          "rss_kb": 675920,
+          "wall_ms": 50.02
+        },
+        "semi_naive_vs_fixpoint_n600[A]": {
+          "allocs_per_it": 556673,
+          "bytes_per_op": 507,
+          "iters": 3,
+          "mops": 0.6376018392267119,
+          "rss_kb": 55456,
+          "wall_ms": 851.16
+        },
+        "semi_naive_vs_fixpoint_n600[B]": {
+          "allocs_per_it": 556058,
+          "bytes_per_op": 507,
+          "iters": 3,
+          "mops": 0.6428012186942571,
+          "rss_kb": 55456,
+          "wall_ms": 844.27
+        },
+        "stratified_negation_5000": {
+          "allocs_per_it": 75317,
+          "bytes_per_op": 1049,
+          "iters": 1,
+          "mops": 0.9503805371189651,
+          "rss_kb": 675920,
+          "wall_ms": 10.52
+        },
+        "tc_path_n1000": {
+          "allocs_per_it": 1528906,
+          "bytes_per_op": 478,
+          "iters": 1,
+          "mops": 0.49430085894310355,
+          "rss_kb": 154340,
+          "wall_ms": 1014.56
+        },
+        "tc_path_n200": {
+          "allocs_per_it": 65164,
+          "bytes_per_op": 545,
+          "iters": 1,
+          "mops": 1.0583224286153703,
+          "rss_kb": 55456,
+          "wall_ms": 19.18
+        },
+        "tc_random_n1500": {
+          "allocs_per_it": 6811764,
+          "bytes_per_op": 594,
+          "iters": 1,
+          "mops": 0.1364241078929444,
+          "rss_kb": 675920,
+          "wall_ms": 16514.54
+        },
+        "unify_ground_pairs": {
+          "allocs_per_it": 6,
+          "bytes_per_op": 1830,
+          "iters": 599,
+          "mops": 0.2751354518370369,
+          "rss_kb": 3324,
+          "wall_ms": 50.07
+        }
+      }
+    },
+    "head": "5d00e218e27bfa4fe2baf717fce9ea6190a9827d",
+    "tests": {
+      "counts": {
+        "failed": 0,
+        "ignored": 0,
+        "passed": 281,
+        "suites": 24
+      },
+      "log": "ai-runs/39998021258-1/logs/final-tests.log",
+      "ok": true
+    }
+  },
+  "finished_at": "2026-10-23T18:01:02Z",
+  "iterations": 8,
+  "last_checkpoint": "ai-runs/39998021258-1/checkpoints/soak-002.json",
+  "minutes": 225.0,
+  "model": {
+    "available": false,
+    "calls": 1,
+    "candidates": [
+      "opencode/deepseek-v4.1-flash-free",
+      "opencode/cat-jam-free",
+      "opencode/glm-5.3-flash-free",
+      "opencode/ll-alpha-free",
+      "opencode/longcat-2.5-preview-free",
+      "opencode/mimo-v2.6-flash-free",
+      "opencode/muse-spark-1.3-contributor-free",
+      "opencode/nemotron-3-ultra-free",
+      "opencode/nemotron-3.5-lightning-free",
+      "opencode/nemotron-3.5-super-vl-free",
+      "opencode/space-bunny-free"
+    ],
+    "failures": 0,
+    "reason": "opencode/deepseek-v4.1-flash-free rejected the free-tier request",
+    "secret_present": true
+  },
+  "push_failures": 0,
+  "rejected": [
+    {
+      "iteration": 6,
+      "origin": "model",
+      "reason": "CampaignError: opencode/deepseek-v4.1-flash-free rejected the free-tier request",
+      "task": "A006-db-third-index"
+    }
+  ],
+  "remaining_minutes": 212.391,
+  "run_id": "39998021258-1",
+  "schema": 1,
+  "started_at": "2026-10-23T17:48:25Z",
+  "status": "finished",
+  "target": "/home/runner/work/axiom/axiom",
+  "tasks": {
+    "A001-peak-rss": {
+      "attempts": 1,
+      "status": "accepted"
+    },
+    "A002-smt-negation": {
+      "attempts": 1,
+      "status": "accepted"
+    },
+    "A003-fol-equality-negative": {
+      "attempts": 1,
+      "status": "accepted"
+    },
+    "A004-planning-negative-precondition": {
+      "attempts": 1,
+      "status": "accepted"
+    },
+    "A005-docs-peak-rss": {
+      "attempts": 1,
+      "status": "accepted"
+    },
+    "A006-db-third-index": {
+      "attempts": 1,
+      "failures": [
+        "CampaignError: opencode/deepseek-v4.1-flash-free rejected the free-tier request"
+      ],
+      "status": "blocked_model"
+    },
+    "A007-smt-lib-printer": {
+      "status": "blocked_model"
+    },
+    "A008-datalog-join-order": {
+      "status": "blocked_model"
+    },
+    "A009-fol-equality-coverage": {
+      "status": "blocked_model"
+    },
+    "A010-docs-claim-audit": {
+      "status": "blocked_model"
+    },
+    "A011-rdl-chain-memory": {
+      "status": "blocked_model"
+    }
+  },
+  "updated_at": "2026-10-23T18:01:02Z"
+}

@@ -61,9 +61,9 @@ document whichever is chosen.
 
 ### 2.1 Peak RSS
 
-`src/bench.rs:206-258` samples after the solver drops. Switch to `peak_rss_kb`
-(`VmHWM`) or sample inside the closure. Do not publish new memory claims until
-this is fixed.
+Fixed: `Bench::run` and `Bench::run_once` record `peak_rss_kb` (`VmHWM`).
+The column is process-wide, so it is a peak for the row that ran last, not a
+per-row delta. Per-row memory claims still need one process per claim.
 
 ### 2.2 Dead benchmark code
 

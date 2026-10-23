@@ -1,0 +1,49 @@
+{
+  "iteration": 3,
+  "task": "A003-fol-equality-negative",
+  "origin": "deterministic",
+  "started_at": "2026-10-23T17:49:55Z",
+  "pre_head": "ecf13da2f01d6685dcd67445b02b7947491dce58",
+  "status": "accepted",
+  "checks": {
+    "fmt_ok": true,
+    "fmt_fix_log": "ai-runs/39998021258-1/logs/A003-fol-equality-negative.fmt-fix.log",
+    "fmt_log": "ai-runs/39998021258-1/logs/A003-fol-equality-negative.fmt-check.log",
+    "clippy": [
+      {
+        "package": "axiom-prover",
+        "ok": true,
+        "log": "ai-runs/39998021258-1/logs/A003-fol-equality-negative.clippy-axiom-prover.log"
+      }
+    ],
+    "targeted": {
+      "ok": true,
+      "log": "ai-runs/39998021258-1/logs/A003-fol-equality-negative.targeted-test.log",
+      "returncode": 0
+    },
+    "tests": {
+      "ok": true,
+      "counts": {
+        "suites": 23,
+        "passed": 279,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "ai-runs/39998021258-1/logs/A003-fol-equality-negative.tests.log"
+    },
+    "bench": null,
+    "elapsed_seconds": 3.868
+  },
+  "bench": [],
+  "changed_files": [
+    "crates/axiom-prover/tests/equality_negative.rs"
+  ],
+  "tests": {
+    "suites": 23,
+    "passed": 279,
+    "failed": 0,
+    "ignored": 0
+  },
+  "benchmark": [],
+  "checks_elapsed_seconds": 3.868
+}

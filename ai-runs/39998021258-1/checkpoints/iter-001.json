@@ -1,0 +1,50 @@
+{
+  "iteration": 1,
+  "task": "A001-peak-rss",
+  "origin": "deterministic",
+  "started_at": "2026-10-23T17:49:34Z",
+  "pre_head": "d2dc24b07ba81d5326dcee4a345c8c384edf4652",
+  "status": "accepted",
+  "checks": {
+    "fmt_ok": true,
+    "fmt_fix_log": "ai-runs/39998021258-1/logs/A001-peak-rss.fmt-fix.log",
+    "fmt_log": "ai-runs/39998021258-1/logs/A001-peak-rss.fmt-check.log",
+    "clippy": [
+      {
+        "package": "axiom",
+        "ok": true,
+        "log": "ai-runs/39998021258-1/logs/A001-peak-rss.clippy-axiom.log"
+      }
+    ],
+    "targeted": {
+      "ok": true,
+      "log": "ai-runs/39998021258-1/logs/A001-peak-rss.targeted-test.log",
+      "returncode": 0
+    },
+    "tests": {
+      "ok": true,
+      "counts": {
+        "suites": 21,
+        "passed": 275,
+        "failed": 0,
+        "ignored": 0
+      },
+      "log": "ai-runs/39998021258-1/logs/A001-peak-rss.tests.log"
+    },
+    "bench": null,
+    "elapsed_seconds": 13.558
+  },
+  "bench": [],
+  "changed_files": [
+    "src/bench.rs",
+    "tests/bench_metrics.rs"
+  ],
+  "tests": {
+    "suites": 21,
+    "passed": 275,
+    "failed": 0,
+    "ignored": 0
+  },
+  "benchmark": [],
+  "checks_elapsed_seconds": 13.558
+}
