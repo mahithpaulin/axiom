@@ -74,9 +74,13 @@ process spawning, networking, `unsafe`, embedded credentials, `include_bytes!`,
 
 Wall-clock time on a shared runner is noisy. The gate uses the **best of two**
 runs for both the baseline and the candidate, requires the best row to be at
-least 2% faster, and rejects any row more than 15% slower. Memory tasks compare
-the process high-water mark (`VmHWM`) instead: the best row must be at least 5%
-lower, with no row more than 5% higher and wall time no more than 20% higher.
+least 2% faster, and rejects any row more than 15% slower.
+
+RSS is recorded as a process-wide high-water mark (`VmHWM`). It is not a per-row
+delta: after one large benchmark, every later row carries the same high-water
+value. The report therefore shows wall time only and keeps RSS in `final.json`.
+A memory claim needs a dedicated process and a dedicated probe; the current
+kernel benchmark is a single process, so no backlog task is gated on RSS alone.
 
 These thresholds are diagnostic, not a performance guarantee. The deterministic
 counters in the bench log are the stronger signal.
