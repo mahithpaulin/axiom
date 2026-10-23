@@ -604,12 +604,191 @@
       "message": "ai-campaign: soak 1 (281 tests) [skip ci]",
       "push_ok": true,
       "sha": "da6fddccb3bf18685c7966e48578534835428762"
+    },
+    {
+      "at": "2026-10-23T17:55:24Z",
+      "message": "ai-campaign: soak 2 (281 tests) [skip ci]",
+      "push_ok": true,
+      "sha": "5d00e218e27bfa4fe2baf717fce9ea6190a9827d"
     }
   ],
   "created_at": "2026-10-23T17:48:25Z",
   "current_task": "A006-db-third-index",
-  "elapsed_minutes": 6.961,
+  "elapsed_minutes": 12.609,
   "failure_streak": 1,
+  "final": {
+    "at": "2026-10-23T18:01:02Z",
+    "bench": {
+      "log": "ai-runs/39998021258-1/logs/final-bench.log",
+      "ok": true,
+      "rows": {
+        "db_index_lookup": {
+          "allocs_per_it": 1,
+          "bytes_per_op": 0,
+          "iters": 20,
+          "mops": 1845.5394500053208,
+          "rss_kb": 12564,
+          "wall_ms": 50.59
+        },
+        "db_index_lookup_arg1": {
+          "allocs_per_it": 1,
+          "bytes_per_op": 0,
+          "iters": 21,
+          "mops": 1881.0052507886194,
+          "rss_kb": 12564,
+          "wall_ms": 52.15
+        },
+        "db_scan_lookup": {
+          "allocs_per_it": 21,
+          "bytes_per_op": 0,
+          "iters": 1,
+          "mops": 2835.2868014016917,
+          "rss_kb": 12564,
+          "wall_ms": 816.33
+        },
+        "end_to_end_prove": {
+          "allocs_per_it": 17851,
+          "bytes_per_op": 2742264,
+          "iters": 12,
+          "mops": 0.00022323057955346293,
+          "rss_kb": 675920,
+          "wall_ms": 53.76
+        },
+        "hash_cons_1000_terms": {
+          "allocs_per_it": 8095,
+          "bytes_per_op": 111,
+          "iters": 1,
+          "mops": 8.352818914003638,
+          "rss_kb": 3052,
+          "wall_ms": 1.08
+        },
+        "hash_cons_sharing": {
+          "allocs_per_it": 43,
+          "bytes_per_op": 7,
+          "iters": 1,
+          "mops": 71.62810686913544,
+          "rss_kb": 3052,
+          "wall_ms": 0.01
+        },
+        "match_pattern_vs_fact": {
+          "allocs_per_it": 4,
+          "bytes_per_op": 0,
+          "iters": 1333,
+          "mops": 0.0,
+          "rss_kb": 3324,
+          "wall_ms": 50.0
+        },
+        "memory_per_fact_probe": {
+          "allocs_per_it": 527869,
+          "bytes_per_op": 284,
+          "iters": 1,
+          "mops": 0.7142434385207597,
+          "rss_kb": 675920,
+          "wall_ms": 702.14
+        },
+        "occurs_check_cost": {
+          "allocs_per_it": 4,
+          "bytes_per_op": 0,
+          "iters": 616,
+          "mops": 0.0,
+          "rss_kb": 3324,
+          "wall_ms": 50.0
+        },
+        "parse_program": {
+          "allocs_per_it": 1575,
+          "bytes_per_op": 1517,
+          "iters": 726,
+          "mops": 1.480996488323173,
+          "rss_kb": 675920,
+          "wall_ms": 50.0
+        },
+        "proof_verify_shallow": {
+          "allocs_per_it": 0,
+          "bytes_per_op": 2,
+          "iters": 2000,
+          "mops": 28.098569782798055,
+          "rss_kb": 675920,
+          "wall_ms": 0.07
+        },
+        "proof_verify_strong": {
+          "allocs_per_it": 805,
+          "bytes_per_op": 15535,
+          "iters": 1518,
+          "mops": 0.030350068850470747,
+          "rss_kb": 675920,
+          "wall_ms": 50.02
+        },
+        "semi_naive_vs_fixpoint_n600[A]": {
+          "allocs_per_it": 556673,
+          "bytes_per_op": 507,
+          "iters": 3,
+          "mops": 0.6376018392267119,
+          "rss_kb": 55456,
+          "wall_ms": 851.16
+        },
+        "semi_naive_vs_fixpoint_n600[B]": {
+          "allocs_per_it": 556058,
+          "bytes_per_op": 507,
+          "iters": 3,
+          "mops": 0.6428012186942571,
+          "rss_kb": 55456,
+          "wall_ms": 844.27
+        },
+        "stratified_negation_5000": {
+          "allocs_per_it": 75317,
+          "bytes_per_op": 1049,
+          "iters": 1,
+          "mops": 0.9503805371189651,
+          "rss_kb": 675920,
+          "wall_ms": 10.52
+        },
+        "tc_path_n1000": {
+          "allocs_per_it": 1528906,
+          "bytes_per_op": 478,
+          "iters": 1,
+          "mops": 0.49430085894310355,
+          "rss_kb": 154340,
+          "wall_ms": 1014.56
+        },
+        "tc_path_n200": {
+          "allocs_per_it": 65164,
+          "bytes_per_op": 545,
+          "iters": 1,
+          "mops": 1.0583224286153703,
+          "rss_kb": 55456,
+          "wall_ms": 19.18
+        },
+        "tc_random_n1500": {
+          "allocs_per_it": 6811764,
+          "bytes_per_op": 594,
+          "iters": 1,
+          "mops": 0.1364241078929444,
+          "rss_kb": 675920,
+          "wall_ms": 16514.54
+        },
+        "unify_ground_pairs": {
+          "allocs_per_it": 6,
+          "bytes_per_op": 1830,
+          "iters": 599,
+          "mops": 0.2751354518370369,
+          "rss_kb": 3324,
+          "wall_ms": 50.07
+        }
+      }
+    },
+    "head": "5d00e218e27bfa4fe2baf717fce9ea6190a9827d",
+    "tests": {
+      "counts": {
+        "failed": 0,
+        "ignored": 0,
+        "passed": 281,
+        "suites": 24
+      },
+      "log": "ai-runs/39998021258-1/logs/final-tests.log",
+      "ok": true
+    }
+  },
+  "finished_at": "2026-10-23T18:01:02Z",
   "iterations": 8,
   "last_checkpoint": "ai-runs/39998021258-1/checkpoints/soak-002.json",
   "minutes": 225.0,
@@ -642,11 +821,11 @@
       "task": "A006-db-third-index"
     }
   ],
-  "remaining_minutes": 218.039,
+  "remaining_minutes": 212.391,
   "run_id": "39998021258-1",
   "schema": 1,
   "started_at": "2026-10-23T17:48:25Z",
-  "status": "running",
+  "status": "finished",
   "target": "/home/runner/work/axiom/axiom",
   "tasks": {
     "A001-peak-rss": {
@@ -692,5 +871,5 @@
       "status": "blocked_model"
     }
   },
-  "updated_at": "2026-10-23T17:55:23Z"
+  "updated_at": "2026-10-23T18:01:02Z"
 }
