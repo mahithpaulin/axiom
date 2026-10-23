@@ -1,5 +1,19 @@
 {
-  "accepted": [],
+  "accepted": [
+    {
+      "benchmark": [],
+      "commit": "ec20a342ce238a51ca0f4a322a32ba947e2f17f7",
+      "iteration": 1,
+      "push_ok": true,
+      "task": "A001-peak-rss",
+      "tests": {
+        "failed": 0,
+        "ignored": 0,
+        "passed": 275,
+        "suites": 21
+      }
+    }
+  ],
   "baseline": {
     "at": "2026-10-23T17:48:37Z",
     "bench": {
@@ -496,13 +510,20 @@
       "message": "ai-campaign: start 39998021258-1 (baseline 274 tests) [skip ci]",
       "push_ok": true,
       "sha": "d2dc24b07ba81d5326dcee4a345c8c384edf4652"
+    },
+    {
+      "at": "2026-10-23T17:49:50Z",
+      "message": "ai-campaign: A001-peak-rss (deterministic, 275 tests) [skip ci]",
+      "push_ok": true,
+      "sha": "ec20a342ce238a51ca0f4a322a32ba947e2f17f7"
     }
   ],
   "created_at": "2026-10-23T17:48:25Z",
-  "current_task": "A001-peak-rss",
-  "elapsed_minutes": 1.383,
+  "current_task": "A002-smt-negation",
+  "elapsed_minutes": 1.475,
   "failure_streak": 0,
-  "iterations": 1,
+  "iterations": 2,
+  "last_checkpoint": "ai-runs/39998021258-1/checkpoints/iter-001.json",
   "minutes": 225.0,
   "model": {
     "available": true,
@@ -526,14 +547,18 @@
   },
   "push_failures": 0,
   "rejected": [],
-  "remaining_minutes": 223.617,
+  "remaining_minutes": 223.525,
   "run_id": "39998021258-1",
   "schema": 1,
   "started_at": "2026-10-23T17:48:25Z",
   "status": "running",
   "target": "/home/runner/work/axiom/axiom",
   "tasks": {
-    "A001-peak-rss": {}
+    "A001-peak-rss": {
+      "attempts": 1,
+      "status": "accepted"
+    },
+    "A002-smt-negation": {}
   },
-  "updated_at": "2026-10-23T17:49:48Z"
+  "updated_at": "2026-10-23T17:49:54Z"
 }
