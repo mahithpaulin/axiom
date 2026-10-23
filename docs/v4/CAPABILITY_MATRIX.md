@@ -106,7 +106,7 @@ by a DPLL(T) driver over the existing SAT core.
 | Duplicate suppression | Implemented | `src/db.rs` insertion path | Hash-consing plus predicate membership. |
 | Stratified negation | Partial | `src/program.rs`; `src/solver_fwd.rs:98-116` | Scheduling and safe-rule rejection fixed; backward-only rules remain outside the safe fragment. |
 | Provenance / derivation explanations | Partial | `src/proof.rs`, `src/check.rs` | Full derivation records when `ProofMode::Full`; no provenance semiring. |
-| Memory-efficient storage / peak measurement | Partial | `src/bench.rs`; F-03 | Dedicated probe is valid; per-row RSS column is post-solve and invalid. |
+| Memory-efficient storage / peak measurement | Partial | `src/bench.rs`; `tests/bench_metrics.rs` | `Bench::run` and `run_once` now record `VmHWM` (`peak_rss_kb`), matching the A/B path. The value is process-wide, so it is not a per-row delta. |
 | Parallel evaluation | Absent | — | Single-threaded. |
 | Soufflé differential benchmarks | Partial | `benchmarks/external/run.py`; `external-bench.yml` | One transitive-closure and one safe-negation program (two queries); not a corpus or performance claim. |
 | Magic sets / demand transformation | Absent | `docs/ROADMAP.md` II7 | Planned compiler pass. |
