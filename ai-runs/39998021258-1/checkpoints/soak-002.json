@@ -1,0 +1,14 @@
+{
+  "iteration": 8,
+  "task": "soak",
+  "origin": "soak",
+  "status": "accepted",
+  "tests": {
+    "suites": 24,
+    "passed": 281,
+    "failed": 0,
+    "ignored": 0
+  },
+  "elapsed_seconds": 2.871,
+  "at": "2026-10-23T17:55:23Z"
+}
