@@ -566,14 +566,20 @@
       "message": "ai-campaign: record failed A006-db-third-index iteration 5 [skip ci]",
       "push_ok": true,
       "sha": "3d5831087d94cb5cad654166383ac4e7a3e41940"
+    },
+    {
+      "at": "2026-10-23T17:34:47Z",
+      "message": "ai-campaign: soak 1 (280 tests) [skip ci]",
+      "push_ok": true,
+      "sha": "52c1a60f4366847850ccaa32fa7a0234c14c1150"
     }
   ],
   "created_at": "2026-10-23T17:33:21Z",
   "current_task": "A006-db-third-index",
-  "elapsed_minutes": 1.407,
+  "elapsed_minutes": 6.457,
   "failure_streak": 1,
-  "iterations": 6,
-  "last_checkpoint": "ai-runs/39994744230-2/checkpoints/soak-001.json",
+  "iterations": 7,
+  "last_checkpoint": "ai-runs/39994744230-2/checkpoints/soak-002.json",
   "minutes": 225.0,
   "model": {
     "available": false,
@@ -610,7 +616,7 @@
       "task": "A006-db-third-index"
     }
   ],
-  "remaining_minutes": 223.593,
+  "remaining_minutes": 218.543,
   "run_id": "39994744230-2",
   "schema": 1,
   "started_at": "2026-10-23T17:33:21Z",
@@ -660,5 +666,5 @@
       "status": "blocked_model"
     }
   },
-  "updated_at": "2026-10-23T17:34:45Z"
+  "updated_at": "2026-10-23T17:39:48Z"
 }
