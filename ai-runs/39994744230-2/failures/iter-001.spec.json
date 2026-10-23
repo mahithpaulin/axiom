@@ -1,0 +1,21 @@
+{
+  "note": "Record VmHWM (peak RSS) for the timed rows instead of a post-run VmRSS point sample. The compare path already used peak_rss_kb; this makes run/run_once consistent and fixes ROADMAP 2.1 / F-03 without changing any solver code.",
+  "edits": [
+    {
+      "file": "src/bench.rs",
+      "find": "            rss_kb: rss_kb(),\n            note: format!(\"hint {hint_ops} ops\"),",
+      "replace": "            rss_kb: peak_rss_kb(),\n            note: format!(\"hint {hint_ops} ops\"),"
+    },
+    {
+      "file": "src/bench.rs",
+      "find": "            rss_kb: rss_kb(),\n            note: \"single shot\".into(),",
+      "replace": "            rss_kb: peak_rss_kb(),\n            note: \"single shot\".into(),"
+    }
+  ],
+  "create": [
+    {
+      "file": "tests/bench_metrics.rs",
+      "content": "use axiom::bench::{peak_rss_kb, rss_kb};\n\n#[test]\nfn peak_rss_is_not_below_current_rss() {\n    assert!(\n        peak_rss_kb() >= rss_kb(),\n        \"VmHWM must be at least the current VmRSS (Linux /proc/self/status)\"\n    );\n}\n"
+    }
+  ]
+}

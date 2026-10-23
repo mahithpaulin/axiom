@@ -1,0 +1,25 @@
+diff --git a/src/bench.rs b/src/bench.rs
+index 02e3097..2321386 100644
+--- a/src/bench.rs
++++ b/src/bench.rs
+@@ -230 +230 @@ impl Bench {
+-            rss_kb: rss_kb(),
++            rss_kb: peak_rss_kb(),
+@@ -252 +252 @@ impl Bench {
+-            rss_kb: rss_kb(),
++            rss_kb: peak_rss_kb(),
+diff --git a/tests/bench_metrics.rs b/tests/bench_metrics.rs
+new file mode 100644
+index 0000000..ae554c4
+--- /dev/null
++++ b/tests/bench_metrics.rs
+@@ -0,0 +1,9 @@
++use axiom::bench::{peak_rss_kb, rss_kb};
++
++#[test]
++fn peak_rss_is_not_below_current_rss() {
++    assert!(
++        peak_rss_kb() >= rss_kb(),
++        "VmHWM must be at least the current VmRSS (Linux /proc/self/status)"
++    );
++}

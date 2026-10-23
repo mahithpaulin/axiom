@@ -1,0 +1,39 @@
+{
+  "iteration": 1,
+  "task": "A001-peak-rss",
+  "origin": "deterministic",
+  "started_at": "2026-10-23T17:34:13Z",
+  "pre_head": "c824058f3a4426ab11c35d95c16baca2a8ef1110",
+  "status": "rejected",
+  "checks": {
+    "fmt_ok": true,
+    "fmt_fix_log": "ai-runs/39994744230-2/logs/A001-peak-rss.fmt-fix.log",
+    "fmt_log": "ai-runs/39994744230-2/logs/A001-peak-rss.fmt-check.log",
+    "clippy": [
+      {
+        "package": "axiom",
+        "ok": true,
+        "log": "ai-runs/39994744230-2/logs/A001-peak-rss.clippy-axiom.log"
+      }
+    ],
+    "targeted": {
+      "ok": false,
+      "log": "ai-runs/39994744230-2/logs/A001-peak-rss.targeted-test.log",
+      "returncode": 101
+    },
+    "tests": {
+      "ok": false,
+      "counts": {
+        "suites": 2,
+        "passed": 67,
+        "failed": 1,
+        "ignored": 0
+      },
+      "log": "ai-runs/39994744230-2/logs/A001-peak-rss.tests.log"
+    },
+    "bench": null,
+    "elapsed_seconds": 6.312
+  },
+  "bench": [],
+  "reason": "CampaignError: targeted test command failed; full workspace tests failed; test count fell from 274 to 67"
+}

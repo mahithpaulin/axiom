@@ -1,0 +1,102 @@
+$ cargo test -p axiom --lib --tests
+rc=101 timeout=False elapsed=2.262s
+
+--- stdout ---
+
+running 67 tests
+test budget::tests::charge_can_overshoot ... ok
+test budget::tests::step_budget_is_enforced ... ok
+test budget::tests::unlimited_never_refuses ... ok
+test check::tests::checker_rejects_unsupported_goal ... ok
+test check::tests::checker_accepts_a_seed_fact ... ok
+test check::tests::groundness_detects_nested_variables ... ok
+test check::tests::matches_respects_the_environment ... ok
+test check::tests::status_semantics_are_not_collapsed ... ok
+test db::tests::dedup_and_counts ... ok
+test db::tests::first_arg_index_selects ... ok
+test contract::inconclusive_answers_carry_no_proof ... ok
+test db::tests::nullary_predicate_uses_the_unreachable_sentinel ... ok
+test db::tests::second_arg_index_selects ... ok
+test contract::proved_answers_verify ... ok
+test db::tests::seed_membership_is_tracked_separately ... ok
+test db::tests::unknown_predicate_yields_no_candidates ... ok
+test exterior::tests::depth_limit_is_enforced ... ok
+test exterior::tests::non_ground_fact_is_rejected ... ok
+test exterior::tests::negation_is_accepted ... ok
+test exterior::tests::numbers_become_constants ... ok
+test exterior::tests::parses_facts_rules_and_queries ... ok
+test exterior::tests::unterminated_is_reported_not_panicked ... ok
+test exterior::tests::uppercase_is_a_variable ... ok
+test exterior::tests::show_round_trips ... ok
+test program::tests::arity_is_enforced ... ok
+test program::tests::bound_negation_is_still_accepted ... ok
+test program::tests::function_symbols_in_the_head_are_backward_only ... ok
+test program::tests::negative_cycles_are_rejected ... ok
+test program::tests::rule_local_variables_are_namespaced_per_rule ... ok
+test program::tests::stratified_negation_gets_a_strictly_higher_stratum ... ok
+test program::tests::symbol_kind_is_predicate_for_atoms ... ok
+test program::tests::unbound_forward_head_variable_is_rejected ... ok
+test program::tests::transitive_closure_is_stratified ... ok
+test program::tests::unbound_negated_variable_is_rejected ... ok
+test sat::tests::luby_sequence_starts_1_1_2 ... ok
+test sat::tests::empty_clause_is_unsat ... ok
+test regressions::single_literal_rule_terminates_and_derives ... ok
+test regressions::every_solution_for_a_seed_is_derived ... ok
+test sat::tests::pigeonhole_2_1_is_unsat_with_proof ... ok
+test sat::tests::tautology_and_duplicates_are_absorbed ... ok
+test sat::tests::unit_conflict_is_unsat ... ok
+test sat::tests::xor_chain_is_sat_with_verified_model ... ok
+test subst::tests::clash_on_distinct_symbols ... ok
+test subst::tests::match_then_resolve_yields_a_ground_term ... ok
+test subst::tests::resolve_is_idempotent_on_ground_terms ... ok
+test subst::tests::occurs_check_blocks_cyclic_terms ... ok
+test subst::tests::undo_restores_the_table_exactly ... ok
+test subst::tests::variable_never_becomes_the_root_over_a_term ... ok
+test symbol::tests::arity_is_part_of_identity ... ok
+test symbol::tests::interning_is_idempotent ... ok
+test symbol::tests::namespaces_do_not_collide ... ok
+test term::tests::atoms_are_hash_consed ... ok
+test term::tests::distinct_terms_do_not_share ... ok
+test term::tests::groundness ... ok
+test term::tests::renderer_handles_nesting ... ok
+test term::tests::interning_leaves_no_dead_child_storage ... ok
+test term::tests::structural_sharing ... ok
+test term::tests::var_identity_is_stable ... ok
+test theory::tests::combination_exchanges_rdl_equality ... ok
+test theory::tests::congruence_agrees_with_naive ... ok
+test theory::tests::congruence_merges_and_explains ... ok
+test theory::tests::congruence_rejects_merged_disequality ... ok
+test theory::tests::diff_detects_negative_cycle_with_edges ... ok
+test theory::tests::diff_explains_bounds ... ok
+test theory::tests::diff_agrees_with_brute_force ... ok
+test subst::tests::deep_terms_resolve_without_native_recursion ... ok
+test term::tests::deep_terms_do_not_overflow_the_stack ... ok
+
+test result: ok. 67 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+
+running 1 test
+test peak_rss_is_not_below_current_rss ... FAILED
+
+failures:
+
+---- peak_rss_is_not_below_current_rss stdout ----
+
+thread 'peak_rss_is_not_below_current_rss' (3801) panicked at tests/bench_metrics.rs:5:5:
+VmHWM must be at least the current VmRSS (Linux /proc/self/status)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    peak_rss_is_not_below_current_rss
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+--- stderr ---
+   Compiling axiom v0.1.0 (/home/runner/work/axiom/axiom)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.18s
+     Running unittests src/lib.rs (target/debug/deps/axiom-fca9850aa5abb0c0)
+     Running tests/bench_metrics.rs (target/debug/deps/bench_metrics-19c2e126144d05e5)
+error: test failed, to rerun pass `-p axiom --test bench_metrics`
+

@@ -490,11 +490,20 @@
     }
   },
   "branch": "ai-optimization/setup-axiom-v4",
-  "commits": [],
+  "commits": [
+    {
+      "at": "2026-10-23T17:34:13Z",
+      "message": "ai-campaign: start 39994744230-2 (baseline 274 tests) [skip ci]",
+      "push_ok": true,
+      "sha": "c824058f3a4426ab11c35d95c16baca2a8ef1110"
+    }
+  ],
   "created_at": "2026-10-23T17:33:21Z",
-  "elapsed_minutes": 0.849,
-  "failure_streak": 0,
-  "iterations": 0,
+  "current_task": "A001-peak-rss",
+  "elapsed_minutes": 0.977,
+  "failure_streak": 1,
+  "iterations": 1,
+  "last_checkpoint": "ai-runs/39994744230-2/checkpoints/iter-001.json",
   "minutes": 225.0,
   "model": {
     "available": true,
@@ -517,13 +526,28 @@
     "secret_present": true
   },
   "push_failures": 0,
-  "rejected": [],
-  "remaining_minutes": 224.151,
+  "rejected": [
+    {
+      "iteration": 1,
+      "origin": "deterministic",
+      "reason": "CampaignError: targeted test command failed; full workspace tests failed; test count fell from 274 to 67",
+      "task": "A001-peak-rss"
+    }
+  ],
+  "remaining_minutes": 224.023,
   "run_id": "39994744230-2",
   "schema": 1,
   "started_at": "2026-10-23T17:33:21Z",
   "status": "running",
   "target": "/home/runner/work/axiom/axiom",
-  "tasks": {},
-  "updated_at": "2026-10-23T17:34:12Z"
+  "tasks": {
+    "A001-peak-rss": {
+      "attempts": 1,
+      "failures": [
+        "CampaignError: targeted test command failed; full workspace tests failed; test count fell from 274 to 67"
+      ],
+      "status": "failed"
+    }
+  },
+  "updated_at": "2026-10-23T17:34:20Z"
 }
