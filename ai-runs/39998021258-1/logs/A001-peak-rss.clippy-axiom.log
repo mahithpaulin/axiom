@@ -1,0 +1,9 @@
+$ cargo clippy -p axiom --lib --tests -- -D warnings
+rc=0 timeout=False elapsed=1.098s
+
+--- stdout ---
+
+--- stderr ---
+    Checking axiom v0.1.0 (/home/runner/work/axiom/axiom)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.06s
+
